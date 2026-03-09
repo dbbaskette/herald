@@ -30,6 +30,23 @@ herald:
   agent:
     persona: ${HERALD_AGENT_PERSONA:}
     system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
+  security:
+    shell-blocklist:
+      - 'rm\s+-rf\s+/'
+      - 'mkfs'
+      - 'dd\s+if='
+      - 'sudo\s+rm'
+      - 'curl\s+.*\|\s*sh'
+      - 'wget\s+.*\|\s*sh'
+      - 'chmod\s+-R\s+777\s+/'
+      - ':\(\)\{ :\|:& \};:'
+      - 'mv\s+/\s'
+      - 'rm\s+-rf\s+\*'
+      - '> /dev/sda'
+      - 'shutdown'
+      - 'reboot'
+      - 'init\s+0'
+      - 'halt'
 
 # TODO: Restrict management endpoints before production deployment (e.g. add Spring Security actuator config)
 management:
