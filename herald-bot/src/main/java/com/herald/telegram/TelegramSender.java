@@ -16,7 +16,7 @@ import java.util.List;
 
 @Component
 @ConditionalOnProperty("herald.telegram.bot-token")
-class TelegramSender {
+public class TelegramSender {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramSender.class);
     private static final int MAX_RETRIES = 3;
@@ -32,7 +32,7 @@ class TelegramSender {
         this.formatter = formatter;
     }
 
-    void sendMessage(String text) {
+    public void sendMessage(String text) {
         List<String> chunks = formatter.split(text);
         for (String chunk : chunks) {
             sendWithRetry(chunk);
