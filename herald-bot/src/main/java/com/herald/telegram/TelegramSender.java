@@ -35,8 +35,7 @@ class TelegramSender {
     void sendMessage(String text) {
         List<String> chunks = formatter.split(text);
         for (String chunk : chunks) {
-            String escaped = formatter.escapeMarkdownV2(chunk);
-            sendWithRetry(escaped);
+            sendWithRetry(chunk);
         }
     }
 
@@ -51,24 +50,36 @@ class TelegramSender {
     private void sendWithRetry(String text) {
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
+                // Try sending as MarkdownV2 first to preserve intentional formatting
                 SendResponse response = bot.execute(
                         new SendMessage(chatId, text).parseMode(ParseMode.MarkdownV2));
                 if (response.isOk()) {
                     return;
                 }
                 if (response.errorCode() == 429) {
-                    Integer retryAfter = response.parameters() != null
-                            ? response.parameters().retryAfter() : null;
-                    long delay = retryAfter != null
-                            ? retryAfter * 1000L
-                            : RETRY_BASE_DELAY_MS * (1L << attempt);
-                    log.warn("Rate limited by Telegram, retrying after {} ms", delay);
-                    Thread.sleep(delay);
+                    handleRateLimit(response, attempt);
                     continue;
                 }
-                // If MarkdownV2 parse fails, fall back to plain text
-                log.warn("Telegram send failed ({}): {}, retrying as plain text",
-                        response.errorCode(), response.description());
+                // MarkdownV2 parse failed — try with escaped text
+                log.debug("MarkdownV2 parse failed, attempting with escaped text: {}",
+                        response.description());
+                String escaped = formatter.escapeMarkdownV2(text);
+                // Re-split if escaping pushed the chunk over the limit
+                List<String> escapedChunks = formatter.split(escaped);
+                boolean allOk = true;
+                for (String escapedChunk : escapedChunks) {
+                    SendResponse escapedResponse = bot.execute(
+                            new SendMessage(chatId, escapedChunk).parseMode(ParseMode.MarkdownV2));
+                    if (!escapedResponse.isOk()) {
+                        allOk = false;
+                        break;
+                    }
+                }
+                if (allOk) {
+                    return;
+                }
+                // Fall back to plain text as last resort
+                log.warn("Escaped MarkdownV2 also failed, sending as plain text");
                 SendResponse fallback = bot.execute(new SendMessage(chatId, text));
                 if (fallback.isOk()) {
                     return;
@@ -92,5 +103,15 @@ class TelegramSender {
             }
         }
         log.error("Failed to send message after {} retries", MAX_RETRIES);
+    }
+
+    private void handleRateLimit(SendResponse response, int attempt) throws InterruptedException {
+        Integer retryAfter = response.parameters() != null
+                ? response.parameters().retryAfter() : null;
+        long delay = retryAfter != null
+                ? retryAfter * 1000L
+                : RETRY_BASE_DELAY_MS * (1L << attempt);
+        log.warn("Rate limited by Telegram, retrying after {} ms", delay);
+        Thread.sleep(delay);
     }
 }

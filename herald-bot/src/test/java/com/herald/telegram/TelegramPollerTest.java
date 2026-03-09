@@ -9,11 +9,9 @@ import com.pengrad.telegrambot.request.GetUpdates;
 import com.pengrad.telegrambot.response.GetUpdatesResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
-
-import java.lang.reflect.Field;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -82,6 +80,21 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(sender).sendTypingAction();
+    }
+
+    @Test
+    void constructorThrowsWhenAllowedChatIdIsBlank() {
+        TelegramBot botMock = mock(TelegramBot.class);
+        TelegramSender senderMock = mock(TelegramSender.class);
+        HeraldConfig blankConfig = new HeraldConfig(
+                null,
+                new HeraldConfig.Telegram("test-token", ""),
+                null);
+        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock);
+
+        assertThatThrownBy(blankPoller::validateConfig)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("allowed-chat-id");
     }
 
     @Test

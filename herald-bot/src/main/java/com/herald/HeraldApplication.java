@@ -3,9 +3,11 @@ package com.herald;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@EnableScheduling
 public class HeraldApplication {
 
     // TODO: When spring-ai-agent-utils is available, register the following tool beans:

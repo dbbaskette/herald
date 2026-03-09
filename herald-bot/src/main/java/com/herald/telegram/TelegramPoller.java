@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import java.util.List;
 
 @Component
@@ -29,6 +30,14 @@ class TelegramPoller {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
+    }
+
+    @PostConstruct
+    void validateConfig() {
+        if (allowedChatId == null || allowedChatId.isBlank()) {
+            throw new IllegalStateException(
+                    "herald.telegram.allowed-chat-id must be configured when Telegram bot is enabled");
+        }
         log.info("Telegram poller initialized for chat ID: {}", allowedChatId);
     }
 
