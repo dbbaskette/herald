@@ -25,9 +25,10 @@ class MemoryBlockAdvisor implements CallAdvisor {
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         String memoryBlock = memoryTools.formatForSystemPrompt();
         if (!memoryBlock.isEmpty()) {
+            String delimited = "\n\n<memory>\n" + memoryBlock + "</memory>";
             request = request.mutate()
                     .prompt(request.prompt().augmentSystemMessage(
-                            existing -> new SystemMessage(existing.getText() + "\n\n" + memoryBlock)))
+                            existing -> new SystemMessage(existing.getText() + delimited)))
                     .build();
         }
         return chain.nextCall(request);

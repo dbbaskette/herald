@@ -34,7 +34,10 @@ class MemoryBlockAdvisorTest {
 
         verify(chain).nextCall(argThat(req -> {
             String systemText = req.prompt().getSystemMessage().getText();
-            return systemText.contains("You are Herald.") && systemText.contains("Known Facts");
+            return systemText.contains("You are Herald.")
+                    && systemText.contains("<memory>")
+                    && systemText.contains("Known Facts")
+                    && systemText.contains("</memory>");
         }));
     }
 

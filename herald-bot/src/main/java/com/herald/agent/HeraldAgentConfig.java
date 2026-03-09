@@ -2,7 +2,10 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import com.herald.memory.MemoryTools;
+import com.herald.tools.AskUserQuestionTool;
+import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
+import com.herald.tools.TodoWriteTool;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
@@ -27,21 +30,26 @@ class HeraldAgentConfig {
     private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter DATETIME_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
+    private static final int MAX_CONVERSATION_MESSAGES = 100;
 
     @Bean
     ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
+                .maxMessages(MAX_CONVERSATION_MESSAGES)
                 .build();
     }
 
     @Bean
-    ChatClient chatClient(
+    ChatClient mainClient(
             ChatClient.Builder builder,
             HeraldConfig config,
             ChatMemory chatMemory,
             MemoryTools memoryTools,
             HeraldShellDecorator shellDecorator,
+            FileSystemTools fsTools,
+            TodoWriteTool todoTool,
+            AskUserQuestionTool askTool,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
@@ -49,7 +57,7 @@ class HeraldAgentConfig {
 
         return builder
                 .defaultSystem(systemPrompt)
-                .defaultTools(memoryTools, shellDecorator)
+                .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
                 .defaultAdvisors(
                         new MemoryBlockAdvisor(memoryTools),
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
