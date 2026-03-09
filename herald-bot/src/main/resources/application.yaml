@@ -12,9 +12,6 @@ spring:
         options:
           model: claude-sonnet-4-5
           max-tokens: 8192
-    openai:
-      api-key: ${OPENAI_API_KEY:}
-      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
 
 management:
   endpoints:
