@@ -31,9 +31,9 @@ herald:
     persona: ${HERALD_AGENT_PERSONA:}
     system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
   security:
-    blocklist-patterns:
+    shell-blocklist:
       - 'rm\s+-rf\s+/'
-      - 'mkfs'
+      - '\bmkfs\b'
       - 'dd\s+if='
       - 'sudo\s+rm'
       - 'curl\s+.*\|\s*sh'
@@ -43,10 +43,10 @@ herald:
       - 'mv\s+/\s'
       - 'rm\s+-rf\s+\*'
       - '> /dev/sda'
-      - 'shutdown'
-      - 'reboot'
+      - '(?:^|[;&|]\s*)(?:/(?:usr/)?s?bin/)?shutdown\b'
+      - '(?:^|[;&|]\s*)(?:/(?:usr/)?s?bin/)?reboot\b'
       - 'init\s+0'
-      - 'halt'
+      - '(?:^|[;&|]\s*)(?:/(?:usr/)?s?bin/)?halt\b'
     shell-timeout-seconds: 30
     confirmation-timeout-seconds: 60
 

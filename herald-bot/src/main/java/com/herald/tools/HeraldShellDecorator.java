@@ -39,7 +39,7 @@ public class HeraldShellDecorator {
                          Optional<ShellCommandExecutor> delegate,
                          Optional<TelegramSender> telegramSender) {
         this.securityConfig = securityConfig;
-        this.blocklist = securityConfig.getBlocklistPatterns().stream()
+        this.blocklist = securityConfig.getShellBlocklist().stream()
                 .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
                 .toList();
         this.delegate = delegate.orElse(command -> executeCommandInternal(command, securityConfig.getShellTimeoutSeconds()));
@@ -80,7 +80,7 @@ public class HeraldShellDecorator {
     String checkBlocklist(String command) {
         for (int i = 0; i < blocklist.size(); i++) {
             if (blocklist.get(i).matcher(command).find()) {
-                return securityConfig.getBlocklistPatterns().get(i);
+                return securityConfig.getShellBlocklist().get(i);
             }
         }
         return null;
@@ -112,20 +112,20 @@ public class HeraldShellDecorator {
     }
 
     private String handleConfirmation(String command) {
-        String confirmId = UUID.randomUUID().toString().substring(0, 8);
+        String confirmId = UUID.randomUUID().toString();
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         pendingConfirmations.put(confirmId, future);
 
         if (telegramSender != null) {
             telegramSender.sendMessage("Shell command requires confirmation:\n"
-                    + command + "\n"
+                    + redactForLog(command) + "\n"
                     + "Reply: /confirm " + confirmId + " yes  OR  /confirm " + confirmId + " no");
         } else {
             log.warn("TelegramSender not available; cannot send confirmation prompt for command: [{}]",
                     redactForLog(command));
             pendingConfirmations.remove(confirmId);
             return "CONFIRMATION REQUIRED: This command requires user approval before execution. "
-                    + "Command: " + command + " — TelegramSender is not configured.";
+                    + "Command: " + redactForLog(command) + " — TelegramSender is not configured.";
         }
 
         try {
@@ -135,11 +135,11 @@ public class HeraldShellDecorator {
                 return delegate.execute(command);
             }
             log.info("Command denied by user: [{}]", redactForLog(command));
-            return "DENIED: Command was rejected by user: " + command;
+            return "DENIED: Command was rejected by user: " + redactForLog(command);
         } catch (TimeoutException e) {
             log.warn("Confirmation timed out for command: [{}]", redactForLog(command));
             return "TIMEOUT: Confirmation timed out after " + securityConfig.getConfirmationTimeoutSeconds()
-                    + "s. Command was not executed: " + command;
+                    + "s. Command was not executed: " + redactForLog(command);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return "ERROR: Confirmation was interrupted.";

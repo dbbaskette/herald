@@ -9,9 +9,19 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "herald.security")
 class ShellSecurityConfig {
 
-    private List<String> blocklistPatterns = List.of(
+    /*
+     * Best-effort blocklist — not a security boundary.
+     * Known bypass vectors that are accepted limitations:
+     *   - Full-path invocation (e.g. /sbin/shutdown, /sbin/mkfs.ext4) for commands
+     *     not covered by path-prefixed variants below.
+     *   - Variable indirection (e.g. CMD='rm -rf /'; $CMD).
+     *   - Encoding / obfuscation tricks (e.g. base64-decoded commands).
+     * The blocklist reduces accidental damage from AI-generated commands;
+     * it is not a substitute for OS-level sandboxing.
+     */
+    private List<String> shellBlocklist = List.of(
             "rm\\s+-rf\\s+/",
-            "mkfs",
+            "\\bmkfs\\b",
             "dd\\s+if=",
             "sudo\\s+rm",
             "curl\\s+.*\\|\\s*sh",
@@ -21,22 +31,22 @@ class ShellSecurityConfig {
             "mv\\s+/\\s",
             "rm\\s+-rf\\s+\\*",
             "> /dev/sda",
-            "shutdown",
-            "reboot",
+            "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?shutdown\\b",
+            "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?reboot\\b",
             "init\\s+0",
-            "halt"
+            "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?halt\\b"
     );
 
     private int shellTimeoutSeconds = 30;
 
     private int confirmationTimeoutSeconds = 60;
 
-    public List<String> getBlocklistPatterns() {
-        return blocklistPatterns;
+    public List<String> getShellBlocklist() {
+        return shellBlocklist;
     }
 
-    public void setBlocklistPatterns(List<String> blocklistPatterns) {
-        this.blocklistPatterns = blocklistPatterns;
+    public void setShellBlocklist(List<String> shellBlocklist) {
+        this.shellBlocklist = shellBlocklist;
     }
 
     public int getShellTimeoutSeconds() {
