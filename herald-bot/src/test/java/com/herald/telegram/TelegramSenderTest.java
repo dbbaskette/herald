@@ -2,6 +2,7 @@ package com.herald.telegram;
 
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
+import com.pengrad.telegrambot.model.ResponseParameters;
 import com.pengrad.telegrambot.request.SendChatAction;
 import com.pengrad.telegrambot.request.SendMessage;
 import com.pengrad.telegrambot.response.SendResponse;
@@ -57,7 +58,7 @@ class TelegramSenderTest {
     }
 
     @Test
-    void sendMessageFallsBackToPlainTextOnMarkdownError() {
+    void sendMessageFallsBackToEscapedMarkdownOnParseError() {
         SendResponse failResponse = mock(SendResponse.class);
         when(failResponse.isOk()).thenReturn(false);
         when(failResponse.errorCode()).thenReturn(400);
@@ -66,6 +67,7 @@ class TelegramSenderTest {
         SendResponse okResponse = mock(SendResponse.class);
         when(okResponse.isOk()).thenReturn(true);
 
+        // First call: raw MarkdownV2 fails; second call: escaped MarkdownV2 succeeds
         when(bot.execute(any(SendMessage.class)))
                 .thenReturn(failResponse)
                 .thenReturn(okResponse);
@@ -73,5 +75,42 @@ class TelegramSenderTest {
         sender.sendMessage("test");
 
         verify(bot, times(2)).execute(any(SendMessage.class));
+    }
+
+    @Test
+    void sendMessageRetriesOn429WithRetryAfter() {
+        SendResponse rateLimitResponse = mock(SendResponse.class);
+        when(rateLimitResponse.isOk()).thenReturn(false);
+        when(rateLimitResponse.errorCode()).thenReturn(429);
+        ResponseParameters params = mock(ResponseParameters.class);
+        when(params.retryAfter()).thenReturn(1);
+        when(rateLimitResponse.parameters()).thenReturn(params);
+
+        SendResponse okResponse = mock(SendResponse.class);
+        when(okResponse.isOk()).thenReturn(true);
+
+        when(bot.execute(any(SendMessage.class)))
+                .thenReturn(rateLimitResponse)
+                .thenReturn(okResponse);
+
+        sender.sendMessage("test");
+
+        // Should have been called twice: once rate-limited, once successful
+        verify(bot, times(2)).execute(any(SendMessage.class));
+    }
+
+    @Test
+    void sendMessageSplitsLongMessageIntoMultipleChunks() {
+        SendResponse okResponse = mock(SendResponse.class);
+        when(okResponse.isOk()).thenReturn(true);
+        when(bot.execute(any(SendMessage.class))).thenReturn(okResponse);
+
+        // Create a message that exceeds 4096 chars and must be split
+        String longMessage = "A".repeat(3000) + ". " + "B".repeat(3000) + ".";
+
+        sender.sendMessage(longMessage);
+
+        // Should send at least 2 chunks
+        verify(bot, atLeast(2)).execute(any(SendMessage.class));
     }
 }
