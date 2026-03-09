@@ -14,6 +14,7 @@ import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MemoryToolsTest {
 
@@ -101,5 +102,64 @@ class MemoryToolsTest {
     @Test
     void formatForSystemPromptReturnsEmptyWhenNoEntries() {
         assertThat(tools.formatForSystemPrompt()).isEmpty();
+    }
+
+    @Test
+    void setRejectsNullKey() {
+        assertThatThrownBy(() -> tools.memory_set(null, "value"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void setRejectsBlankKey() {
+        assertThatThrownBy(() -> tools.memory_set("  ", "value"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void setRejectsNullValue() {
+        assertThatThrownBy(() -> tools.memory_set("key", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void setRejectsBlankValue() {
+        assertThatThrownBy(() -> tools.memory_set("key", "  "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void specialCharactersInValuesAreStoredAndRetrieved() {
+        tools.memory_set("markdown", "**bold** and *italic* and `code`");
+        assertThat(tools.memory_get("markdown")).contains("**bold** and *italic* and `code`");
+    }
+
+    @Test
+    void newlinesInValuesDoNotCorruptList() {
+        tools.memory_set("multiline", "line1\nline2\nline3");
+        String list = tools.memory_list();
+        assertThat(list).contains("- **multiline**:");
+    }
+
+    @Test
+    void formatForSystemPromptSanitizesNewlines() {
+        tools.memory_set("inject", "value\n## Injected Header\n- fake entry");
+        String prompt = tools.formatForSystemPrompt();
+        // Newlines should be collapsed — injected content cannot create new markdown lines
+        assertThat(prompt.lines().count()).isEqualTo(2); // header + one entry only
+        assertThat(prompt).contains("value ## Injected Header - fake entry");
+    }
+
+    @Test
+    void sanitizeTruncatesLongValues() {
+        String longValue = "a".repeat(600);
+        String sanitized = MemoryTools.sanitize(longValue);
+        assertThat(sanitized).hasSize(501); // 500 + ellipsis character
+        assertThat(sanitized).endsWith("…");
+    }
+
+    @Test
+    void sanitizeHandlesNullInput() {
+        assertThat(MemoryTools.sanitize(null)).isEmpty();
     }
 }

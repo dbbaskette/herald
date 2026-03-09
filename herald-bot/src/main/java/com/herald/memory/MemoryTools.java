@@ -64,7 +64,8 @@ public class MemoryTools {
     }
 
     /**
-     * Formats all memory entries as a markdown block suitable for system prompt injection.
+     * Formats all memory entries as a markdown block suitable for system prompt inclusion.
+     * Values are sanitized to mitigate prompt injection via stored memory content.
      */
     public String formatForSystemPrompt() {
         Map<String, String> entries = repository.listAll();
@@ -72,7 +73,27 @@ public class MemoryTools {
             return "";
         }
         StringBuilder sb = new StringBuilder("## Known Facts\n");
-        entries.forEach((k, v) -> sb.append("- **").append(k).append("**: ").append(v).append("\n"));
+        entries.forEach((k, v) -> sb.append("- **").append(sanitize(k)).append("**: ").append(sanitize(v)).append("\n"));
         return sb.toString();
+    }
+
+    private static final int MAX_SANITIZED_LENGTH = 500;
+
+    /**
+     * Sanitizes a value for safe inclusion in system prompts by stripping control characters,
+     * collapsing newlines, and truncating to a maximum length.
+     */
+    static String sanitize(String input) {
+        if (input == null) {
+            return "";
+        }
+        // Replace newlines and carriage returns with spaces to prevent prompt structure manipulation
+        String sanitized = input.replaceAll("[\\r\\n]+", " ");
+        // Strip other control characters (except normal space)
+        sanitized = sanitized.replaceAll("[\\x00-\\x1F\\x7F]", "");
+        if (sanitized.length() > MAX_SANITIZED_LENGTH) {
+            sanitized = sanitized.substring(0, MAX_SANITIZED_LENGTH) + "…";
+        }
+        return sanitized;
     }
 }

@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 @Component
 class MemoryRepository {
@@ -17,6 +19,8 @@ class MemoryRepository {
     }
 
     void set(String key, String value) {
+        Assert.isTrue(StringUtils.hasText(key), "Memory key must not be null or blank");
+        Assert.isTrue(StringUtils.hasText(value), "Memory value must not be null or blank");
         jdbcTemplate.update(
                 "INSERT INTO memory (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) "
                         + "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP",
