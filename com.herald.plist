@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.herald</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>java</string>
+        <string>-jar</string>
+        <string>herald-bot.jar</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>~/.herald</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>~/Library/Logs/herald.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>~/Library/Logs/herald.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TELEGRAM_BOT_TOKEN</key>
+        <string></string>
+        <key>ANTHROPIC_API_KEY</key>
+        <string></string>
+        <key>OPENAI_API_KEY</key>
+        <string></string>
+        <key>GCAL_MCP_URL</key>
+        <string></string>
+        <key>GMAIL_MCP_URL</key>
+        <string></string>
+    </dict>
+</dict>
+</plist>
