@@ -1,0 +1,54 @@
+telegram:
+  allowed_chat_id: 123456789
+  bot_token: ${TELEGRAM_BOT_TOKEN}
+
+providers:
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com
+  ollama:
+    base_url: http://localhost:11434
+    api_key: ollama
+
+agent:
+  provider: anthropic
+  model: claude-sonnet-4-5
+  max_tokens: 8192
+  persona: |
+    Your name is Herald. You are Dan's personal AI agent — autonomous,
+    capable, dry wit. Dan is Head of Technical Marketing at Broadcom/VMware
+    (Tanzu). Direct and technical. Occasionally reference your namesake.
+    You have access to specialist subagents for deep research. Use them.
+
+subagents:
+  dir: .claude/agents
+  models:
+    haiku: claude-haiku-4-5
+    sonnet: claude-sonnet-4-5
+    opus: claude-opus-4-5
+
+skills:
+  dir: .claude/skills
+  watch: true
+
+memory:
+  db_path: ~/.herald/herald.db
+
+cron:
+  timezone: America/New_York
+  morning_briefing:
+    enabled: true
+    schedule: '0 7 * * 1-5'
+
+mcp_servers:
+  - name: google-calendar
+    url: ${GCAL_MCP_URL}
+  - name: gmail
+    url: ${GMAIL_MCP_URL}
+
+ui:
+  enabled: true
+  port: 8080
+  host: 0.0.0.0
