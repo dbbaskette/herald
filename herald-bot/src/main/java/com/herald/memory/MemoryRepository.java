@@ -41,4 +41,13 @@ class MemoryRepository {
         int rows = jdbcTemplate.update("DELETE FROM memory WHERE key = ?", key);
         return rows > 0;
     }
+
+    void deleteAll() {
+        jdbcTemplate.update("DELETE FROM memory");
+    }
+
+    int count() {
+        Integer result = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memory", Integer.class);
+        return result != null ? result : 0;
+    }
 }

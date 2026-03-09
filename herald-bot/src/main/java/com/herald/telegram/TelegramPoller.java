@@ -25,14 +25,16 @@ class TelegramPoller {
     private final String allowedChatId;
     private final TelegramSender sender;
     private final TelegramQuestionHandler questionHandler;
+    private final CommandHandler commandHandler;
     private int offset = 0;
 
     TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
-                   TelegramQuestionHandler questionHandler) {
+                   TelegramQuestionHandler questionHandler, CommandHandler commandHandler) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
         this.questionHandler = questionHandler;
+        this.commandHandler = commandHandler;
     }
 
     @PostConstruct
@@ -83,6 +85,11 @@ class TelegramPoller {
 
         String text = message.text();
         log.info("Received message from authorized chat: {}", text.substring(0, Math.min(text.length(), 50)));
+
+        // Handle slash commands before anything else
+        if (commandHandler.handle(text)) {
+            return;
+        }
 
         sender.sendTypingAction();
 

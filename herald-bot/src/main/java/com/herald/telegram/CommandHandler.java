@@ -1,0 +1,157 @@
+package com.herald.telegram;
+
+import com.herald.memory.MemoryTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.lang.management.ManagementFactory;
+import java.time.Duration;
+import java.util.Map;
+
+@Component
+class CommandHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
+    private static final String DEFAULT_CONVERSATION_ID = "default";
+
+    private final MemoryTools memoryTools;
+    private final ChatMemory chatMemory;
+    private final TelegramSender sender;
+    private final String modelName;
+    private final int activeToolsCount;
+
+    CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
+                   @Value("${spring.ai.anthropic.chat.options.model:unknown}") String modelName) {
+        this.memoryTools = memoryTools;
+        this.chatMemory = chatMemory;
+        this.sender = sender;
+        this.modelName = modelName;
+        // Default tools configured in HeraldAgentConfig: memory, shell, fs, todo, ask
+        this.activeToolsCount = 5;
+    }
+
+    boolean handle(String text) {
+        if (text == null || !text.startsWith("/")) {
+            return false;
+        }
+
+        String normalized = text.strip().toLowerCase();
+        String[] parts = text.strip().split("\\s+", 4);
+        String command = parts[0].toLowerCase();
+
+        switch (command) {
+            case "/help" -> handleHelp();
+            case "/status" -> handleStatus();
+            case "/reset" -> handleReset();
+            case "/debug" -> handleDebug();
+            case "/memory" -> handleMemory(parts);
+            default -> {
+                sender.sendMessage("Unknown command: " + parts[0]
+                        + "\nType /help to see available commands.");
+            }
+        }
+
+        log.info("Handled slash command: {}", command);
+        return true;
+    }
+
+    private void handleHelp() {
+        String help = """
+                *Available Commands*
+
+                /help — Show this command list
+                /status — System status: uptime, model, memory count
+                /reset — Clear conversation history (memory is preserved)
+                /debug — Show context size, memory entries, active tools
+                /memory list — Display all stored memory entries
+                /memory set <key> <value> — Store a memory entry
+                /memory clear — Clear all memory entries
+                """;
+        sender.sendMessage(help);
+    }
+
+    private void handleStatus() {
+        long uptimeMillis = ManagementFactory.getRuntimeMXBean().getUptime();
+        String uptime = formatUptime(uptimeMillis);
+        int memoryCount = memoryTools.count();
+
+        String status = """
+                *System Status*
+
+                Uptime: %s
+                Model: %s
+                Memory entries: %d
+                Active tools: %d
+                """.formatted(uptime, modelName, memoryCount, activeToolsCount);
+        sender.sendMessage(status);
+    }
+
+    private void handleReset() {
+        chatMemory.clear(DEFAULT_CONVERSATION_ID);
+        sender.sendMessage("Conversation history cleared. Memory entries are preserved.");
+        log.info("Conversation history cleared via /reset command");
+    }
+
+    private void handleDebug() {
+        int memoryCount = memoryTools.count();
+
+        String debug = """
+                *Debug Info*
+
+                Memory entries: %d
+                Active tools: %d
+                Model: %s
+                """.formatted(memoryCount, activeToolsCount, modelName);
+        sender.sendMessage(debug);
+    }
+
+    private void handleMemory(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /memory list | /memory set <key> <value> | /memory clear");
+            return;
+        }
+
+        String subcommand = parts[1].toLowerCase();
+        switch (subcommand) {
+            case "list" -> {
+                String result = memoryTools.memory_list();
+                sender.sendMessage(result);
+            }
+            case "clear" -> {
+                memoryTools.clearAll();
+                sender.sendMessage("All memory entries cleared.");
+                log.info("Memory cleared via /memory clear command");
+            }
+            case "set" -> {
+                if (parts.length < 4) {
+                    sender.sendMessage("Usage: /memory set <key> <value>");
+                    return;
+                }
+                String key = parts[2];
+                String value = parts[3];
+                String result = memoryTools.memory_set(key, value);
+                sender.sendMessage(result);
+            }
+            default -> sender.sendMessage(
+                    "Unknown memory subcommand: " + subcommand
+                            + "\nUsage: /memory list | /memory set <key> <value> | /memory clear");
+        }
+    }
+
+    static String formatUptime(long millis) {
+        Duration d = Duration.ofMillis(millis);
+        long days = d.toDays();
+        long hours = d.toHoursPart();
+        long minutes = d.toMinutesPart();
+        if (days > 0) {
+            return "%dd %dh %dm".formatted(days, hours, minutes);
+        }
+        if (hours > 0) {
+            return "%dh %dm".formatted(hours, minutes);
+        }
+        return "%dm".formatted(minutes);
+    }
+}

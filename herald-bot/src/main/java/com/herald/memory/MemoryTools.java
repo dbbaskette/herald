@@ -55,6 +55,14 @@ public class MemoryTools {
         return "No memory found for key: " + key;
     }
 
+    public void clearAll() {
+        repository.deleteAll();
+    }
+
+    public int count() {
+        return repository.count();
+    }
+
     /**
      * Formats all memory entries as a markdown block suitable for system prompt injection.
      */
