@@ -20,6 +20,7 @@ class TelegramPollerTest {
     private TelegramBot bot;
     private TelegramSender sender;
     private TelegramQuestionHandler questionHandler;
+    private CommandHandler commandHandler;
     private TelegramPoller poller;
 
     @BeforeEach
@@ -27,11 +28,12 @@ class TelegramPollerTest {
         bot = mock(TelegramBot.class);
         sender = mock(TelegramSender.class);
         questionHandler = mock(TelegramQuestionHandler.class);
+        commandHandler = mock(CommandHandler.class);
         HeraldConfig config = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
                 null);
-        poller = new TelegramPoller(bot, config, sender, questionHandler);
+        poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler);
     }
 
     @Test
@@ -120,15 +122,49 @@ class TelegramPollerTest {
         TelegramBot botMock = mock(TelegramBot.class);
         TelegramSender senderMock = mock(TelegramSender.class);
         TelegramQuestionHandler handlerMock = mock(TelegramQuestionHandler.class);
+        CommandHandler cmdMock = mock(CommandHandler.class);
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", ""),
                 null);
-        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock);
+        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock);
 
         assertThatThrownBy(blankPoller::validateConfig)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("allowed-chat-id");
+    }
+
+    @Test
+    void pollRoutesSlashCommandToCommandHandler() throws Exception {
+        when(commandHandler.handle("/help")).thenReturn(true);
+
+        Update update = createUpdate(12345L, "/help");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(commandHandler).handle("/help");
+        // Command should NOT trigger typing action or reach agent loop
+        verify(sender, never()).sendTypingAction();
+    }
+
+    @Test
+    void pollPassesNonCommandToAgentLoop() throws Exception {
+        when(commandHandler.handle("hello")).thenReturn(false);
+
+        Update update = createUpdate(12345L, "hello");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(commandHandler).handle("hello");
+        verify(sender).sendTypingAction();
     }
 
     @Test
