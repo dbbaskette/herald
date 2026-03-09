@@ -21,7 +21,8 @@ class TelegramSenderTest {
         bot = mock(TelegramBot.class);
         HeraldConfig config = new HeraldConfig(
                 null,
-                new HeraldConfig.Telegram("test-token", "12345"));
+                new HeraldConfig.Telegram("test-token", "12345"),
+                null);
         sender = new TelegramSender(bot, config, new MessageFormatter());
     }
 

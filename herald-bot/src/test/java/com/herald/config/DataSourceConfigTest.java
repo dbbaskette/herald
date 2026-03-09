@@ -28,7 +28,7 @@ class DataSourceConfigTest {
     @Test
     void dataSourceEnablesWalMode() throws SQLException {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null);
+                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null, null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         DataSource dataSource = dsConfig.dataSource(config);
@@ -44,7 +44,7 @@ class DataSourceConfigTest {
     @Test
     void dataSourceCreatesAllFiveTables() throws SQLException {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null);
+                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null, null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         DataSource dataSource = dsConfig.dataSource(config);
@@ -72,7 +72,7 @@ class DataSourceConfigTest {
     void dataSourceCreatesParentDirectory() throws SQLException {
         Path nestedDir = tempDir.resolve("sub/dir/herald.db");
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(nestedDir.toString()), null);
+                new HeraldConfig.Memory(nestedDir.toString()), null, null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         dsConfig.dataSource(config);
