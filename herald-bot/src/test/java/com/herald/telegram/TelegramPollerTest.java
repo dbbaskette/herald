@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.model.Chat;
@@ -21,6 +22,7 @@ class TelegramPollerTest {
     private TelegramSender sender;
     private TelegramQuestionHandler questionHandler;
     private CommandHandler commandHandler;
+    private AgentService agentService;
     private TelegramPoller poller;
 
     @BeforeEach
@@ -29,11 +31,12 @@ class TelegramPollerTest {
         sender = mock(TelegramSender.class);
         questionHandler = mock(TelegramQuestionHandler.class);
         commandHandler = mock(CommandHandler.class);
+        agentService = mock(AgentService.class);
         HeraldConfig config = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
                 null);
-        poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler);
+        poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler, agentService);
     }
 
     @Test
@@ -123,11 +126,12 @@ class TelegramPollerTest {
         TelegramSender senderMock = mock(TelegramSender.class);
         TelegramQuestionHandler handlerMock = mock(TelegramQuestionHandler.class);
         CommandHandler cmdMock = mock(CommandHandler.class);
+        AgentService agentMock = mock(AgentService.class);
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", ""),
                 null);
-        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock);
+        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock, agentMock);
 
         assertThatThrownBy(blankPoller::validateConfig)
                 .isInstanceOf(IllegalStateException.class)
@@ -154,6 +158,7 @@ class TelegramPollerTest {
     @Test
     void pollPassesNonCommandToAgentLoop() throws Exception {
         when(commandHandler.handle("hello")).thenReturn(false);
+        when(agentService.chat("hello")).thenReturn("Hi there!");
 
         Update update = createUpdate(12345L, "hello");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -165,6 +170,41 @@ class TelegramPollerTest {
 
         verify(commandHandler).handle("hello");
         verify(sender).sendTypingAction();
+        verify(agentService).chat("hello");
+        verify(sender).sendMessage("Hi there!");
+    }
+
+    @Test
+    void pollSendsErrorMessageWhenAgentThrows() throws Exception {
+        when(commandHandler.handle("hello")).thenReturn(false);
+        when(agentService.chat("hello")).thenThrow(new RuntimeException("model error"));
+
+        Update update = createUpdate(12345L, "hello");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(sender).sendMessage("Sorry, something went wrong processing your message. Please try again.");
+    }
+
+    @Test
+    void pollDoesNotSendBlankAgentResponse() throws Exception {
+        when(commandHandler.handle("hello")).thenReturn(false);
+        when(agentService.chat("hello")).thenReturn("");
+
+        Update update = createUpdate(12345L, "hello");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(agentService).chat("hello");
+        verify(sender, never()).sendMessage(any());
     }
 
     @Test
