@@ -31,12 +31,14 @@ herald:
   providers:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
-    openai:
-      api-key: ${OPENAI_API_KEY:}
-      base-url: https://api.openai.com
-    ollama:
-      base-url: ${OLLAMA_BASE_URL:}
-      api-key: ${OLLAMA_API_KEY:ollama}
+    # OpenAI provider — enabled when HERALD_PROVIDERS_OPENAI_API_KEY env var is set
+    # openai:
+    #   api-key: ${OPENAI_API_KEY}
+    #   base-url: https://api.openai.com
+    # Ollama provider — enabled when HERALD_PROVIDERS_OLLAMA_BASE_URL env var is set
+    # ollama:
+    #   base-url: http://localhost:11434
+    #   api-key: ollama
   telegram:
     bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
     allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}
