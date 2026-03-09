@@ -3,13 +3,19 @@ package com.herald.tools;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.herald.telegram.TelegramSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.stubbing.Answer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -20,17 +26,18 @@ class HeraldShellDecoratorTest {
     @BeforeEach
     void setUp() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of(
+        config.setShellBlocklist(List.of(
                 "rm\\s+-rf\\s+/",
-                "mkfs",
+                "\\bmkfs\\b",
                 "dd\\s+if=",
                 "sudo\\s+rm",
                 "curl\\s+.*\\|\\s*sh",
                 "wget\\s+.*\\|\\s*sh",
                 "chmod\\s+-R\\s+777\\s+/",
                 "> /dev/sda",
-                "shutdown",
-                "reboot"
+                "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?shutdown\\b",
+                "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?reboot\\b",
+                "(?:^|[;&|]\\s*)(?:/(?:usr/)?s?bin/)?halt\\b"
         ));
         decorator = new HeraldShellDecorator(config);
     }
@@ -152,6 +159,40 @@ class HeraldShellDecoratorTest {
         assertThat(result).startsWith("BLOCKED");
     }
 
+    // --- Word boundary: legitimate commands with blocklisted substrings are NOT blocked ---
+
+    @Test
+    void shutdownInFilePathIsNotBlocked() {
+        String result = decorator.shell_exec("cat /var/log/shutdown.log");
+        assertThat(result).doesNotStartWith("BLOCKED");
+    }
+
+    @Test
+    void rebootInFilePathIsNotBlocked() {
+        String result = decorator.shell_exec("cat /var/log/reboot.log 2>/dev/null; echo done");
+        assertThat(result).doesNotStartWith("BLOCKED");
+    }
+
+    @Test
+    void haltAsSubstringIsNotBlocked() {
+        String result = decorator.shell_exec("echo halting_progress > /dev/null");
+        assertThat(result).doesNotStartWith("BLOCKED");
+    }
+
+    // --- Path-prefixed variants are blocked ---
+
+    @Test
+    void sbinShutdownIsBlocked() {
+        String result = decorator.shell_exec("/sbin/shutdown -h now");
+        assertThat(result).startsWith("BLOCKED");
+    }
+
+    @Test
+    void sbinRebootIsBlocked() {
+        String result = decorator.shell_exec("/sbin/reboot");
+        assertThat(result).startsWith("BLOCKED");
+    }
+
     // --- Case-insensitive blocklist ---
 
     @Test
@@ -171,7 +212,7 @@ class HeraldShellDecoratorTest {
     @Test
     void sudoCommandRequiresConfirmation() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of("rm\\s+-rf\\s+/"));
+        config.setShellBlocklist(List.of("rm\\s+-rf\\s+/"));
         HeraldShellDecorator limited = new HeraldShellDecorator(config);
 
         assertThat(limited.requiresConfirmation("sudo apt install vim")).isTrue();
@@ -183,7 +224,7 @@ class HeraldShellDecoratorTest {
     @Test
     void pipeToShellRequiresConfirmation() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         HeraldShellDecorator limited = new HeraldShellDecorator(config);
 
         assertThat(limited.requiresConfirmation("cat script.txt | bash")).isTrue();
@@ -194,7 +235,7 @@ class HeraldShellDecoratorTest {
     @Test
     void redirectToSystemPathRequiresConfirmation() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         HeraldShellDecorator limited = new HeraldShellDecorator(config);
 
         assertThat(limited.requiresConfirmation("echo test > /etc/passwd")).isTrue();
@@ -205,7 +246,7 @@ class HeraldShellDecoratorTest {
     @Test
     void sudoInSubcommandRequiresConfirmation() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         HeraldShellDecorator limited = new HeraldShellDecorator(config);
 
         assertThat(limited.requiresConfirmation("export VAR=$(sudo cat /etc/shadow)")).isTrue();
@@ -214,7 +255,7 @@ class HeraldShellDecoratorTest {
     @Test
     void sudoAfterSemicolonRequiresConfirmation() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         HeraldShellDecorator limited = new HeraldShellDecorator(config);
 
         assertThat(limited.requiresConfirmation("echo hi;sudo other")).isTrue();
@@ -225,7 +266,7 @@ class HeraldShellDecoratorTest {
     @Test
     void confirmationSendsTelegramMessageAndTimesOut() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(1); // 1s timeout for fast test
 
         TelegramSender mockSender = mock(TelegramSender.class);
@@ -241,40 +282,48 @@ class HeraldShellDecoratorTest {
     @Test
     void confirmationApprovedExecutesCommand() throws Exception {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
         TelegramSender mockSender = mock(TelegramSender.class);
+        CountDownLatch messageSent = new CountDownLatch(1);
+        AtomicReference<String> capturedMessage = new AtomicReference<>();
+        doAnswer((Answer<Void>) invocation -> {
+            capturedMessage.set(invocation.getArgument(0));
+            messageSent.countDown();
+            return null;
+        }).when(mockSender).sendMessage(anyString());
+
         ShellCommandExecutor mockExecutor = command -> "executed: " + command;
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.of(mockExecutor), Optional.of(mockSender));
 
-        // Run shell_exec in a separate thread since it blocks waiting for confirmation
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo confirmed"));
 
-        // Wait briefly then confirm
-        Thread.sleep(200);
-        // Extract confirmId from the message sent to Telegram
-        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(mockSender).sendMessage(captor.capture());
-        String msg = captor.getValue();
-        // Parse confirmId from "/confirm <id> yes"
-        String confirmId = msg.split("/confirm ")[1].split(" ")[0];
-
+        assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
+        String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
         dec.confirmCommand(confirmId, true);
 
-        String result = resultFuture.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        String result = resultFuture.get(5, TimeUnit.SECONDS);
         assertThat(result).isEqualTo("executed: sudo echo confirmed");
     }
 
     @Test
     void confirmationDeniedRejectsCommand() throws Exception {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
         TelegramSender mockSender = mock(TelegramSender.class);
+        CountDownLatch messageSent = new CountDownLatch(1);
+        AtomicReference<String> capturedMessage = new AtomicReference<>();
+        doAnswer((Answer<Void>) invocation -> {
+            capturedMessage.set(invocation.getArgument(0));
+            messageSent.countDown();
+            return null;
+        }).when(mockSender).sendMessage(anyString());
+
         ShellCommandExecutor mockExecutor = command -> "should not run";
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.of(mockExecutor), Optional.of(mockSender));
@@ -282,15 +331,81 @@ class HeraldShellDecoratorTest {
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo nope"));
 
-        Thread.sleep(200);
-        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(mockSender).sendMessage(captor.capture());
-        String confirmId = captor.getValue().split("/confirm ")[1].split(" ")[0];
-
+        assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
+        String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
         dec.confirmCommand(confirmId, false);
 
-        String result = resultFuture.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        String result = resultFuture.get(5, TimeUnit.SECONDS);
         assertThat(result).startsWith("DENIED:");
+    }
+
+    // --- Response redaction ---
+
+    @Test
+    void deniedResponseRedactsSensitiveData() throws Exception {
+        ShellSecurityConfig config = new ShellSecurityConfig();
+        config.setShellBlocklist(List.of());
+        config.setConfirmationTimeoutSeconds(5);
+
+        TelegramSender mockSender = mock(TelegramSender.class);
+        CountDownLatch messageSent = new CountDownLatch(1);
+        AtomicReference<String> capturedMessage = new AtomicReference<>();
+        doAnswer((Answer<Void>) invocation -> {
+            capturedMessage.set(invocation.getArgument(0));
+            messageSent.countDown();
+            return null;
+        }).when(mockSender).sendMessage(anyString());
+
+        ShellCommandExecutor mockExecutor = command -> "should not run";
+        HeraldShellDecorator dec = new HeraldShellDecorator(
+                config, Optional.of(mockExecutor), Optional.of(mockSender));
+
+        CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
+                () -> dec.shell_exec("sudo curl --password=secret123 http://example.com"));
+
+        assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
+        String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
+        dec.confirmCommand(confirmId, false);
+
+        String result = resultFuture.get(5, TimeUnit.SECONDS);
+        assertThat(result).startsWith("DENIED:");
+        assertThat(result).contains("[REDACTED]");
+        assertThat(result).doesNotContain("secret123");
+    }
+
+    @Test
+    void timeoutResponseRedactsSensitiveData() {
+        ShellSecurityConfig config = new ShellSecurityConfig();
+        config.setShellBlocklist(List.of());
+        config.setConfirmationTimeoutSeconds(1);
+
+        TelegramSender mockSender = mock(TelegramSender.class);
+        HeraldShellDecorator dec = new HeraldShellDecorator(
+                config, Optional.empty(), Optional.of(mockSender));
+
+        String result = dec.shell_exec("sudo curl --password=secret123 http://example.com");
+
+        assertThat(result).startsWith("TIMEOUT:");
+        assertThat(result).contains("[REDACTED]");
+        assertThat(result).doesNotContain("secret123");
+    }
+
+    @Test
+    void telegramConfirmationMessageRedactsSensitiveData() {
+        ShellSecurityConfig config = new ShellSecurityConfig();
+        config.setShellBlocklist(List.of());
+        config.setConfirmationTimeoutSeconds(1);
+
+        TelegramSender mockSender = mock(TelegramSender.class);
+        HeraldShellDecorator dec = new HeraldShellDecorator(
+                config, Optional.empty(), Optional.of(mockSender));
+
+        dec.shell_exec("sudo curl --password=secret123 http://example.com");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(mockSender).sendMessage(captor.capture());
+        assertThat(captor.getValue()).contains("[REDACTED]");
+        assertThat(captor.getValue()).doesNotContain("secret123");
     }
 
     // --- Delegate pattern ---
@@ -298,7 +413,7 @@ class HeraldShellDecoratorTest {
     @Test
     void delegatesToShellCommandExecutor() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of());
+        config.setShellBlocklist(List.of());
         ShellCommandExecutor mockExecutor = command -> "delegated: " + command;
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.of(mockExecutor), Optional.empty());
@@ -321,12 +436,54 @@ class HeraldShellDecoratorTest {
         assertThat(pattern).contains("rm");
     }
 
+    // --- Redaction without Telegram ---
+
+    @Test
+    void confirmationRequiredWithoutTelegramRedactsSensitiveContent() {
+        ShellSecurityConfig config = new ShellSecurityConfig();
+        config.setShellBlocklist(List.of());
+        HeraldShellDecorator dec = new HeraldShellDecorator(config);
+
+        String result = dec.shell_exec("sudo curl --password=topsecret http://example.com");
+        assertThat(result).contains("CONFIRMATION REQUIRED");
+        assertThat(result).doesNotContain("topsecret");
+        assertThat(result).contains("[REDACTED]");
+    }
+
+    // --- Full UUID confirmation IDs ---
+
+    @Test
+    void confirmationIdIsFullUuid() throws Exception {
+        ShellSecurityConfig config = new ShellSecurityConfig();
+        config.setShellBlocklist(List.of());
+        config.setConfirmationTimeoutSeconds(5);
+
+        TelegramSender mockSender = mock(TelegramSender.class);
+        CountDownLatch messageSent = new CountDownLatch(1);
+        AtomicReference<String> capturedMessage = new AtomicReference<>();
+        doAnswer((Answer<Void>) invocation -> {
+            capturedMessage.set(invocation.getArgument(0));
+            messageSent.countDown();
+            return null;
+        }).when(mockSender).sendMessage(anyString());
+
+        HeraldShellDecorator dec = new HeraldShellDecorator(
+                config, Optional.empty(), Optional.of(mockSender));
+
+        CompletableFuture.supplyAsync(() -> dec.shell_exec("sudo echo test"));
+
+        assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
+        String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
+        assertThat(confirmId).hasSize(36);
+        assertThat(confirmId).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    }
+
     // --- Configurability ---
 
     @Test
     void blocklistIsConfigurable() {
         ShellSecurityConfig config = new ShellSecurityConfig();
-        config.setBlocklistPatterns(List.of("echo\\s+forbidden"));
+        config.setShellBlocklist(List.of("echo\\s+forbidden"));
         HeraldShellDecorator custom = new HeraldShellDecorator(config);
 
         assertThat(custom.shell_exec("echo forbidden")).startsWith("BLOCKED");
