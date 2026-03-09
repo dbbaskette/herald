@@ -19,17 +19,19 @@ class TelegramPollerTest {
 
     private TelegramBot bot;
     private TelegramSender sender;
+    private TelegramQuestionHandler questionHandler;
     private TelegramPoller poller;
 
     @BeforeEach
     void setUp() {
         bot = mock(TelegramBot.class);
         sender = mock(TelegramSender.class);
+        questionHandler = mock(TelegramQuestionHandler.class);
         HeraldConfig config = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
                 null);
-        poller = new TelegramPoller(bot, config, sender);
+        poller = new TelegramPoller(bot, config, sender, questionHandler);
     }
 
     @Test
@@ -83,14 +85,46 @@ class TelegramPollerTest {
     }
 
     @Test
+    void pollRoutesReplyToPendingQuestion() throws Exception {
+        when(questionHandler.hasPendingQuestion()).thenReturn(true);
+        when(questionHandler.resolveAnswer("B")).thenReturn(true);
+
+        Update update = createUpdate(12345L, "B");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(questionHandler).resolveAnswer("B");
+    }
+
+    @Test
+    void pollDoesNotRouteToQuestionHandlerWhenNoPending() throws Exception {
+        when(questionHandler.hasPendingQuestion()).thenReturn(false);
+
+        Update update = createUpdate(12345L, "hello");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(questionHandler, never()).resolveAnswer(any());
+    }
+
+    @Test
     void constructorThrowsWhenAllowedChatIdIsBlank() {
         TelegramBot botMock = mock(TelegramBot.class);
         TelegramSender senderMock = mock(TelegramSender.class);
+        TelegramQuestionHandler handlerMock = mock(TelegramQuestionHandler.class);
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", ""),
                 null);
-        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock);
+        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock);
 
         assertThatThrownBy(blankPoller::validateConfig)
                 .isInstanceOf(IllegalStateException.class)

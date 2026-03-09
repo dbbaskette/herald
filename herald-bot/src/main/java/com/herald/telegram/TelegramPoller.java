@@ -24,12 +24,15 @@ class TelegramPoller {
     private final TelegramBot bot;
     private final String allowedChatId;
     private final TelegramSender sender;
+    private final TelegramQuestionHandler questionHandler;
     private int offset = 0;
 
-    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender) {
+    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
+                   TelegramQuestionHandler questionHandler) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
+        this.questionHandler = questionHandler;
     }
 
     @PostConstruct
@@ -82,6 +85,14 @@ class TelegramPoller {
         log.info("Received message from authorized chat: {}", text.substring(0, Math.min(text.length(), 50)));
 
         sender.sendTypingAction();
+
+        // If there's a pending question, route this reply as the answer
+        if (questionHandler.hasPendingQuestion()) {
+            if (questionHandler.resolveAnswer(text)) {
+                log.info("User reply resolved pending question");
+                return;
+            }
+        }
 
         // TODO: pass message to agent loop (wired in a later issue)
         log.debug("Agent loop not yet wired — message received: {}", text);
