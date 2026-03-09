@@ -1,7 +1,14 @@
 package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
+import com.herald.memory.MemoryTools;
+import com.herald.tools.HeraldShellDecorator;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -22,9 +29,19 @@ class HeraldAgentConfig {
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
 
     @Bean
+    ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(repository)
+                .build();
+    }
+
+    @Bean
     ChatClient chatClient(
             ChatClient.Builder builder,
             HeraldConfig config,
+            ChatMemory chatMemory,
+            MemoryTools memoryTools,
+            HeraldShellDecorator shellDecorator,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
@@ -32,6 +49,14 @@ class HeraldAgentConfig {
 
         return builder
                 .defaultSystem(systemPrompt)
+                .defaultTools(memoryTools, shellDecorator)
+                .defaultAdvisors(
+                        new MemoryBlockAdvisor(memoryTools),
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        ToolCallAdvisor.builder()
+                                .conversationHistoryEnabled(false)
+                                .build()
+                )
                 .build();
     }
 
