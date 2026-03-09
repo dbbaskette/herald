@@ -97,9 +97,10 @@ class HeraldAgentConfigTest {
     @Test
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
-                agentConfig.mainClient(null, configWith(null, null),
+                agentConfig.mainClient(null, null, configWith(null, null),
                         null, null, null, null, null, null,
-                        new ClassPathResource("prompts/NONEXISTENT.md")))
+                        new ClassPathResource("prompts/NONEXISTENT.md"),
+                        ".claude/agents"))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }

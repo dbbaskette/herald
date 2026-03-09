@@ -44,12 +44,10 @@
             <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
         </dependency>
 
-        <!-- TODO: uncomment when org.springaicommunity:spring-ai-agent-utils 0.4.2+ is published
         <dependency>
             <groupId>org.springaicommunity</groupId>
             <artifactId>spring-ai-agent-utils</artifactId>
         </dependency>
-        -->
 
         <!-- Telegram Bot API -->
         <dependency>

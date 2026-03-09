@@ -6,12 +6,19 @@ import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
+import org.springaicommunity.agent.tools.task.TaskTool;
+import org.springaicommunity.agent.tools.task.TaskOutputTool;
+import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentReferences;
+import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
+import org.springaicommunity.agent.common.task.DefaultTaskRepository;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -20,9 +27,12 @@ import org.springframework.beans.factory.annotation.Value;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Configuration
 class HeraldAgentConfig {
@@ -43,6 +53,7 @@ class HeraldAgentConfig {
     @Bean
     ChatClient mainClient(
             ChatClient.Builder builder,
+            ChatModel chatModel,
             HeraldConfig config,
             ChatMemory chatMemory,
             MemoryTools memoryTools,
@@ -50,14 +61,39 @@ class HeraldAgentConfig {
             FileSystemTools fsTools,
             TodoWriteTool todoTool,
             AskUserQuestionTool askTool,
-            @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource) {
+            @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
+            @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config);
 
+        // Configure subagent delegation via TaskTool
+        var taskRepository = new DefaultTaskRepository();
+
+        var claudeSubagentType = ClaudeSubagentType.builder()
+                .chatClientBuilder("default", ChatClient.builder(chatModel))
+                .build();
+
+        var subagentRefs = loadSubagentReferences(agentsDirectory);
+
+        var taskToolBuilder = TaskTool.builder()
+                .subagentTypes(claudeSubagentType)
+                .taskRepository(taskRepository);
+
+        if (!subagentRefs.isEmpty()) {
+            taskToolBuilder.subagentReferences(subagentRefs);
+        }
+
+        ToolCallback taskTool = taskToolBuilder.build();
+
+        ToolCallback taskOutputTool = TaskOutputTool.builder()
+                .taskRepository(taskRepository)
+                .build();
+
         return builder
                 .defaultSystem(systemPrompt)
                 .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
+                .defaultToolCallbacks(taskTool, taskOutputTool)
                 .defaultAdvisors(
                         new MemoryBlockAdvisor(memoryTools),
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
@@ -79,6 +115,15 @@ class HeraldAgentConfig {
                 .replace("{current_datetime}", now.format(DATETIME_FORMAT))
                 .replace("{timezone}", DEFAULT_TIMEZONE.getId())
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
+    }
+
+    private List<org.springaicommunity.agent.common.task.subagent.SubagentReference> loadSubagentReferences(
+            String agentsDirectory) {
+        Path agentsPath = Path.of(agentsDirectory);
+        if (Files.isDirectory(agentsPath)) {
+            return ClaudeSubagentReferences.fromRootDirectory(agentsDirectory);
+        }
+        return List.of();
     }
 
     private String loadPromptTemplate(Resource resource) {

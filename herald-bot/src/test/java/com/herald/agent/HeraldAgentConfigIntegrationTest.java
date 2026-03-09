@@ -7,12 +7,17 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.core.io.ClassPathResource;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -24,7 +29,7 @@ import static org.mockito.Mockito.mock;
 class HeraldAgentConfigIntegrationTest {
 
     @Test
-    void mainClientBeanCreatedWithAllToolsAndAdvisors() {
+    void mainClientBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
 
         // Verify chatMemory bean creation
@@ -47,9 +52,45 @@ class HeraldAgentConfigIntegrationTest {
                 new HeraldConfig.Agent("TestBot", null));
 
         ChatClient client = agentConfig.mainClient(
-                builder, config, chatMemory,
+                builder, mockModel, config, chatMemory,
                 memoryTools, shellDecorator, fsTools, todoTool, askTool,
-                new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"));
+                new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                tempDir.toString());
+
+        assertThat(client).isNotNull();
+    }
+
+    @Test
+    void mainClientLoadsSubagentDefinitionsFromDirectory(@TempDir Path tempDir) throws IOException {
+        // Create a test subagent definition
+        Files.writeString(tempDir.resolve("test-agent.md"),
+                """
+                ---
+                name: test-agent
+                description: A test subagent for unit testing
+                model: sonnet
+                tools: Read, Grep
+                ---
+                You are a test agent.
+                """);
+
+        HeraldAgentConfig agentConfig = new HeraldAgentConfig();
+
+        ChatModel mockModel = mock(ChatModel.class);
+        ChatClient.Builder builder = ChatClient.builder(mockModel);
+
+        HeraldConfig config = new HeraldConfig(null, null,
+                new HeraldConfig.Agent("TestBot", null));
+
+        JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
+        ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
+
+        ChatClient client = agentConfig.mainClient(
+                builder, mockModel, config, chatMemory,
+                mock(MemoryTools.class), mock(HeraldShellDecorator.class),
+                new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                tempDir.toString());
 
         assertThat(client).isNotNull();
     }

@@ -10,13 +10,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class HeraldApplication {
 
-    // TODO: When spring-ai-agent-utils is available, register the following tool beans:
+    // TODO: When spring-ai-agent-utils stubs are replaced, migrate to canonical versions:
     //  - SkillsTool
     //  - ShellTools
-    //  - FileSystemTools
-    //  - TodoWriteTool
+    //  - FileSystemTools (currently stub)
+    //  - TodoWriteTool (currently stub)
     //  - AskUserQuestionTool
-    //  - TaskTool
+    // TaskTool is now wired via HeraldAgentConfig
 
     public static void main(String[] args) {
         SpringApplication.run(HeraldApplication.class, args);
