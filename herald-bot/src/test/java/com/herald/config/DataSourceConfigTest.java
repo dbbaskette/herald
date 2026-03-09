@@ -44,7 +44,7 @@ class DataSourceConfigTest {
     @Test
     void dataSourceCreatesAllFiveTables() throws SQLException {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()));
+                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         DataSource dataSource = dsConfig.dataSource(config);
@@ -72,7 +72,7 @@ class DataSourceConfigTest {
     void dataSourceCreatesParentDirectory() throws SQLException {
         Path nestedDir = tempDir.resolve("sub/dir/herald.db");
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(nestedDir.toString()));
+                new HeraldConfig.Memory(nestedDir.toString()), null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         dsConfig.dataSource(config);
