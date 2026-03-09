@@ -5,6 +5,9 @@ spring:
     virtual:
       enabled: true
 
+  sql:
+    init:
+      mode: never  # Schema managed explicitly by DataSourceInitializer bean
   ai:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
@@ -12,9 +15,11 @@ spring:
         options:
           model: claude-sonnet-4-5
           max-tokens: 8192
-    # chat:
-    #   memory:
-    #     repository: jdbc
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: never  # Schema managed by DataSourceInitializer via schema.sql
 
 herald:
   memory:

@@ -44,11 +44,14 @@ class DataSourceConfig {
     DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
         populator.addScript(new ClassPathResource("schema.sql"));
+        // continueOnError=true so IF NOT EXISTS clauses don't fail on re-run;
+        // genuine SQL errors are logged as warnings below by Spring's ResourceDatabasePopulator
         populator.setContinueOnError(true);
 
         DataSourceInitializer initializer = new DataSourceInitializer();
         initializer.setDataSource(dataSource);
         initializer.setDatabasePopulator(populator);
+        log.info("DataSourceInitializer configured with schema.sql (continueOnError=true)");
         return initializer;
     }
 
