@@ -100,7 +100,7 @@ class HeraldAgentConfigTest {
                 agentConfig.mainClient(null, null, configWith(null, null),
                         null, null, null, null, null, null,
                         new ClassPathResource("prompts/NONEXISTENT.md"),
-                        ".claude/agents"))
+                        ".claude/agents", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }

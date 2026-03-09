@@ -6,11 +6,13 @@ import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
-import org.springaicommunity.agent.tools.task.TaskTool;
+import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
+import org.springaicommunity.agent.tools.task.TaskTool;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentReferences;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
-import org.springaicommunity.agent.common.task.DefaultTaskRepository;
+import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
@@ -19,10 +21,10 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -62,16 +64,22 @@ class HeraldAgentConfig {
             TodoWriteTool todoTool,
             AskUserQuestionTool askTool,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
-            @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory) {
+            @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
+            @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
+            @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
+            @Value("${herald.agent.model.opus:claude-opus-4-5}") String opusModel) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config);
 
-        // Configure subagent delegation via TaskTool
+        // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
         var claudeSubagentType = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
+                .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
+                .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
+                .chatClientBuilder("opus", chatClientBuilderForModel(chatModel, opusModel))
                 .build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
@@ -104,6 +112,11 @@ class HeraldAgentConfig {
                 .build();
     }
 
+    private ChatClient.Builder chatClientBuilderForModel(ChatModel chatModel, String modelId) {
+        return ChatClient.builder(chatModel)
+                .defaultOptions(AnthropicChatOptions.builder().model(modelId).build());
+    }
+
     String resolvePrompt(String template, HeraldConfig config) {
         ZonedDateTime now = ZonedDateTime.now(DEFAULT_TIMEZONE);
 
@@ -117,8 +130,7 @@ class HeraldAgentConfig {
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 
-    private List<org.springaicommunity.agent.common.task.subagent.SubagentReference> loadSubagentReferences(
-            String agentsDirectory) {
+    List<SubagentReference> loadSubagentReferences(String agentsDirectory) {
         Path agentsPath = Path.of(agentsDirectory);
         if (Files.isDirectory(agentsPath)) {
             return ClaudeSubagentReferences.fromRootDirectory(agentsDirectory);
