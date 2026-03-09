@@ -8,21 +8,21 @@ class HeraldConfigTest {
 
     @Test
     void dbPathDefaultsToTildePath() {
-        HeraldConfig config = new HeraldConfig(null);
+        HeraldConfig config = new HeraldConfig(null, null);
         assertThat(config.dbPath()).isEqualTo("~/.herald/herald.db");
     }
 
     @Test
     void dbPathUsesConfiguredValue() {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory("/custom/path/herald.db"));
+                new HeraldConfig.Memory("/custom/path/herald.db"), null);
         assertThat(config.dbPath()).isEqualTo("/custom/path/herald.db");
     }
 
     @Test
     void dbPathUsesConfiguredTildePath() {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory("~/custom/herald.db"));
+                new HeraldConfig.Memory("~/custom/herald.db"), null);
         assertThat(config.dbPath()).isEqualTo("~/custom/herald.db");
     }
 }
