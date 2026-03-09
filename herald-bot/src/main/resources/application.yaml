@@ -13,6 +13,10 @@ spring:
           model: claude-sonnet-4-5
           max-tokens: 8192
 
+herald:
+  memory:
+    db-path: ~/.herald/herald.db
+
 management:
   endpoints:
     web:

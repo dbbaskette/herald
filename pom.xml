@@ -37,6 +37,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Override MCP SDK version until 1.1.0-SNAPSHOT is published -->
+            <dependency>
+                <groupId>io.modelcontextprotocol.sdk</groupId>
+                <artifactId>mcp-json-jackson3</artifactId>
+                <version>1.0.0</version>
+            </dependency>
             <!-- TODO: uncomment when org.springaicommunity:spring-ai-agent-utils 0.4.2+ is published
             <dependency>
                 <groupId>org.springaicommunity</groupId>
