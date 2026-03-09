@@ -37,7 +37,7 @@ class HeraldAgentConfigIntegrationTest {
         HeraldShellDecorator shellDecorator = mock(HeraldShellDecorator.class);
         FileSystemTools fsTools = new FileSystemTools();
         TodoWriteTool todoTool = new TodoWriteTool();
-        AskUserQuestionTool askTool = new AskUserQuestionTool();
+        AskUserQuestionTool askTool = mock(AskUserQuestionTool.class);
 
         // Build ChatClient with a mock ChatModel
         ChatModel mockModel = mock(ChatModel.class);
