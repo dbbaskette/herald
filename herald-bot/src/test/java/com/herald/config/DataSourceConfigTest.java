@@ -28,7 +28,7 @@ class DataSourceConfigTest {
     @Test
     void dataSourceEnablesWalMode() throws SQLException {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()));
+                new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null);
 
         DataSourceConfig dsConfig = new DataSourceConfig();
         DataSource dataSource = dsConfig.dataSource(config);
