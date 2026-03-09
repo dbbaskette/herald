@@ -22,6 +22,9 @@ herald:
   telegram:
     bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
     allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}
+  agent:
+    persona: ${HERALD_AGENT_PERSONA:}
+    system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
 
 # TODO: Restrict management endpoints before production deployment (e.g. add Spring Security actuator config)
 management:

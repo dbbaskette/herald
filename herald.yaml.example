@@ -21,6 +21,9 @@ agent:
     capable, dry wit. Dan is Head of Technical Marketing at Broadcom/VMware
     (Tanzu). Direct and technical. Occasionally reference your namesake.
     You have access to specialist subagents for deep research. Use them.
+  system_prompt_extra: |
+    # Additional Instructions
+    # Add any extra instructions here that will be appended to the base system prompt.
 
 subagents:
   dir: .claude/agents
