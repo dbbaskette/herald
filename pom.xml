@@ -43,13 +43,11 @@
                 <artifactId>mcp-json-jackson3</artifactId>
                 <version>1.0.0</version>
             </dependency>
-            <!-- TODO: uncomment when org.springaicommunity:spring-ai-agent-utils 0.4.2+ is published
             <dependency>
                 <groupId>org.springaicommunity</groupId>
                 <artifactId>spring-ai-agent-utils</artifactId>
-                <version>0.4.2</version>
+                <version>0.5.0</version>
             </dependency>
-            -->
         </dependencies>
     </dependencyManagement>
 
