@@ -15,6 +15,10 @@ spring:
         options:
           model: claude-sonnet-4-5
           max-tokens: 8192
+    openai:
+      # Disable auto-configuration — provider beans are created manually via herald.providers config
+      chat:
+        enabled: false
     chat:
       memory:
         repository:
@@ -24,6 +28,15 @@ spring:
 herald:
   memory:
     db-path: ~/.herald/herald.db
+  providers:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.openai.com
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:}
+      api-key: ${OLLAMA_API_KEY:ollama}
   telegram:
     bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
     allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}

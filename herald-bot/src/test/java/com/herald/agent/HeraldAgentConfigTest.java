@@ -2,14 +2,21 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 class HeraldAgentConfigTest {
 
@@ -100,14 +107,29 @@ class HeraldAgentConfigTest {
                 agentConfig.mainClient(null, null, configWith(null, null),
                         null, null, null, null, null, null,
                         new ClassPathResource("prompts/NONEXISTENT.md"),
-                        ".claude/agents", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"))
+                        ".claude/agents", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5",
+                        "gpt-4o", "llama3.2", Optional.empty(), Optional.empty()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }
 
+    @Test
+    void chatOptionsForAnthropicModelReturnsAnthropicOptions() {
+        var model = mock(AnthropicChatModel.class);
+        ChatOptions options = HeraldAgentConfig.chatOptionsForModel(model, "claude-sonnet-4-5");
+        assertThat(options).isInstanceOf(AnthropicChatOptions.class);
+    }
+
+    @Test
+    void chatOptionsForOpenAiModelReturnsOpenAiOptions() {
+        var model = mock(OpenAiChatModel.class);
+        ChatOptions options = HeraldAgentConfig.chatOptionsForModel(model, "gpt-4o");
+        assertThat(options).isInstanceOf(OpenAiChatOptions.class);
+    }
+
     private HeraldConfig configWith(String persona, String extra) {
         return new HeraldConfig(null, null,
-                new HeraldConfig.Agent(persona, extra));
+                new HeraldConfig.Agent(persona, extra), null);
     }
 
     private String loadPromptTemplate() throws IOException {

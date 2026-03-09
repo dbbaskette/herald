@@ -14,12 +14,14 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -33,6 +35,8 @@ class HeraldAgentConfigIntegrationTest {
     private static final String HAIKU_MODEL = "claude-haiku-4-5";
     private static final String SONNET_MODEL = "claude-sonnet-4-5";
     private static final String OPUS_MODEL = "claude-opus-4-5";
+    private static final String OPENAI_MODEL = "gpt-4o";
+    private static final String OLLAMA_MODEL = "llama3.2";
 
     @Test
     void mainClientBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
@@ -46,14 +50,15 @@ class HeraldAgentConfigIntegrationTest {
         ChatClient.Builder builder = ChatClient.builder(mockModel);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null));
+                new HeraldConfig.Agent("TestBot", null), null);
 
         ChatClient client = agentConfig.mainClient(
                 builder, mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL);
+                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
 
         assertThat(client).isNotNull();
     }
@@ -77,7 +82,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatClient.Builder builder = ChatClient.builder(mockModel);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null));
+                new HeraldConfig.Agent("TestBot", null), null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -87,7 +92,35 @@ class HeraldAgentConfigIntegrationTest {
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL);
+                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
+
+        assertThat(client).isNotNull();
+    }
+
+    @Test
+    void mainClientWiresOpenAiAndOllamaProviders(@TempDir Path tempDir) {
+        HeraldAgentConfig agentConfig = new HeraldAgentConfig();
+
+        ChatModel mockAnthropicModel = mock(ChatModel.class);
+        ChatModel mockOpenAiModel = mock(OpenAiChatModel.class);
+        ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
+        ChatClient.Builder builder = ChatClient.builder(mockAnthropicModel);
+
+        HeraldConfig config = new HeraldConfig(null, null,
+                new HeraldConfig.Agent("TestBot", null), null);
+
+        JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
+        ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
+
+        ChatClient client = agentConfig.mainClient(
+                builder, mockAnthropicModel, config, chatMemory,
+                mock(MemoryTools.class), mock(HeraldShellDecorator.class),
+                new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                OPENAI_MODEL, OLLAMA_MODEL,
+                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel));
 
         assertThat(client).isNotNull();
     }

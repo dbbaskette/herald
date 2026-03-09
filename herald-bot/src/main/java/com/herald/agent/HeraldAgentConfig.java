@@ -20,7 +20,10 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,6 +38,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 @Configuration
 class HeraldAgentConfig {
@@ -67,7 +71,11 @@ class HeraldAgentConfig {
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
-            @Value("${herald.agent.model.opus:claude-opus-4-5}") String opusModel) {
+            @Value("${herald.agent.model.opus:claude-opus-4-5}") String opusModel,
+            @Value("${herald.agent.model.openai:gpt-4o}") String openaiModel,
+            @Value("${herald.agent.model.ollama:llama3.2}") String ollamaModel,
+            @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
+            @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config);
@@ -75,12 +83,18 @@ class HeraldAgentConfig {
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
-        var claudeSubagentType = ClaudeSubagentType.builder()
+        var subagentTypeBuilder = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
                 .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
-                .chatClientBuilder("opus", chatClientBuilderForModel(chatModel, opusModel))
-                .build();
+                .chatClientBuilder("opus", chatClientBuilderForModel(chatModel, opusModel));
+
+        openaiChatModel.ifPresent(model ->
+                subagentTypeBuilder.chatClientBuilder("openai", chatClientBuilderForModel(model, openaiModel)));
+        ollamaChatModel.ifPresent(model ->
+                subagentTypeBuilder.chatClientBuilder("ollama", chatClientBuilderForModel(model, ollamaModel)));
+
+        var claudeSubagentType = subagentTypeBuilder.build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
 
@@ -114,7 +128,15 @@ class HeraldAgentConfig {
 
     private ChatClient.Builder chatClientBuilderForModel(ChatModel chatModel, String modelId) {
         return ChatClient.builder(chatModel)
-                .defaultOptions(AnthropicChatOptions.builder().model(modelId).build());
+                .defaultOptions(chatOptionsForModel(chatModel, modelId));
+    }
+
+    static org.springframework.ai.chat.prompt.ChatOptions chatOptionsForModel(ChatModel chatModel, String modelId) {
+        if (chatModel instanceof OpenAiChatModel) {
+            return OpenAiChatOptions.builder().model(modelId).build();
+        }
+        // Default to Anthropic (includes AnthropicChatModel and any future Anthropic-compatible models)
+        return AnthropicChatOptions.builder().model(modelId).build();
     }
 
     String resolvePrompt(String template, HeraldConfig config) {
