@@ -31,7 +31,7 @@ herald:
     persona: ${HERALD_AGENT_PERSONA:}
     system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
   security:
-    shell-blocklist:
+    blocklist-patterns:
       - 'rm\s+-rf\s+/'
       - 'mkfs'
       - 'dd\s+if='
@@ -47,6 +47,8 @@ herald:
       - 'reboot'
       - 'init\s+0'
       - 'halt'
+    shell-timeout-seconds: 30
+    confirmation-timeout-seconds: 60
 
 # TODO: Restrict management endpoints before production deployment (e.g. add Spring Security actuator config)
 management:

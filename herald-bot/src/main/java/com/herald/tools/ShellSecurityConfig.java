@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "herald.security")
 class ShellSecurityConfig {
 
-    private List<String> shellBlocklist = List.of(
+    private List<String> blocklistPatterns = List.of(
             "rm\\s+-rf\\s+/",
             "mkfs",
             "dd\\s+if=",
@@ -17,7 +17,7 @@ class ShellSecurityConfig {
             "curl\\s+.*\\|\\s*sh",
             "wget\\s+.*\\|\\s*sh",
             "chmod\\s+-R\\s+777\\s+/",
-            ":(){ :\\|:& };:",
+            ":\\(\\)\\{\\s+:\\|:&\\s+\\};:",
             "mv\\s+/\\s",
             "rm\\s+-rf\\s+\\*",
             "> /dev/sda",
@@ -27,15 +27,31 @@ class ShellSecurityConfig {
             "halt"
     );
 
-    public List<String> getShellBlocklist() {
-        return shellBlocklist;
-    }
+    private int shellTimeoutSeconds = 30;
 
-    public void setShellBlocklist(List<String> shellBlocklist) {
-        this.shellBlocklist = shellBlocklist;
-    }
+    private int confirmationTimeoutSeconds = 60;
 
     public List<String> getBlocklistPatterns() {
-        return shellBlocklist;
+        return blocklistPatterns;
+    }
+
+    public void setBlocklistPatterns(List<String> blocklistPatterns) {
+        this.blocklistPatterns = blocklistPatterns;
+    }
+
+    public int getShellTimeoutSeconds() {
+        return shellTimeoutSeconds;
+    }
+
+    public void setShellTimeoutSeconds(int shellTimeoutSeconds) {
+        this.shellTimeoutSeconds = shellTimeoutSeconds;
+    }
+
+    public int getConfirmationTimeoutSeconds() {
+        return confirmationTimeoutSeconds;
+    }
+
+    public void setConfirmationTimeoutSeconds(int confirmationTimeoutSeconds) {
+        this.confirmationTimeoutSeconds = confirmationTimeoutSeconds;
     }
 }
