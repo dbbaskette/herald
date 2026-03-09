@@ -3,6 +3,7 @@ package com.herald.agent;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -59,9 +60,11 @@ class AgentMetrics {
         latencyTimer.record(Duration.ofMillis(latencyMs));
 
         // Structured JSON log entry
-        log.info("""
-                {"turn_id":"{}","model":"{}","tokens_in":{},"tokens_out":{},"latency_ms":{},"tool_calls":{}}""",
-                turnId, model, tokensIn, tokensOut, latencyMs, toolCalls);
+        String toolCallsJson = toolCalls.stream()
+                .map(name -> "\"" + name.replace("\"", "\\\"") + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+        log.info("{\"turn_id\":\"{}\",\"model\":\"{}\",\"tokens_in\":{},\"tokens_out\":{},\"latency_ms\":{},\"tool_calls\":{}}",
+                turnId, model, tokensIn, tokensOut, latencyMs, toolCallsJson);
 
         // Persist to model_usage table
         jdbcTemplate.update(

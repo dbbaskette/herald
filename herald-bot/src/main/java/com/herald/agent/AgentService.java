@@ -1,13 +1,16 @@
 package com.herald.agent;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.stereotype.Service;
 
 /**
@@ -45,40 +48,60 @@ public class AgentService {
 
         long startTime = System.nanoTime();
 
-        ChatResponse chatResponse = mainClient.prompt()
-                .user(userMessage)
-                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
-                .call()
-                .chatResponse();
+        String model = "unknown";
+        long tokensIn = 0;
+        long tokensOut = 0;
+        List<String> toolCalls = Collections.emptyList();
+        ChatResponse chatResponse = null;
 
-        long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
+        try {
+            chatResponse = mainClient.prompt()
+                    .user(userMessage)
+                    .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                    .call()
+                    .chatResponse();
+
+            if (chatResponse != null && chatResponse.getMetadata() != null) {
+                Usage usage = chatResponse.getMetadata().getUsage();
+                if (usage != null) {
+                    tokensIn = usage.getPromptTokens() != null ? usage.getPromptTokens().longValue() : 0;
+                    tokensOut = usage.getCompletionTokens() != null ? usage.getCompletionTokens().longValue() : 0;
+                }
+                if (chatResponse.getMetadata().getModel() != null) {
+                    model = chatResponse.getMetadata().getModel();
+                }
+            }
+
+            // Extract tool call names from all generations
+            toolCalls = extractToolCalls(chatResponse);
+        } finally {
+            long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
+            agentMetrics.recordTurn(model, tokensIn, tokensOut, latencyMs, toolCalls);
+        }
 
         String content = chatResponse != null && chatResponse.getResult() != null
                 ? chatResponse.getResult().getOutput().getText()
                 : null;
 
-        // Extract usage metadata
-        String model = "unknown";
-        long tokensIn = 0;
-        long tokensOut = 0;
-        List<String> toolCalls = Collections.emptyList();
-
-        if (chatResponse != null && chatResponse.getMetadata() != null) {
-            Usage usage = chatResponse.getMetadata().getUsage();
-            if (usage != null) {
-                tokensIn = usage.getPromptTokens() != null ? usage.getPromptTokens().longValue() : 0;
-                tokensOut = usage.getCompletionTokens() != null ? usage.getCompletionTokens().longValue() : 0;
-            }
-            if (chatResponse.getMetadata().getModel() != null) {
-                model = chatResponse.getMetadata().getModel();
-            }
-        }
-
-        agentMetrics.recordTurn(model, tokensIn, tokensOut, latencyMs, toolCalls);
-
         log.info("Agent response generated (conversation={}), length={}",
                 conversationId, content != null ? content.length() : 0);
 
         return content != null ? content : "";
+    }
+
+    private List<String> extractToolCalls(ChatResponse chatResponse) {
+        if (chatResponse == null || chatResponse.getResults() == null) {
+            return Collections.emptyList();
+        }
+        List<String> names = new ArrayList<>();
+        for (Generation generation : chatResponse.getResults()) {
+            if (generation.getOutput() instanceof AssistantMessage assistant
+                    && assistant.getToolCalls() != null) {
+                for (AssistantMessage.ToolCall tc : assistant.getToolCalls()) {
+                    names.add(tc.name());
+                }
+            }
+        }
+        return names;
     }
 }

@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class AgentServiceTest {
@@ -74,12 +75,15 @@ class AgentServiceTest {
     }
 
     @Test
-    void chatPropagatesExceptions() {
+    void chatPropagatesExceptionsAndRecordsMetrics() {
         when(requestSpec.call()).thenThrow(new RuntimeException("API error"));
 
         assertThatThrownBy(() -> agentService.chat("hello"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("API error");
+
+        // Metrics should still be recorded on failure with zero tokens
+        verify(agentMetrics).recordTurn(eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()));
     }
 
     @Test
@@ -89,6 +93,29 @@ class AgentServiceTest {
         agentService.chat("test");
 
         verify(agentMetrics).recordTurn(anyString(), anyLong(), anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void chatExtractsToolCallNames() {
+        List<AssistantMessage.ToolCall> toolCalls = List.of(
+                new AssistantMessage.ToolCall("tc1", "function", "shell_exec", "{}"),
+                new AssistantMessage.ToolCall("tc2", "function", "file_read", "{}"));
+        AssistantMessage assistantMessage = AssistantMessage.builder()
+                .content("result")
+                .toolCalls(toolCalls)
+                .build();
+        Generation generation = new Generation(assistantMessage);
+        ChatResponseMetadata metadata = ChatResponseMetadata.builder()
+                .usage(new EmptyUsage())
+                .model("claude-sonnet-4-5")
+                .build();
+        ChatResponse response = new ChatResponse(List.of(generation), metadata);
+        when(callResponseSpec.chatResponse()).thenReturn(response);
+
+        agentService.chat("run tools");
+
+        verify(agentMetrics).recordTurn(anyString(), anyLong(), anyLong(), anyLong(),
+                eq(List.of("shell_exec", "file_read")));
     }
 
     private ChatResponse mockChatResponse(String content) {
