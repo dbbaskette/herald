@@ -76,7 +76,8 @@ public class AgentService {
             toolCalls = extractToolCalls(chatResponse);
         } finally {
             long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
-            agentMetrics.recordTurn(model, tokensIn, tokensOut, latencyMs, toolCalls);
+            String provider = AgentMetrics.deriveProvider(model);
+            agentMetrics.recordTurn(provider, model, tokensIn, tokensOut, latencyMs, toolCalls, null);
         }
 
         String content = chatResponse != null && chatResponse.getResult() != null

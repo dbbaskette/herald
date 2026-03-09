@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 class AgentServiceTest {
@@ -52,7 +53,7 @@ class AgentServiceTest {
 
         assertThat(result).isEqualTo("Hello from Herald!");
         verify(requestSpec).user("Hi");
-        verify(agentMetrics).recordTurn(anyString(), anyLong(), anyLong(), anyLong(), any());
+        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -83,7 +84,7 @@ class AgentServiceTest {
                 .hasMessage("API error");
 
         // Metrics should still be recorded on failure with zero tokens
-        verify(agentMetrics).recordTurn(eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()));
+        verify(agentMetrics).recordTurn(eq("unknown"), eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()), isNull());
     }
 
     @Test
@@ -92,7 +93,7 @@ class AgentServiceTest {
 
         agentService.chat("test");
 
-        verify(agentMetrics).recordTurn(anyString(), anyLong(), anyLong(), anyLong(), any());
+        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -114,8 +115,8 @@ class AgentServiceTest {
 
         agentService.chat("run tools");
 
-        verify(agentMetrics).recordTurn(anyString(), anyLong(), anyLong(), anyLong(),
-                eq(List.of("shell_exec", "file_read")));
+        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(),
+                eq(List.of("shell_exec", "file_read")), isNull());
     }
 
     private ChatResponse mockChatResponse(String content) {
