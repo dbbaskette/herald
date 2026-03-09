@@ -15,14 +15,14 @@ class HeraldConfigTest {
     @Test
     void dbPathUsesConfiguredValue() {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory("/custom/path/herald.db"), null, null);
+                new HeraldConfig.Memory("/custom/path/herald.db"), null, null, null);
         assertThat(config.dbPath()).isEqualTo("/custom/path/herald.db");
     }
 
     @Test
     void dbPathUsesConfiguredTildePath() {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory("~/custom/herald.db"), null, null);
+                new HeraldConfig.Memory("~/custom/herald.db"), null, null, null);
         assertThat(config.dbPath()).isEqualTo("~/custom/herald.db");
     }
 

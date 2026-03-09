@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,8 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
+import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.Map;
+import java.util.List;
 
 @Component
 class CommandHandler {
@@ -20,14 +22,17 @@ class CommandHandler {
     private final MemoryTools memoryTools;
     private final ChatMemory chatMemory;
     private final TelegramSender sender;
+    private final UsageTracker usageTracker;
     private final String modelName;
     private final int activeToolsCount;
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
+                   UsageTracker usageTracker,
                    @Value("${spring.ai.anthropic.chat.options.model:unknown}") String modelName) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
+        this.usageTracker = usageTracker;
         this.modelName = modelName;
         // Default tools configured in HeraldAgentConfig: memory, shell, fs, todo, ask
         this.activeToolsCount = 5;
@@ -38,7 +43,6 @@ class CommandHandler {
             return false;
         }
 
-        String normalized = text.strip().toLowerCase();
         String[] parts = text.strip().split("\\s+", 4);
         String command = parts[0].toLowerCase();
 
@@ -48,6 +52,7 @@ class CommandHandler {
             case "/reset" -> handleReset();
             case "/debug" -> handleDebug();
             case "/memory" -> handleMemory(parts);
+            case "/model" -> handleModel(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -69,6 +74,7 @@ class CommandHandler {
                 /memory list — Display all stored memory entries
                 /memory set <key> <value> — Store a memory entry
                 /memory clear — Clear all memory entries
+                /model status — Show current model and daily token usage
                 """;
         sender.sendMessage(help);
     }
@@ -139,6 +145,56 @@ class CommandHandler {
                     "Unknown memory subcommand: " + subcommand
                             + "\nUsage: /memory list | /memory set <key> <value> | /memory clear");
         }
+    }
+
+    private void handleModel(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /model status");
+            return;
+        }
+
+        String subcommand = parts[1].toLowerCase();
+        if ("status".equals(subcommand)) {
+            handleModelStatus();
+        } else {
+            sender.sendMessage("Unknown model subcommand: " + subcommand
+                    + "\nUsage: /model status");
+        }
+    }
+
+    private void handleModelStatus() {
+        UsageTracker.UsageSummary daily = usageTracker.getDailyUsage();
+        List<UsageTracker.AgentUsage> breakdown = usageTracker.getDailyUsageByAgent();
+        BigDecimal cost = usageTracker.estimateDailyCost();
+
+        var sb = new StringBuilder();
+        sb.append("*Model Status*\n\n");
+        sb.append("Current model: ").append(modelName).append("\n");
+        sb.append("Tokens today: ").append(formatTokens(daily.tokensIn())).append(" in / ")
+                .append(formatTokens(daily.tokensOut())).append(" out\n");
+        sb.append("Estimated cost today: $").append(cost.toPlainString()).append("\n");
+
+        if (!breakdown.isEmpty()) {
+            sb.append("\n*Per-agent breakdown:*\n");
+            for (UsageTracker.AgentUsage usage : breakdown) {
+                sb.append("  ").append(usage.agent())
+                        .append(" (").append(usage.provider()).append("/").append(usage.model()).append("): ")
+                        .append(formatTokens(usage.tokensIn())).append(" in / ")
+                        .append(formatTokens(usage.tokensOut())).append(" out\n");
+            }
+        }
+
+        sender.sendMessage(sb.toString());
+    }
+
+    private String formatTokens(long tokens) {
+        if (tokens >= 1_000_000) {
+            return "%.1fM".formatted(tokens / 1_000_000.0);
+        }
+        if (tokens >= 1_000) {
+            return "%.1fK".formatted(tokens / 1_000.0);
+        }
+        return String.valueOf(tokens);
     }
 
     static String formatUptime(long millis) {
