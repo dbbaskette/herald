@@ -1,10 +1,10 @@
 PLIST       := com.herald.plist
-PLIST_DEST  := ~/Library/LaunchAgents/$(PLIST)
+PLIST_DEST  := $(HOME)/Library/LaunchAgents/$(PLIST)
 LABEL       := com.herald
-HERALD_HOME := ~/.herald
+HERALD_HOME := $(HOME)/.herald
 JAR_SOURCE  := herald-bot/target/herald-bot-0.1.0-SNAPSHOT.jar
 JAR_DEST    := $(HERALD_HOME)/herald-bot.jar
-LOG_FILE    := ~/Library/Logs/herald.log
+LOG_FILE    := $(HOME)/Library/Logs/herald.log
 
 .PHONY: build install uninstall start stop restart logs dev
 
@@ -13,8 +13,9 @@ build:
 
 install: build
 	@mkdir -p $(HERALD_HOME)
+	@mkdir -p $(HOME)/Library/LaunchAgents
 	cp $(JAR_SOURCE) $(JAR_DEST)
-	cp $(PLIST) $(PLIST_DEST)
+	sed 's|__HOME__|$(HOME)|g' $(PLIST) > $(PLIST_DEST)
 	launchctl load $(PLIST_DEST)
 	@echo "Herald service installed and started."
 

@@ -9,11 +9,11 @@
     <array>
         <string>java</string>
         <string>-jar</string>
-        <string>herald-bot.jar</string>
+        <string>__HOME__/.herald/herald-bot.jar</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>~/.herald</string>
+    <string>__HOME__/.herald</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -22,10 +22,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>~/Library/Logs/herald.log</string>
+    <string>__HOME__/Library/Logs/herald.log</string>
 
     <key>StandardErrorPath</key>
-    <string>~/Library/Logs/herald.log</string>
+    <string>__HOME__/Library/Logs/herald.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
