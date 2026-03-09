@@ -12,6 +12,6 @@ public record HeraldConfig(Memory memory) {
         if (memory != null && memory.dbPath() != null) {
             return memory.dbPath();
         }
-        return System.getProperty("user.home") + "/.herald/herald.db";
+        return "~/.herald/herald.db";
     }
 }
