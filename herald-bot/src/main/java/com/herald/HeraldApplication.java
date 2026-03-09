@@ -8,6 +8,14 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 @ConfigurationPropertiesScan
 public class HeraldApplication {
 
+    // TODO: When spring-ai-agent-utils is available, register the following tool beans:
+    //  - SkillsTool
+    //  - ShellTools
+    //  - FileSystemTools
+    //  - TodoWriteTool
+    //  - AskUserQuestionTool
+    //  - TaskTool
+
     public static void main(String[] args) {
         SpringApplication.run(HeraldApplication.class, args);
     }

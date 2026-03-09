@@ -12,6 +12,9 @@ spring:
         options:
           model: claude-sonnet-4-5
           max-tokens: 8192
+    # chat:
+    #   memory:
+    #     repository: jdbc
 
 herald:
   memory:
@@ -20,6 +23,7 @@ herald:
     bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
     allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}
 
+# TODO: Restrict management endpoints before production deployment (e.g. add Spring Security actuator config)
 management:
   endpoints:
     web:

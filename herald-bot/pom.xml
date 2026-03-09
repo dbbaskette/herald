@@ -34,6 +34,7 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-anthropic</artifactId>
         </dependency>
+        <!-- Note: 'model-' infix is correct for Spring AI 2.0.0-SNAPSHOT BOM -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
