@@ -5,6 +5,10 @@ spring:
     virtual:
       enabled: true
 
+  sql:
+    init:
+      mode: always
+
   ai:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
@@ -12,6 +16,10 @@ spring:
         options:
           model: claude-sonnet-4-5
           max-tokens: 8192
+
+herald:
+  memory:
+    db-path: ~/.herald/herald.db
 
 management:
   endpoints:
