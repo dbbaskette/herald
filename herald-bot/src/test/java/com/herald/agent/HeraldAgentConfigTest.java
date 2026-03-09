@@ -2,11 +2,14 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HeraldAgentConfigTest {
 
@@ -67,6 +70,37 @@ class HeraldAgentConfigTest {
         assertThat(template).contains("# Communication Style");
         assertThat(template).contains("# Safety Rules");
         assertThat(template).contains("# Dan's Context");
+    }
+
+    @Test
+    void emptyPersonaFallsBackToDefault() throws IOException {
+        String template = loadPromptTemplate();
+        HeraldConfig config = configWith("", null);
+
+        String result = agentConfig.resolvePrompt(template, config);
+
+        assertThat(result).contains("You are **Herald");
+        assertThat(result).doesNotContain("{persona}");
+    }
+
+    @Test
+    void blankPersonaFallsBackToDefault() throws IOException {
+        String template = loadPromptTemplate();
+        HeraldConfig config = configWith("   ", null);
+
+        String result = agentConfig.resolvePrompt(template, config);
+
+        assertThat(result).contains("You are **Herald");
+        assertThat(result).doesNotContain("{persona}");
+    }
+
+    @Test
+    void loadPromptTemplateThrowsForMissingResource() {
+        assertThatThrownBy(() ->
+                agentConfig.chatClient(null, configWith(null, null),
+                        new ClassPathResource("prompts/NONEXISTENT.md")))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasMessageContaining("Failed to load system prompt template");
     }
 
     private HeraldConfig configWith(String persona, String extra) {

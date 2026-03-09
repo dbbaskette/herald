@@ -15,7 +15,7 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent) {
     }
 
     public String persona() {
-        if (agent != null && agent.persona() != null) {
+        if (agent != null && agent.persona() != null && !agent.persona().isBlank()) {
             return agent.persona();
         }
         return "Herald — Dan's personal AI agent. Autonomous, capable, dry wit. "
@@ -23,7 +23,7 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent) {
     }
 
     public String systemPromptExtra() {
-        if (agent != null && agent.systemPromptExtra() != null) {
+        if (agent != null && agent.systemPromptExtra() != null && !agent.systemPromptExtra().isBlank()) {
             return agent.systemPromptExtra();
         }
         return "";

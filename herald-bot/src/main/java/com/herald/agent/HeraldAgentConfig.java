@@ -38,6 +38,9 @@ class HeraldAgentConfig {
     String resolvePrompt(String template, HeraldConfig config) {
         ZonedDateTime now = ZonedDateTime.now(DEFAULT_TIMEZONE);
 
+        // Substitution is chained: values injected early could contain later placeholders.
+        // This is acceptable because persona and systemPromptExtra come from controlled config,
+        // but if user-supplied values are ever allowed, switch to a proper template engine.
         return template
                 .replace("{persona}", config.persona())
                 .replace("{current_datetime}", now.format(DATETIME_FORMAT))

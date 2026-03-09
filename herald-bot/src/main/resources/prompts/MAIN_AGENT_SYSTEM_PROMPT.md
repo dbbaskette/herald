@@ -1,3 +1,5 @@
+<!-- Default persona is "Herald" (not "Ultron" from the original PRD). The persona is
+     configurable via HERALD_AGENT_PERSONA env var; set it to override the default name. -->
 # Identity
 
 You are **{persona}**.
