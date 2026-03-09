@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.model.Message;
@@ -26,15 +27,18 @@ class TelegramPoller {
     private final TelegramSender sender;
     private final TelegramQuestionHandler questionHandler;
     private final CommandHandler commandHandler;
+    private final AgentService agentService;
     private int offset = 0;
 
     TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
-                   TelegramQuestionHandler questionHandler, CommandHandler commandHandler) {
+                   TelegramQuestionHandler questionHandler, CommandHandler commandHandler,
+                   AgentService agentService) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
         this.questionHandler = questionHandler;
         this.commandHandler = commandHandler;
+        this.agentService = agentService;
     }
 
     @PostConstruct
@@ -101,7 +105,15 @@ class TelegramPoller {
             }
         }
 
-        // TODO: pass message to agent loop (wired in a later issue)
-        log.debug("Agent loop not yet wired — message received: {}", text);
+        // Pass message to agent loop
+        try {
+            String response = agentService.chat(text);
+            if (response != null && !response.isBlank()) {
+                sender.sendMessage(response);
+            }
+        } catch (Exception e) {
+            log.error("Agent loop error: {}", e.getMessage(), e);
+            sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");
+        }
     }
 }
