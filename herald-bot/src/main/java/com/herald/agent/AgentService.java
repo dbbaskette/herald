@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 public class AgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
-    private static final String DEFAULT_CONVERSATION_ID = "default";
+    public static final String DEFAULT_CONVERSATION_ID = "default";
 
     private final ModelSwitcher modelSwitcher;
     private final AgentMetrics agentMetrics;

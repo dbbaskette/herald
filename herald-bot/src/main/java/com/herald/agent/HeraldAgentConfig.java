@@ -51,6 +51,13 @@ class HeraldAgentConfig {
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
     private static final int MAX_CONVERSATION_MESSAGES = 100;
 
+    // Keep in sync with .defaultTools() and .defaultToolCallbacks() in modelSwitcher()
+    @Bean
+    @Qualifier("activeToolNames")
+    List<String> activeToolNames() {
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput");
+    }
+
     @Bean
     ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
