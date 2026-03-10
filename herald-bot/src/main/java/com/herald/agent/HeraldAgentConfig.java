@@ -7,7 +7,6 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
-import org.springaicommunity.agent.tools.SkillsTool;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentReferences;
@@ -69,9 +68,9 @@ class HeraldAgentConfig {
     }
 
     @Bean
-    @Qualifier("skillsDirectory")
-    String skillsDirectory(@Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
-        return skillsDirectory;
+    ReloadableSkillsTool reloadableSkillsTool(
+            @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+        return new ReloadableSkillsTool(skillsDirectory);
     }
 
     @Bean
@@ -87,7 +86,7 @@ class HeraldAgentConfig {
             JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
-            @Qualifier("skillsDirectory") String skillsDirectory,
+            ReloadableSkillsTool reloadableSkillsTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
@@ -137,19 +136,12 @@ class HeraldAgentConfig {
                 .taskRepository(taskRepository)
                 .build();
 
-        ToolCallback skillsTool = buildSkillsTool(skillsDirectory);
-
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
-        Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm -> {
-                var builder = ChatClient.builder(cm)
+        Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
+                ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
-                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool);
-                if (skillsTool != null) {
-                    builder.defaultToolCallbacks(taskTool, taskOutputTool, skillsTool);
-                } else {
-                    builder.defaultToolCallbacks(taskTool, taskOutputTool);
-                }
-                return builder
+                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
+                        .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 contextMdAdvisor,
@@ -159,7 +151,6 @@ class HeraldAgentConfig {
                                         .conversationHistoryEnabled(false)
                                         .build()
                         );
-        };
 
         // Build the initial client from the default Anthropic ChatModel
         ChatClient initialClient = clientBuilderFactory.apply(chatModel).build();
@@ -199,20 +190,6 @@ class HeraldAgentConfig {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
-    }
-
-    static ToolCallback buildSkillsTool(String skillsDirectory) {
-        Path skillsPath = Path.of(skillsDirectory);
-        if (!Files.isDirectory(skillsPath)) {
-            return null;
-        }
-        var skills = org.springaicommunity.agent.utils.Skills.loadDirectory(skillsDirectory);
-        if (skills.isEmpty()) {
-            return null;
-        }
-        return SkillsTool.builder()
-                .addSkillsDirectory(skillsDirectory)
-                .build();
     }
 
     List<SubagentReference> loadSubagentReferences(String agentsDirectory) {

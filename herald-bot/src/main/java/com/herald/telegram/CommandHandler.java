@@ -6,8 +6,8 @@ import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.herald.agent.ReloadableSkillsTool;
 import org.springaicommunity.agent.tools.SkillsTool;
-import org.springaicommunity.agent.utils.Skills;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -28,20 +28,20 @@ class CommandHandler {
     private final TelegramSender sender;
     private final UsageTracker usageTracker;
     private final ModelSwitcher modelSwitcher;
-    private final String skillsDirectory;
+    private final ReloadableSkillsTool reloadableSkillsTool;
     private final int activeToolsCount;
     private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
                    UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                    @Qualifier("activeToolNames") List<String> activeToolNames,
-                   @Qualifier("skillsDirectory") String skillsDirectory) {
+                   ReloadableSkillsTool reloadableSkillsTool) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
         this.usageTracker = usageTracker;
         this.modelSwitcher = modelSwitcher;
-        this.skillsDirectory = skillsDirectory;
+        this.reloadableSkillsTool = reloadableSkillsTool;
         this.activeToolsCount = activeToolNames.size();
     }
 
@@ -199,17 +199,17 @@ class CommandHandler {
         String subcommand = parts[1].toLowerCase();
         switch (subcommand) {
             case "list" -> {
-                List<SkillsTool.Skill> skills = Skills.loadDirectory(skillsDirectory);
+                List<SkillsTool.Skill> skills = reloadableSkillsTool.getSkills();
                 if (skills.isEmpty()) {
-                    sender.sendMessage("No skills found in " + skillsDirectory);
+                    sender.sendMessage("No skills found in " + reloadableSkillsTool.getSkillsDirectory());
                     return;
                 }
                 var sb = new StringBuilder("*Loaded Skills*\n\n");
                 for (SkillsTool.Skill skill : skills) {
                     String name = skill.name();
-                    Object desc = skill.frontMatter().get("description");
+                    String desc = String.valueOf(skill.frontMatter().get("description"));
                     sb.append("- *").append(name).append("*");
-                    if (desc != null) {
+                    if (!"null".equals(desc)) {
                         sb.append(" — ").append(desc);
                     }
                     sb.append("\n");
@@ -217,9 +217,10 @@ class CommandHandler {
                 sender.sendMessage(sb.toString());
             }
             case "reload" -> {
-                List<SkillsTool.Skill> skills = Skills.loadDirectory(skillsDirectory);
-                sender.sendMessage("Reloaded %d skill(s) from %s".formatted(skills.size(), skillsDirectory));
-                log.info("Skills reloaded from {}: {} skill(s)", skillsDirectory, skills.size());
+                int count = reloadableSkillsTool.reload();
+                String dir = reloadableSkillsTool.getSkillsDirectory();
+                sender.sendMessage("Reloaded %d skill(s) from %s".formatted(count, dir));
+                log.info("Skills reloaded from {}: {} skill(s)", dir, count);
             }
             default -> sender.sendMessage(
                     "Unknown skills subcommand: " + subcommand
