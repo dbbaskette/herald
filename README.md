@@ -76,6 +76,7 @@ sequenceDiagram
 - **Telegram Bot Token** (from [@BotFather](https://t.me/BotFather))
 - **Anthropic API Key**
 - **Node.js 20+** and **npm** (for Console frontend build)
+- **gws** _(optional)_ — Google Workspace CLI for Gmail/Calendar skills ([setup guide](docs/gws-setup.md))
 
 ## Quick Start
 
