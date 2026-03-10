@@ -172,7 +172,11 @@ describe('stores', () => {
     })
 
     it('fetchJobs populates jobs on success', async () => {
-      const mockJobs = [{ id: '1', name: 'job', expression: '0 * * * *', enabled: true }]
+      const mockJobs = [{
+        id: '1', name: 'job', expression: '0 * * * *', enabled: true,
+        builtIn: false, promptText: '', status: 'idle',
+        lastRun: null, nextRun: null, lastRunLog: null,
+      }]
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(mockJobs),
