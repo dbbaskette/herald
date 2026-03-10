@@ -2,6 +2,7 @@ package com.herald.tools;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -18,12 +19,19 @@ import java.util.stream.IntStream;
 public class TodoWriteTool {
 
     private final CopyOnWriteArrayList<TodoItem> items = new CopyOnWriteArrayList<>();
+    private final ApplicationEventPublisher eventPublisher;
+
+    public TodoWriteTool(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
 
     @Tool(description = "Add a new TODO item to the task list.")
     public String todo_add(
             @ToolParam(description = "Description of the task") String task) {
         items.add(new TodoItem(task, false));
-        return "Added TODO: " + task;
+        String result = "Added TODO: " + task;
+        eventPublisher.publishEvent(new TodoProgressEvent(this, result));
+        return result;
     }
 
     @Tool(description = "Mark a TODO item as complete by its 1-based index.")
@@ -34,7 +42,9 @@ public class TodoWriteTool {
         }
         TodoItem old = items.get(index - 1);
         items.set(index - 1, new TodoItem(old.task(), true));
-        return "Completed: " + old.task();
+        String result = "Completed: " + old.task();
+        eventPublisher.publishEvent(new TodoProgressEvent(this, result));
+        return result;
     }
 
     @Tool(description = "List all TODO items with their status.")
