@@ -51,6 +51,7 @@ herald:
   agent:
     persona: ${HERALD_AGENT_PERSONA:}
     system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
+    context-file: ${HERALD_AGENT_CONTEXT_FILE:~/.herald/CONTEXT.md}
   security:
     shell-blocklist:
       - 'rm\s+-rf\s+/'

@@ -35,7 +35,7 @@ class HeraldConfigTest {
     @Test
     void personaUsesConfiguredValue() {
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("Custom Persona", null), null);
+                new HeraldConfig.Agent("Custom Persona", null, null), null);
         assertThat(config.persona()).isEqualTo("Custom Persona");
     }
 
@@ -48,7 +48,20 @@ class HeraldConfigTest {
     @Test
     void systemPromptExtraUsesConfiguredValue() {
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent(null, "Extra instructions"), null);
+                new HeraldConfig.Agent(null, "Extra instructions", null), null);
         assertThat(config.systemPromptExtra()).isEqualTo("Extra instructions");
+    }
+
+    @Test
+    void contextFileDefaultsToTildePath() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null);
+        assertThat(config.contextFile()).isEqualTo("~/.herald/CONTEXT.md");
+    }
+
+    @Test
+    void contextFileUsesConfiguredValue() {
+        HeraldConfig config = new HeraldConfig(null, null,
+                new HeraldConfig.Agent(null, null, "/custom/CONTEXT.md"), null);
+        assertThat(config.contextFile()).isEqualTo("/custom/CONTEXT.md");
     }
 }

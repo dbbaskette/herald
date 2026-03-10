@@ -31,6 +31,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -91,6 +92,11 @@ class HeraldAgentConfig {
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config);
 
+        // Set up CONTEXT.md advisor — reads standing brief from disk each turn
+        Path contextFilePath = resolveTildePath(config.contextFile());
+        ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(contextFilePath);
+        contextMdAdvisor.ensureTemplateExists(loadContextTemplate());
+
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
@@ -131,6 +137,7 @@ class HeraldAgentConfig {
                         .defaultToolCallbacks(taskTool, taskOutputTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
+                                contextMdAdvisor,
                                 new MemoryBlockAdvisor(memoryTools),
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                 ToolCallAdvisor.builder()
@@ -192,5 +199,23 @@ class HeraldAgentConfig {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load system prompt template", e);
         }
+    }
+
+    String loadContextTemplate() {
+        try (InputStream in = getClass().getResourceAsStream("/prompts/CONTEXT_TEMPLATE.md")) {
+            if (in == null) {
+                throw new IllegalStateException("CONTEXT_TEMPLATE.md not found on classpath");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to load CONTEXT.md template", e);
+        }
+    }
+
+    static Path resolveTildePath(String path) {
+        if (path.startsWith("~/") || path.equals("~")) {
+            return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
+        }
+        return Path.of(path);
     }
 }

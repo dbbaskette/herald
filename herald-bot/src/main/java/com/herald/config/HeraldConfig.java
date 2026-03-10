@@ -11,7 +11,7 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record Telegram(String botToken, String allowedChatId) {
     }
 
-    public record Agent(String persona, String systemPromptExtra) {
+    public record Agent(String persona, String systemPromptExtra, String contextFile) {
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
@@ -37,6 +37,13 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.systemPromptExtra();
         }
         return "";
+    }
+
+    public String contextFile() {
+        if (agent != null && agent.contextFile() != null && !agent.contextFile().isBlank()) {
+            return agent.contextFile();
+        }
+        return "~/.herald/CONTEXT.md";
     }
 
     public String dbPath() {
