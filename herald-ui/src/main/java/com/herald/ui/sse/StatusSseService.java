@@ -51,6 +51,17 @@ public class StatusSseService {
         }
     }
 
+    public void publishSkillReload(String timestamp) {
+        Map<String, String> payload = Map.of("timestamp", timestamp);
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().name("skill-reload").data(payload));
+            } catch (IOException e) {
+                emitter.completeWithError(e);
+            }
+        }
+    }
+
     public Map<String, Object> buildStatus() {
         Integer messageCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM messages", Integer.class);
         Integer pendingCommandCount = jdbcTemplate.queryForObject(
