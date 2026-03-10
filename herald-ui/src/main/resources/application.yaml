@@ -11,6 +11,7 @@ spring:
 herald:
   ui:
     db-path: ${HERALD_DB_PATH:~/.herald/herald.db}
+    skills-path: ${HERALD_SKILLS_PATH:~/.herald/skills}
 
 server:
   port: 8080
