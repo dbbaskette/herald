@@ -1,206 +1,313 @@
 ---
 name: obsidian
 description: >
-  Manages Obsidian vault via Obsidian CLI — search notes, read/create/update notes
-  with YAML properties and backlinks, manage daily notes, list tasks, and run commands.
-  Use when asked about notes, knowledge base, vault, daily journal, or linked references.
+  Manages Obsidian vault via the official Obsidian CLI (v1.12+) — search notes,
+  read/create/update notes, manage daily notes, list tasks and tags, view backlinks,
+  and run commands. Use when asked about notes, knowledge base, vault, daily journal,
+  or linked references.
 ---
 
 # Obsidian Knowledge Base Skill
 
-Manage an Obsidian vault using the `obsidian` CLI tool (v1.12+). The CLI communicates with the running Obsidian desktop app via IPC, providing full access to vault features including backlinks, YAML properties, Dataview refreshes, and plugin actions.
+Manage an Obsidian vault using the official `obsidian` CLI (requires Obsidian 1.12+ with CLI enabled).
+The CLI communicates with the running Obsidian desktop app via IPC.
 
-**IMPORTANT: The Obsidian desktop app must be running with CLI enabled (Settings → Command line interface → Toggle ON).**
+**IMPORTANT: The Obsidian desktop app must be running with CLI enabled (Settings → General → Command line interface → Toggle ON).**
 
 ## Prerequisites
 
-The `obsidian` CLI must be installed and the Obsidian app must be running. Test with:
+The `obsidian` CLI must be registered and the Obsidian app must be running. Test with:
 
 ```bash
-obsidian search "test" 2>&1 | head -5
+obsidian version
 ```
 
-If this fails, tell the user: "The Obsidian CLI is not available. Make sure Obsidian is running and CLI is enabled in Settings → Command line interface → Toggle ON."
+If this fails, tell the user: "The Obsidian CLI is not available. Make sure Obsidian 1.12+ is installed, running, and CLI is enabled in Settings → General → Command line interface → Toggle ON. See https://help.obsidian.md/cli for setup."
+
+### macOS PATH
+
+On macOS, the CLI is at `/Applications/Obsidian.app/Contents/MacOS/obsidian`. The installer adds this to `~/.zprofile`. If it's not on PATH, the user needs:
+
+```bash
+export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
+```
+
+## CLI Syntax
+
+All commands use `key=value` parameters (not POSIX flags). Quote values with spaces:
+
+```bash
+obsidian command param=value param2="value with spaces"
+```
+
+- `file=<name>` — resolves like wikilinks (name only, no path/extension needed)
+- `path=<path>` — exact path from vault root (e.g. `folder/note.md`)
+- If neither is given, most commands default to the active file.
 
 ## Commands
 
 ### Search Notes
 
 ```bash
-obsidian search "query"
+obsidian search query="meeting notes"
+obsidian search query="Spring AI" path="Projects"
+obsidian search query="TODO" total
 ```
 
-- Full-text search across the entire vault.
-- Returns matching notes with context snippets.
-- Use specific keywords for more precise results.
+- `query=<text>` — (required) search text
+- `path=<folder>` — limit to folder
+- `limit=<n>` — max results
+- `total` — return match count only
+- `format=text|json` — output format (default: text)
 
-**Use for:** "Find my notes about Spring AI", "Search for notes mentioning Herald", "What do I have about microservices?"
-
-### Search by Tag
+For search with line context (grep-style `path:line: text` output):
 
 ```bash
-obsidian search --tag "tag-name"
+obsidian search:context query="meeting notes"
 ```
 
-- Find all notes with a specific tag.
-- Supports nested tags: `--tag "project/herald"`.
-- Combine with text search for narrower results.
+**Use for:** "Find my notes about Spring AI", "Search for notes mentioning Herald"
 
-**Use for:** "Show me notes tagged #meeting from this week", "Find all project/herald notes", "What notes have the #architecture tag?"
-
-### Read Note
+### Read a Note
 
 ```bash
-obsidian cat "Note Name"
+obsidian read file="Recipe"
+obsidian read path="Projects/Herald/architecture.md"
 ```
 
-Or by path:
+- `file=<name>` — file name (wikilink resolution)
+- `path=<path>` — exact vault-relative path
+- Defaults to active file if neither specified.
+
+**Use for:** "Show me the Herald architecture note", "Read my meeting notes from Friday"
+
+### Create a Note
 
 ```bash
-obsidian cat "path/to/note.md"
+obsidian create name="Trip to Paris"
+obsidian create name="Meeting Notes" content="# Meeting\n\nAttendees: ..."
+obsidian create name="New Project" template="Project Template"
+obsidian create name="Quick Note" content="Hello" open
 ```
 
-- Returns the full content of a note including YAML frontmatter.
-- Use the note name (without `.md`) or the full vault-relative path.
-- Parse YAML frontmatter to understand note metadata (tags, aliases, dates, etc.).
+- `name=<name>` — file name
+- `path=<path>` — exact file path
+- `content=<text>` — initial content (use `\n` for newlines)
+- `template=<name>` — template to use
+- `overwrite` — overwrite if file exists
+- `open` — open file after creating
 
-**Use for:** "Show me the Herald architecture note", "Read my meeting notes from Friday", "What's in the project roadmap note?"
+**Use for:** "Create a note called 'Herald Architecture Decisions'", "Make a new meeting note"
 
-### Create Note
+### Append to a Note
 
 ```bash
-obsidian create "Note Name" --content "Markdown content here" --properties '{"tags": ["tag1", "tag2"], "date": "2026-03-09"}'
+obsidian append file="Daily" content="- Met with X about Y"
+obsidian append content="## New Section\n\nContent here"
 ```
 
-- Creates a new note with optional content and YAML properties.
-- The `--properties` flag accepts a JSON object that becomes YAML frontmatter.
-- Use `[[Note Name]]` syntax in content to create backlinks to other notes.
-- Common properties: `tags`, `date`, `aliases`, `cssclasses`, custom fields.
-- If the note already exists, the command will fail — use `append` or `properties set` to modify existing notes.
+- `file=<name>` / `path=<path>` — target file (defaults to active)
+- `content=<text>` — (required) content to append
+- `inline` — append without leading newline
 
-**Use for:** "Create a note called 'Herald Architecture Decisions'", "Make a new meeting note for today's standup", "Start a new project note with these tags"
+**Use for:** "Add this to my daily note", "Append these action items to the meeting note"
 
-### Append to Note
+### Prepend to a Note
 
 ```bash
-obsidian append "Note Name" --content "Additional content here"
+obsidian prepend file="Daily" content="# Priority Tasks"
 ```
 
-- Appends content to the end of an existing note.
-- Use for adding entries to running notes, daily logs, or lists.
-- Content is appended as-is — include newlines and formatting as needed.
-- Use `[[backlinks]]` in content to link to other notes.
-
-**Use for:** "Add this to my daily note", "Append these action items to the meeting note", "Log this to my Herald development journal"
-
-### Update Properties
-
-```bash
-obsidian properties set "Note Name" --key value
-```
-
-- Updates or adds YAML frontmatter properties on an existing note.
-- Use for tagging, setting status, adding dates, or custom metadata.
-- Property values can be strings, numbers, booleans, or arrays.
-
-**Use for:** "Tag this note with #completed", "Set the status to 'in-progress'", "Add the 'herald' tag to that note"
+- Same parameters as `append`, inserts after frontmatter.
 
 ### Daily Note
 
 ```bash
 obsidian daily
+obsidian daily:read
+obsidian daily:append content="- [ ] Buy groceries"
+obsidian daily:prepend content="## Top Priority"
+obsidian daily:path
 ```
 
-- Opens or creates today's daily note using the configured daily note template.
-- Returns the content of the daily note.
-- Use `obsidian append` with the daily note name to add entries.
+- `daily` — open today's daily note
+- `daily:read` — read daily note contents
+- `daily:append` — append content to daily note
+- `daily:prepend` — prepend content to daily note
+- `daily:path` — get the daily note file path
 
-**Use for:** "What's in my daily note?", "Open today's daily note", "Add this to today's journal"
+**Use for:** "What's in my daily note?", "Add a task to today's note"
 
-### List Tasks
+### Tasks
 
 ```bash
-obsidian tasks --status incomplete
+obsidian tasks todo
+obsidian tasks done
+obsidian tasks daily
+obsidian tasks file="Project Plan" todo
+obsidian tasks todo verbose
 ```
 
-- Lists incomplete tasks (`- [ ]`) from across the vault.
-- Returns tasks with their source note for context.
-- For completed tasks: `--status complete`.
-- For all tasks: omit the `--status` flag.
+- `todo` — show incomplete tasks only
+- `done` — show completed tasks only
+- `daily` — tasks from daily note only
+- `file=<name>` / `path=<path>` — filter by file
+- `total` — return count only
+- `verbose` — group by file with line numbers
+- `format=json|tsv|csv` — output format
 
-**Use for:** "What tasks are open in my project notes?", "Show my incomplete to-dos", "List all open tasks"
+Toggle or update a task:
+
+```bash
+obsidian task ref="Recipe.md:8" toggle
+obsidian task daily line=3 done
+obsidian task file="Project" line=12 todo
+```
+
+**Use for:** "What tasks are open?", "Show incomplete todos from my daily note", "Mark task on line 5 as done"
+
+### Tags
+
+```bash
+obsidian tags
+obsidian tags counts
+obsidian tags sort=count
+obsidian tag name="meeting"
+```
+
+- `counts` — include tag occurrence counts
+- `sort=count` — sort by frequency
+- `total` — return tag count only
+- `active` — tags for active file only
+- `file=<name>` — tags for specific file
+
+**Use for:** "What tags do I use?", "Show notes tagged #meeting"
+
+### Properties (Frontmatter)
+
+```bash
+obsidian properties file="Recipe"
+obsidian property:read file="Recipe" name="tags"
+obsidian property:set file="Recipe" name="status" value="complete"
+obsidian property:remove file="Recipe" name="draft"
+```
+
+- `property:read` — read a property value
+- `property:set` — set/update a property
+- `property:remove` — remove a property
+- `name=<name>` — (required) property name
+- `value=<value>` — (required for set) property value
+- `type=text|list|number|checkbox|date|datetime` — property type
+
+**Use for:** "Tag this note with completed", "Set the status to in-progress"
 
 ### Backlinks
 
 ```bash
-obsidian backlinks "Note Name"
+obsidian backlinks file="Herald"
+obsidian backlinks counts
+obsidian backlinks total
 ```
 
-- Finds all notes that link to the specified note via `[[Note Name]]`.
-- Returns linking note names and the context around each link.
-- Useful for understanding how a concept connects to other notes.
+- `file=<name>` / `path=<path>` — target file
+- `counts` — include link counts
+- `total` — return backlink count only
+- `format=json|tsv|csv` — output format
 
-**Use for:** "What notes link to the 'Herald' note?", "Show backlinks to my architecture decisions", "What references this note?"
-
-### Run Command
+Related link commands:
 
 ```bash
-obsidian command "command-id"
+obsidian links file="Herald"
+obsidian unresolved
+obsidian orphans
+obsidian deadends
 ```
 
-- Triggers any Obsidian command palette action by its command ID.
-- Use for plugin actions, workspace commands, or built-in operations.
-- Common commands: `daily-notes`, `graph:open`, `editor:toggle-source`.
+**Use for:** "What notes link to Herald?", "Show orphan notes", "Find broken links"
 
-**Use for:** "Open the graph view", "Run the Dataview refresh", "Toggle reading mode"
+### Outline
+
+```bash
+obsidian outline file="Recipe"
+obsidian outline format=md
+```
+
+- Shows heading structure of a file.
+- `format=tree|md|json` — output format
+
+### Run a Command
+
+```bash
+obsidian command id="daily-notes"
+obsidian commands filter="daily"
+```
+
+- `id=<command-id>` — (required) Obsidian command palette ID to execute
+- `commands` — list all available command IDs
+- `filter=<prefix>` — filter command list by prefix
+
+**Use for:** "Open the graph view", "Run the Dataview refresh"
+
+### File Management
+
+```bash
+obsidian open file="Recipe"
+obsidian file file="Recipe"
+obsidian files folder="Projects" ext=md
+obsidian move file="Old Name" to="Archive/Old Name.md"
+obsidian rename file="Draft" name="Final Version"
+obsidian delete file="Scratch" permanent
+```
+
+### Templates
+
+```bash
+obsidian templates
+obsidian template:read name="Meeting Notes"
+obsidian template:read name="Meeting Notes" resolve
+```
+
+- `resolve` — process `{{date}}`, `{{time}}`, `{{title}}` variables
+
+### Vault Info
+
+```bash
+obsidian vault
+obsidian vaults
+```
+
+### Word Count
+
+```bash
+obsidian wordcount file="Essay"
+obsidian wordcount words
+obsidian wordcount characters
+```
 
 ## Response Formatting
 
 Format responses as clean Telegram-friendly messages (Markdown):
 
-- **Search results:** `• **Note Name** — <snippet or summary>` one per note, most relevant first. Include the path if notes share names.
-- **Note content:** Show the note title as a bold header, then the content. Summarize long notes unless the user asks for the full text.
-- **Created note:** "Note created: **<Note Name>** with tags: `tag1`, `tag2`. Added backlinks to: [[linked note]]."
-- **Appended content:** "Added to **<Note Name>**: <brief summary of what was appended>."
-- **Task list:** `• ☐ <task text> (from **<source note>**)` one per task.
-- **Backlinks:** `• **<Linking Note>** — <context snippet around the link>` one per linking note.
-- **Daily note:** Show today's date as header, then the note content or a summary.
-- **Empty results:** "No notes found matching that search." or "No incomplete tasks found in your vault."
+- **Search results:** `• **Note Name** — <snippet>` one per note, most relevant first.
+- **Note content:** Bold header, then content. Summarize long notes unless full text requested.
+- **Created/appended:** Confirm what was done: "Created **Trip to Paris** with template Travel."
+- **Task list:** `• [ ] <task text> (from **<source note>**)` one per task.
+- **Backlinks:** `• **<Linking Note>** — <context>` one per linking note.
+- **Daily note:** Today's date as header, then content or summary.
+- **Empty results:** "No notes found matching that search." / "No incomplete tasks found."
 
 ## Error Handling
 
 | Error | Response |
 |-------|----------|
-| `obsidian: command not found` | "The Obsidian CLI is not installed. Install Obsidian v1.12+ and enable the CLI in Settings → Command line interface." |
-| Connection refused / IPC error | "Can't connect to Obsidian. Make sure the app is running and CLI is enabled in Settings → Command line interface → Toggle ON." |
-| Note not found | "Note '<name>' was not found in your vault. Check the name or try searching for it." |
-| Note already exists (on create) | "A note named '<name>' already exists. Use append to add content or read it first." |
-| Vault locked / sync conflict | "Your vault appears to be locked or syncing. Wait a moment and try again." |
-| Invalid properties JSON | "The properties format was invalid. Properties should be valid JSON, e.g., `{\"tags\": [\"example\"]}`." |
-| No results | "No notes found matching that search." |
-
-## Example Interactions
-
-**"Find my notes about Spring AI"**
-→ Run `obsidian search "Spring AI"`. List matching notes with snippets. Offer to read any specific note.
-
-**"Add this to my daily note: met with X about Y"**
-→ Run `obsidian daily` to get today's daily note name. Then `obsidian append "<daily note>" --content "\n- Met with X about Y"`. Confirm the addition.
-
-**"Create a note called 'Herald Architecture Decisions' with these points..."**
-→ Run `obsidian create "Herald Architecture Decisions" --content "<formatted points>" --properties '{"tags": ["herald", "architecture"]}'`. Include `[[Herald]]` backlink in the content.
-
-**"What tasks are open in my project notes?"**
-→ Run `obsidian tasks --status incomplete`. Group tasks by source note. Highlight any with due dates.
-
-**"What notes link to the 'Herald' note?"**
-→ Run `obsidian backlinks "Herald"`. List each linking note with the context around the link.
-
-**"Show me notes tagged #meeting from this week"**
-→ Run `obsidian search --tag "meeting"`. Filter results to recent notes. Show note names with dates and snippets.
+| `obsidian: command not found` | "The Obsidian CLI is not on your PATH. Make sure Obsidian 1.12+ is installed and CLI is enabled in Settings → General. See https://help.obsidian.md/cli" |
+| Connection refused / timeout | "Can't connect to Obsidian. Make sure the app is running." |
+| File not found | "Note '<name>' was not found. Check the name or try searching." |
+| File already exists (on create) | "A note named '<name>' already exists. Use append to add content, or pass `overwrite` to replace it." |
 
 ## Integration Notes
 
-- **Morning briefing:** Pull daily note content and incomplete tasks for the daily summary.
-- **Auto-memory sync:** Key facts from Herald memory can be synced to an Obsidian "Herald Memory" note.
-- **Research:** Search Obsidian for existing knowledge before performing web research with the research subagent.
+- **Morning briefing:** Pull `daily:read` content and `tasks daily todo` for the daily summary.
+- **Auto-memory sync:** Key facts from Herald memory can be written to an Obsidian note via `create`/`append`.
+- **Research:** Search Obsidian with `search query=...` for existing knowledge before using web research.
+- **Clipboard:** Add `--copy` to any command to copy output to clipboard instead of stdout.
