@@ -3,7 +3,7 @@ package com.herald.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
-public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers) {
+public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron) {
 
     public record Memory(String dbPath) {
     }
@@ -52,6 +52,16 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.maxContextTokens();
         }
         return 200_000; // Claude default context window
+    }
+
+    public record Cron(String timezone) {
+    }
+
+    public String cronTimezone() {
+        if (cron != null && cron.timezone() != null && !cron.timezone().isBlank()) {
+            return cron.timezone();
+        }
+        return "America/New_York";
     }
 
     public String dbPath() {
