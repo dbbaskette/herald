@@ -10,7 +10,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 @Component
-class MemoryRepository {
+public class MemoryRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -27,7 +27,7 @@ class MemoryRepository {
                 key, value);
     }
 
-    String get(String key) {
+    public String get(String key) {
         List<String> results = jdbcTemplate.queryForList(
                 "SELECT value FROM memory WHERE key = ?", String.class, key);
         return results.isEmpty() ? null : results.get(0);

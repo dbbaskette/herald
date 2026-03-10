@@ -184,14 +184,27 @@ class CronServiceTest {
     @Test
     void executeJobUsesBriefingJobForMorningBriefing() {
         CronJob job = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "base prompt", null, true, true);
-        when(briefingJob.buildPrompt("base prompt")).thenReturn("enriched prompt");
+        when(briefingJob.buildMorningPrompt()).thenReturn("enriched prompt");
         when(agentService.chat("enriched prompt", "cron-morning-briefing")).thenReturn("briefing result");
 
         cronService.executeJob(job);
 
-        verify(briefingJob).buildPrompt("base prompt");
+        verify(briefingJob).buildMorningPrompt();
         verify(agentService).chat("enriched prompt", "cron-morning-briefing");
         verify(telegramSender).sendMessage("briefing result");
+    }
+
+    @Test
+    void executeJobUsesBriefingJobForWeeklyReview() {
+        CronJob job = new CronJob(2, "weekly-review", "0 18 * * 5", "base prompt", null, true, true);
+        when(briefingJob.buildWeeklyPrompt()).thenReturn("weekly prompt");
+        when(agentService.chat("weekly prompt", "cron-weekly-review")).thenReturn("weekly result");
+
+        cronService.executeJob(job);
+
+        verify(briefingJob).buildWeeklyPrompt();
+        verify(agentService).chat("weekly prompt", "cron-weekly-review");
+        verify(telegramSender).sendMessage("weekly result");
     }
 
     @Test
