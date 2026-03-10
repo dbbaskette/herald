@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -124,6 +123,7 @@ class HeraldAgentConfig {
                         .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
                         .defaultToolCallbacks(taskTool, taskOutputTool)
                         .defaultAdvisors(
+                                new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 new MemoryBlockAdvisor(memoryTools),
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                 ToolCallAdvisor.builder()
@@ -160,16 +160,14 @@ class HeraldAgentConfig {
         return AnthropicChatOptions.builder().model(modelId).build();
     }
 
+    /**
+     * Resolves static placeholders in the prompt template. Dynamic placeholders like
+     * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
+     * here and handled per-turn by {@link DateTimePromptAdvisor}.
+     */
     String resolvePrompt(String template, HeraldConfig config) {
-        ZonedDateTime now = ZonedDateTime.now(DEFAULT_TIMEZONE);
-
-        // Substitution is chained: values injected early could contain later placeholders.
-        // This is acceptable because persona and systemPromptExtra come from controlled config,
-        // but if user-supplied values are ever allowed, switch to a proper template engine.
         return template
                 .replace("{persona}", config.persona())
-                .replace("{current_datetime}", now.format(DATETIME_FORMAT))
-                .replace("{timezone}", DEFAULT_TIMEZONE.getId())
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 
