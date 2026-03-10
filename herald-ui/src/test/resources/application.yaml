@@ -7,3 +7,4 @@ herald:
   ui:
     db-path: ${java.io.tmpdir}/herald-test-${random.uuid}.db
     skills-path: ${java.io.tmpdir}/herald-test-skills-${random.uuid}
+    bundled-skills-path: ${java.io.tmpdir}/herald-test-bundled-skills-${random.uuid}
