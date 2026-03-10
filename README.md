@@ -131,6 +131,13 @@ make install-ui   # Installs herald-ui launchd service
 | `GMAIL_MCP_URL` | Gmail MCP server URL | No |
 | `HERALD_CONFIG` | Override config path (default: `~/.herald/herald.yaml`) | No |
 
+### Optional: Google Workspace CLI
+
+Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)](https://www.npmjs.com/package/@googleworkspace/cli).
+This is optional — Herald runs without it, but Google skills will be unavailable.
+
+See **[docs/gws-setup.md](docs/gws-setup.md)** for installation and authentication instructions.
+
 ## Project Structure
 
 ```
