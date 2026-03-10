@@ -62,7 +62,7 @@ class DataSourceConfigTest {
                 tables.add(rs.getString(1));
             }
             assertThat(tables).containsExactlyInAnyOrder(
-                    "messages", "memory", "cron_jobs", "commands", "model_usage");
+                    "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides");
         }
     }
 

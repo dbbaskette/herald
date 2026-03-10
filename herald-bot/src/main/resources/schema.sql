@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
 
 INSERT OR IGNORE INTO cron_jobs (name, schedule, prompt, enabled, built_in) VALUES (
     'morning-briefing',
-    '0 7 * * 1-5',
+    '0 0 7 * * 1-5',
     'You are running as a scheduled morning briefing. Compile a concise morning digest for the user:
 
 1. **Weather** — Fetch the current weather and today''s forecast from wttr.in for the user''s configured location.
@@ -40,7 +40,7 @@ Keep the tone friendly and concise. Use bullet points and bold headers for reada
 
 INSERT OR IGNORE INTO cron_jobs (name, schedule, prompt, enabled, built_in) VALUES (
     'weekly-review',
-    '0 18 * * 5',
+    '0 0 18 * * 5',
     'You are running as a scheduled weekly review. Compile a concise end-of-week summary for the user:
 
 1. **Week recap** — Summarize the key conversations, tasks, and activity from this week.

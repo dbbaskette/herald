@@ -18,7 +18,7 @@ import java.util.List;
 
 @Component
 @ConditionalOnProperty("herald.telegram.bot-token")
-class TelegramPoller {
+public class TelegramPoller {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramPoller.class);
 
@@ -30,9 +30,9 @@ class TelegramPoller {
     private final AgentService agentService;
     private int offset = 0;
 
-    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
-                   TelegramQuestionHandler questionHandler, CommandHandler commandHandler,
-                   AgentService agentService) {
+    public TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
+                          TelegramQuestionHandler questionHandler, CommandHandler commandHandler,
+                          AgentService agentService) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;

@@ -25,7 +25,7 @@ import static java.nio.file.StandardWatchEventKinds.*;
  * on {@link ReloadableSkillsTool} within 250ms using debounced events.
  */
 @Component
-class SkillsWatcher {
+public class SkillsWatcher {
 
     private static final Logger log = LoggerFactory.getLogger(SkillsWatcher.class);
     private static final long DEBOUNCE_MS = 250;
@@ -42,8 +42,8 @@ class SkillsWatcher {
     private volatile ScheduledFuture<?> pendingReload;
     private final Map<WatchKey, Path> watchKeyPaths = new HashMap<>();
 
-    SkillsWatcher(ReloadableSkillsTool reloadableSkillsTool,
-                  @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+    public SkillsWatcher(ReloadableSkillsTool reloadableSkillsTool,
+                         @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
         this.reloadableSkillsTool = reloadableSkillsTool;
         this.skillsDirectory = skillsDirectory;
     }

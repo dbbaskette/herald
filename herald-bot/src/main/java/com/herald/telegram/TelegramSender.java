@@ -26,7 +26,7 @@ public class TelegramSender {
     private final String chatId;
     private final MessageFormatter formatter;
 
-    TelegramSender(TelegramBot bot, HeraldConfig config, MessageFormatter formatter) {
+    public TelegramSender(TelegramBot bot, HeraldConfig config, MessageFormatter formatter) {
         this.bot = bot;
         this.chatId = config.telegram().allowedChatId();
         this.formatter = formatter;

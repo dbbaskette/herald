@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>java</string>
+        <string>__JAVA_BIN__</string>
         <string>-jar</string>
         <string>__HOME__/.herald/herald-ui.jar</string>
     </array>

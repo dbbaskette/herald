@@ -15,7 +15,7 @@ public class CronTools {
 
     private final CronService cronService;
 
-    CronTools(CronService cronService) {
+    public CronTools(CronService cronService) {
         this.cronService = cronService;
     }
 

@@ -10,7 +10,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 @Component
-class CronRepository {
+public class CronRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -27,7 +27,7 @@ class CronRepository {
                 rs.getInt("built_in") == 1);
     };
 
-    CronRepository(JdbcTemplate jdbcTemplate) {
+    public CronRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 

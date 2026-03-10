@@ -107,16 +107,6 @@ describe('useStatusStore', () => {
   })
 
   it('updates status on SSE message', () => {
-    let messageHandler: ((event: MessageEvent) => void) | null = null
-    const mockEventSource = vi.fn().mockImplementation(() => ({
-      onopen: null,
-      onmessage: null,
-      onerror: null,
-      close: vi.fn(),
-      set onmessage(fn: (event: MessageEvent) => void) { messageHandler = fn },
-      get onmessage() { return messageHandler },
-    }))
-    // Need a better mock approach - use object
     let esInstance: any = null
     vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => {
       esInstance = {

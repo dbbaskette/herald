@@ -1,13 +1,20 @@
 package com.herald.ui.sse;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -19,10 +26,18 @@ public class StatusSseService {
     private static final Logger log = LoggerFactory.getLogger(StatusSseService.class);
 
     private final JdbcTemplate jdbcTemplate;
+    private final String botHealthUrl;
+    private final HttpClient httpClient;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private Instant botStartTime;
 
-    public StatusSseService(JdbcTemplate jdbcTemplate) {
+    public StatusSseService(JdbcTemplate jdbcTemplate,
+                            @Value("${herald.ui.bot-port:8081}") int botPort) {
         this.jdbcTemplate = jdbcTemplate;
+        this.botHealthUrl = "http://localhost:" + botPort + "/actuator/health";
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(2))
+                .build();
     }
 
     public SseEmitter register() {
@@ -55,10 +70,79 @@ public class StatusSseService {
         Integer messageCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM messages", Integer.class);
         Integer pendingCommandCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM commands WHERE status = 'pending'", Integer.class);
+        Integer memoryCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memory", Integer.class);
+        Integer cronCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cron_jobs", Integer.class);
 
-        return Map.of(
-                "messageCount", messageCount != null ? messageCount : 0,
-                "pendingCommandCount", pendingCommandCount != null ? pendingCommandCount : 0,
-                "timestamp", Instant.now().toString());
+        boolean botRunning = checkBotHealth();
+
+        if (botRunning && botStartTime == null) {
+            botStartTime = Instant.now();
+        } else if (!botRunning) {
+            botStartTime = null;
+        }
+
+        Map<String, Object> bot = new HashMap<>();
+        bot.put("running", botRunning);
+        bot.put("pid", null);
+        bot.put("uptime", botStartTime != null ? formatUptime(botStartTime) : "—");
+        bot.put("restartCount", 0);
+
+        Map<String, Object> memory = new HashMap<>();
+        memory.put("entryCount", memoryCount != null ? memoryCount : 0);
+        memory.put("databaseFileSize", "—");
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("name", "claude-sonnet-4-5");
+        model.put("requestsToday", messageCount != null ? messageCount : 0);
+        model.put("estimatedTokenSpend", "—");
+
+        Map<String, Object> skills = new HashMap<>();
+        skills.put("totalLoaded", 0);
+        skills.put("lastReload", null);
+        skills.put("parseErrors", List.of());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("healthy", botRunning);
+        result.put("bot", bot);
+        result.put("model", model);
+        result.put("mcp", List.of());
+        result.put("skills", skills);
+        result.put("memory", memory);
+        result.put("cron", List.of());
+        result.put("recentActivity", List.of());
+        result.put("messageCount", messageCount != null ? messageCount : 0);
+        result.put("pendingCommandCount", pendingCommandCount != null ? pendingCommandCount : 0);
+        result.put("cronCount", cronCount != null ? cronCount : 0);
+        result.put("timestamp", Instant.now().toString());
+
+        return result;
+    }
+
+    private boolean checkBotHealth() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(botHealthUrl))
+                    .timeout(Duration.ofSeconds(2))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String formatUptime(Instant start) {
+        Duration d = Duration.between(start, Instant.now());
+        long hours = d.toHours();
+        long mins = d.toMinutesPart();
+        if (hours > 0) {
+            return hours + "h " + mins + "m";
+        }
+        long secs = d.toSecondsPart();
+        if (mins > 0) {
+            return mins + "m " + secs + "s";
+        }
+        return secs + "s";
     }
 }

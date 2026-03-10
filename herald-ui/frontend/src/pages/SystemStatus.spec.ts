@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia } from 'pinia'
 import SystemStatus from './SystemStatus.vue'
 import { useStatusStore } from '@/stores/status'
 import type { SystemStatus as SystemStatusType } from '@/stores/status'

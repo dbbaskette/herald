@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useMessagesStore } from '@/stores/messages'
-import type { ToolCall, SubagentCall } from '@/stores/messages'
 
 const store = useMessagesStore()
 

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
-class CommandHandler {
+public class CommandHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
@@ -41,11 +41,11 @@ class CommandHandler {
     private final int maxContextTokens;
     private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
-    CommandHandler(MemoryTools memoryTools, CronService cronService, ChatMemory chatMemory,
-                   TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
-                   @Qualifier("activeToolNames") List<String> activeToolNames,
-                   ReloadableSkillsTool reloadableSkillsTool,
-                   @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
+    public CommandHandler(MemoryTools memoryTools, CronService cronService, ChatMemory chatMemory,
+                          TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
+                          @Qualifier("activeToolNames") List<String> activeToolNames,
+                          ReloadableSkillsTool reloadableSkillsTool,
+                          @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
         this.memoryTools = memoryTools;
         this.cronService = cronService;
         this.chatMemory = chatMemory;

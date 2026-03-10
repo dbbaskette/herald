@@ -8,10 +8,10 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @ConditionalOnProperty("herald.telegram.bot-token")
-class TelegramBotConfig {
+public class TelegramBotConfig {
 
     @Bean
-    TelegramBot telegramBot(HeraldConfig config) {
+    public TelegramBot telegramBot(HeraldConfig config) {
         return new TelegramBot(config.telegram().botToken());
     }
 }

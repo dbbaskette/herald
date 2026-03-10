@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConfigurationProperties(prefix = "herald.security")
-class ShellSecurityConfig {
+public class ShellSecurityConfig {
 
     /*
      * Best-effort blocklist — not a security boundary.

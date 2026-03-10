@@ -124,7 +124,7 @@ class CronRepositoryTest {
     void seedDataContainsMorningBriefing() {
         CronJob job = repository.findByName("morning-briefing");
         assertThat(job).isNotNull();
-        assertThat(job.schedule()).isEqualTo("0 7 * * 1-5");
+        assertThat(job.schedule()).isEqualTo("0 0 7 * * 1-5");
         assertThat(job.builtIn()).isTrue();
         assertThat(job.enabled()).isTrue();
         assertThat(job.prompt()).contains("weather");
@@ -134,7 +134,7 @@ class CronRepositoryTest {
     void seedDataContainsWeeklyReview() {
         CronJob job = repository.findByName("weekly-review");
         assertThat(job).isNotNull();
-        assertThat(job.schedule()).isEqualTo("0 18 * * 5");
+        assertThat(job.schedule()).isEqualTo("0 0 18 * * 5");
         assertThat(job.builtIn()).isTrue();
         assertThat(job.enabled()).isTrue();
         assertThat(job.prompt()).contains("recap");

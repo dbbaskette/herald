@@ -15,7 +15,7 @@ public class AskUserQuestionTool {
 
     private final TelegramQuestionHandler questionHandler;
 
-    AskUserQuestionTool(ObjectProvider<TelegramQuestionHandler> questionHandlerProvider) {
+    public AskUserQuestionTool(ObjectProvider<TelegramQuestionHandler> questionHandlerProvider) {
         this.questionHandler = questionHandlerProvider.getIfAvailable();
     }
 

@@ -14,7 +14,7 @@ public class MemoryRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    MemoryRepository(JdbcTemplate jdbcTemplate) {
+    public MemoryRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 

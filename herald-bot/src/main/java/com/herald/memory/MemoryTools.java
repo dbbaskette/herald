@@ -12,7 +12,7 @@ public class MemoryTools {
 
     private final MemoryRepository repository;
 
-    MemoryTools(MemoryRepository repository) {
+    public MemoryTools(MemoryRepository repository) {
         this.repository = repository;
     }
 

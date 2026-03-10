@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * and persists token usage to the model_usage table.
  */
 @Component
-class AgentMetrics {
+public class AgentMetrics {
 
     private static final Logger log = LoggerFactory.getLogger(AgentMetrics.class);
 
@@ -27,7 +27,7 @@ class AgentMetrics {
     private final MeterRegistry meterRegistry;
     private final JdbcTemplate jdbcTemplate;
 
-    AgentMetrics(MeterRegistry meterRegistry, JdbcTemplate jdbcTemplate) {
+    public AgentMetrics(MeterRegistry meterRegistry, JdbcTemplate jdbcTemplate) {
         this.meterRegistry = meterRegistry;
         this.turnsCounter = Counter.builder("herald.agent.turns")
                 .description("Number of agent turns processed")

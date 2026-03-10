@@ -12,13 +12,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty("herald.telegram.bot-token")
-class TodoProgressListener {
+public class TodoProgressListener {
 
     private static final Logger log = LoggerFactory.getLogger(TodoProgressListener.class);
 
     private final TelegramSender sender;
 
-    TodoProgressListener(TelegramSender sender) {
+    public TodoProgressListener(TelegramSender sender) {
         this.sender = sender;
     }
 

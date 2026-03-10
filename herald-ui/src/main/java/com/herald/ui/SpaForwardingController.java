@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class SpaForwardingController {
 
-    @GetMapping(value = {"/{path:[^\\.]*}", "/{path:[^\\.]*}/**"})
+    @GetMapping(value = {"/{path:(?!api|assets|vite\\.svg)[^\\.]*}", "/{path:(?!api|assets|vite\\.svg)[^\\.]*}/**"})
     public String forward() {
         return "forward:/index.html";
     }

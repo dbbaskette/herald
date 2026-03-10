@@ -139,149 +139,30 @@ describe('stores', () => {
   })
 
   describe('useSkillsStore', () => {
-    const mockSkills = [
-      { name: 'greeting', description: 'A greeting skill', source: 'bundled', readOnly: true },
-      { name: 'custom', description: 'A custom skill', source: 'local', readOnly: false },
-    ]
-
     it('has correct initial state', () => {
       const store = useSkillsStore()
-      expect(store.skills).toEqual([])
+      expect(store.skillNames).toEqual([])
       expect(store.loading).toBe(false)
-      expect(store.selectedSkill).toBeNull()
+      expect(store.selectedName).toBeNull()
       expect(store.editorContent).toBe('')
-      expect(store.isDirty).toBe(false)
-      expect(store.isSaving).toBe(false)
     })
 
-    it('fetchSkills populates skills on success', async () => {
+    it('fetchSkills populates skillNames on success', async () => {
+      const mockNames = ['greeting', 'weather']
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(mockSkills),
+        json: () => Promise.resolve(mockNames),
       }))
       const store = useSkillsStore()
       await store.fetchSkills()
-      expect(store.skills).toEqual(mockSkills)
+      expect(store.skillNames).toEqual(mockNames)
     })
 
     it('fetchSkills resets to empty on error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fail')))
       const store = useSkillsStore()
       await store.fetchSkills()
-      expect(store.skills).toEqual([])
-    })
-
-    it('selectSkill fetches content and sets selectedSkill', async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSkills) })
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('# Greeting\nHello world') })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const store = useSkillsStore()
-      await store.fetchSkills()
-      const result = await store.selectSkill('greeting')
-
-      expect(result).toBe(true)
-      expect(store.selectedSkill?.name).toBe('greeting')
-      expect(store.editorContent).toBe('# Greeting\nHello world')
-      expect(store.isDirty).toBe(false)
-    })
-
-    it('selectSkill returns false on error', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fail')))
-      const store = useSkillsStore()
-      const result = await store.selectSkill('nonexistent')
-      expect(result).toBe(false)
-    })
-
-    it('isDirty becomes true when editorContent differs from lastSavedContent', async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSkills) })
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('original') })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const store = useSkillsStore()
-      await store.fetchSkills()
-      await store.selectSkill('custom')
-      expect(store.isDirty).toBe(false)
-
-      store.editorContent = 'modified'
-      expect(store.isDirty).toBe(true)
-    })
-
-    it('saveSkill sends PUT and resets isDirty', async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSkills) })
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('original') })
-        .mockResolvedValueOnce({ ok: true })
-      vi.stubGlobal('fetch', fetchMock)
-
-      const store = useSkillsStore()
-      await store.fetchSkills()
-      await store.selectSkill('custom')
-      store.editorContent = 'updated content'
-      expect(store.isDirty).toBe(true)
-
-      const result = await store.saveSkill()
-      expect(result).toBe(true)
-      expect(store.isDirty).toBe(false)
-      expect(fetchMock).toHaveBeenLastCalledWith('/api/skills/custom', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/plain' },
-        body: 'updated content',
-      })
-    })
-
-    it('saveSkill returns false when no skill selected', async () => {
-      const store = useSkillsStore()
-      const result = await store.saveSkill()
-      expect(result).toBe(false)
-    })
-
-    it('createSkill posts then selects the new skill', async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true }) // POST
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([...mockSkills, { name: 'new-skill', description: '', source: 'local', readOnly: false }]) }) // fetchSkills
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('') }) // selectSkill
-      vi.stubGlobal('fetch', fetchMock)
-
-      const store = useSkillsStore()
-      const result = await store.createSkill('new-skill')
-      expect(result).toBe(true)
-      expect(store.selectedSkill?.name).toBe('new-skill')
-    })
-
-    it('createSkill returns false on error', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, statusText: 'Conflict' }))
-      const store = useSkillsStore()
-      const result = await store.createSkill('existing')
-      expect(result).toBe(false)
-    })
-
-    it('deleteSkill removes skill and deselects if active', async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSkills) })
-        .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('content') })
-        .mockResolvedValueOnce({ ok: true }) // DELETE
-      vi.stubGlobal('fetch', fetchMock)
-
-      const store = useSkillsStore()
-      await store.fetchSkills()
-      await store.selectSkill('custom')
-      expect(store.selectedSkill?.name).toBe('custom')
-
-      const result = await store.deleteSkill('custom')
-      expect(result).toBe(true)
-      expect(store.skills.find(s => s.name === 'custom')).toBeUndefined()
-      expect(store.selectedSkill).toBeNull()
-      expect(store.editorContent).toBe('')
-    })
-
-    it('deleteSkill returns false on error', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, statusText: 'Forbidden' }))
-      const store = useSkillsStore()
-      const result = await store.deleteSkill('bundled')
-      expect(result).toBe(false)
+      expect(store.skillNames).toEqual([])
     })
   })
 

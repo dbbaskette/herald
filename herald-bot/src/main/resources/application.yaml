@@ -81,7 +81,7 @@ herald:
 
 # Run the embedded web server on port 8080 for actuator endpoints only
 server:
-  port: ${HERALD_SERVER_PORT:8080}
+  port: ${HERALD_SERVER_PORT:8081}
 
 # TODO: Restrict management endpoints before production deployment (e.g. add Spring Security actuator config)
 management:

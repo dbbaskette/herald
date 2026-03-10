@@ -19,16 +19,19 @@ import com.herald.config.HeraldConfig;
 import com.herald.telegram.TelegramSender;
 
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.ObjectProvider;
 
 import jakarta.annotation.PostConstruct;
+import org.springframework.context.annotation.DependsOn;
 
 @Service
+@DependsOn("dataSourceInitializer")
 public class CronService {
 
     private static final Logger log = LoggerFactory.getLogger(CronService.class);
 
     private final CronRepository cronRepository;
-    private final AgentService agentService;
+    private final ObjectProvider<AgentService> agentServiceProvider;
     private final TelegramSender telegramSender;
     private final ChatMemory chatMemory;
     private final BriefingJob briefingJob;
@@ -36,11 +39,11 @@ public class CronService {
     private final TaskScheduler scheduler;
     private final Map<Long, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
 
-    public CronService(CronRepository cronRepository, AgentService agentService,
+    public CronService(CronRepository cronRepository, ObjectProvider<AgentService> agentServiceProvider,
                        Optional<TelegramSender> telegramSender, ChatMemory chatMemory,
                        HeraldConfig config, BriefingJob briefingJob, TaskScheduler taskScheduler) {
         this.cronRepository = cronRepository;
-        this.agentService = agentService;
+        this.agentServiceProvider = agentServiceProvider;
         this.telegramSender = telegramSender.orElse(null);
         this.chatMemory = chatMemory;
         this.briefingJob = briefingJob;
@@ -175,7 +178,7 @@ public class CronService {
             } else {
                 prompt = job.prompt();
             }
-            String response = agentService.chat(prompt, conversationId);
+            String response = agentServiceProvider.getObject().chat(prompt, conversationId);
             if (telegramSender != null) {
                 telegramSender.sendMessage(response);
             } else {

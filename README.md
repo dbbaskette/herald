@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
-![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M2-blueviolet.svg)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--SNAPSHOT-blueviolet.svg)
 
 > An AI agent that knows who you are, runs on your machine, can do things on your behalf, and reaches out to you — not just the other way around.
 
@@ -48,7 +48,7 @@ Herald is a Spring Boot monorepo producing two runnable JARs:
 
 | Service | Role | Port |
 |---------|------|------|
-| **herald-bot** | Telegram bot, agent loop, tools, cron | — |
+| **herald-bot** | Telegram bot, agent loop, tools, cron | 8081 |
 | **herald-ui** | Management console (REST API + Vue 3) | 8080 |
 
 Both run as macOS `launchd` services and share a single SQLite database.
@@ -133,9 +133,10 @@ The `.env.example` file documents all optional variables (additional AI provider
 **Using the run script** (recommended — auto-loads `.env`):
 
 ```bash
-./run.sh          # starts herald-bot
-./run.sh ui       # starts herald-ui console
-./run.sh all      # starts both
+./run.sh          # starts both bot + ui (default)
+./run.sh bot      # starts herald-bot only (port 8081)
+./run.sh ui       # starts herald-ui only (port 8080)
+./run.sh stop     # stops all herald services
 ./run.sh build    # builds all modules
 ```
 
@@ -328,7 +329,7 @@ This mirrors the library's design: custom domain tools as annotated beans, libra
 |-----------|------------|
 | Language | Java 21 (virtual threads) |
 | Framework | Spring Boot 4.0.x |
-| AI Framework | Spring AI 2.0.0-M2 |
+| AI Framework | Spring AI 2.0.0-SNAPSHOT |
 | Agent Utils | spring-ai-agent-utils |
 | Telegram | pengrad/java-telegram-bot-api |
 | Database | SQLite (WAL mode) |
@@ -377,6 +378,12 @@ erDiagram
         int tokens_in
         int tokens_out
         datetime created_at
+    }
+    model_overrides {
+        int id PK
+        text provider
+        text model
+        datetime updated_at
     }
 ```
 

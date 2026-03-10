@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
-class MessageFormatter {
+public class MessageFormatter {
 
     static final int TELEGRAM_MAX_LENGTH = 4096;
 

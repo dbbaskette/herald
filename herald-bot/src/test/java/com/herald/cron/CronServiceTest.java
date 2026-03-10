@@ -9,6 +9,7 @@ import com.herald.telegram.TelegramSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
@@ -39,9 +40,16 @@ class CronServiceTest {
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
         TaskScheduler scheduler = createTaskScheduler();
-        cronService = new CronService(cronRepository, agentService,
+        cronService = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         cronService.loadJobs();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> objectProvider(T instance) {
+        ObjectProvider<T> provider = mock(ObjectProvider.class);
+        when(provider.getObject()).thenReturn(instance);
+        return provider;
     }
 
     private static TaskScheduler createTaskScheduler() {
@@ -127,7 +135,7 @@ class CronServiceTest {
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
         TaskScheduler scheduler = createTaskScheduler();
-        CronService service = new CronService(cronRepository, agentService,
+        CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         service.loadJobs();
 
@@ -245,7 +253,7 @@ class CronServiceTest {
     void defaultTimezoneUsedWhenConfigIsNull() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
-        CronService service = new CronService(cronRepository, agentService,
+        CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         assertThat(service).isNotNull();
     }
@@ -255,7 +263,7 @@ class CronServiceTest {
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
         TaskScheduler scheduler = createTaskScheduler();
-        CronService service = new CronService(cronRepository, agentService,
+        CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.empty(), chatMemory, config, briefingJob, scheduler);
 
         CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);

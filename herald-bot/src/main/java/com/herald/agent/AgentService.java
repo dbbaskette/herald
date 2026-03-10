@@ -25,7 +25,7 @@ public class AgentService {
     private final ModelSwitcher modelSwitcher;
     private final AgentMetrics agentMetrics;
 
-    AgentService(ModelSwitcher modelSwitcher, AgentMetrics agentMetrics) {
+    public AgentService(ModelSwitcher modelSwitcher, AgentMetrics agentMetrics) {
         this.modelSwitcher = modelSwitcher;
         this.agentMetrics = agentMetrics;
     }

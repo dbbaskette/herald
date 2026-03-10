@@ -12,8 +12,9 @@ const navItems = [
 
 <template>
   <aside class="w-64 bg-gray-900 text-gray-100 flex flex-col">
-    <div class="px-6 py-4 text-xl font-bold tracking-wide border-b border-gray-700">
-      Herald
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-700">
+      <img src="/herald-icon.png" alt="Herald" class="w-8 h-8 rounded-md" />
+      <span class="text-xl font-bold tracking-wide">Herald</span>
     </div>
     <nav class="flex-1 px-3 py-4 space-y-1">
       <RouterLink

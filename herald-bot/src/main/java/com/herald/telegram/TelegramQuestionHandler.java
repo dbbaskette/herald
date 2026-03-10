@@ -2,6 +2,7 @@ package com.herald.telegram;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -34,7 +35,8 @@ public class TelegramQuestionHandler {
     private final long timeoutMinutes;
     private final AtomicReference<PendingQuestion> pendingQuestion = new AtomicReference<>();
 
-    TelegramQuestionHandler(TelegramSender sender) {
+    @Autowired
+    public TelegramQuestionHandler(TelegramSender sender) {
         this(sender, DEFAULT_TIMEOUT_MINUTES);
     }
 

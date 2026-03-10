@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -35,7 +36,8 @@ public class HeraldShellDecorator {
     private final TelegramSender telegramSender;
     private final ConcurrentHashMap<String, CompletableFuture<Boolean>> pendingConfirmations = new ConcurrentHashMap<>();
 
-    HeraldShellDecorator(ShellSecurityConfig securityConfig,
+    @Autowired
+    public HeraldShellDecorator(ShellSecurityConfig securityConfig,
                          Optional<ShellCommandExecutor> delegate,
                          Optional<TelegramSender> telegramSender) {
         this.securityConfig = securityConfig;

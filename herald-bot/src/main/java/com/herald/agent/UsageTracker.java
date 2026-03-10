@@ -32,7 +32,7 @@ public class UsageTracker {
 
     private final JdbcTemplate jdbcTemplate;
 
-    UsageTracker(JdbcTemplate jdbcTemplate) {
+    public UsageTracker(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 

@@ -22,12 +22,12 @@ import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 @Configuration
-class DataSourceConfig {
+public class DataSourceConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceConfig.class);
 
     @Bean
-    DataSource dataSource(HeraldConfig heraldConfig) {
+    public DataSource dataSource(HeraldConfig heraldConfig) {
         String dbPath = resolveDbPath(heraldConfig.dbPath());
         ensureParentDirectory(dbPath);
 
@@ -41,7 +41,7 @@ class DataSourceConfig {
     }
 
     @Bean
-    DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
+    public DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
         populator.addScript(new ClassPathResource("schema.sql"));
         // continueOnError=true so IF NOT EXISTS clauses don't fail on re-run;
@@ -56,7 +56,7 @@ class DataSourceConfig {
     }
 
     @Bean
-    JdbcChatMemoryRepository chatMemoryRepository(JdbcTemplate jdbcTemplate, DataSource dataSource) {
+    public JdbcChatMemoryRepository chatMemoryRepository(JdbcTemplate jdbcTemplate, DataSource dataSource) {
         return JdbcChatMemoryRepository.builder()
                 .jdbcTemplate(jdbcTemplate)
                 .dataSource(dataSource)

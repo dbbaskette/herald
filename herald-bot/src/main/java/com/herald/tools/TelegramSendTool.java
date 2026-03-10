@@ -15,7 +15,7 @@ public class TelegramSendTool {
 
     private final TelegramSender telegramSender;
 
-    TelegramSendTool(ObjectProvider<TelegramSender> telegramSenderProvider) {
+    public TelegramSendTool(ObjectProvider<TelegramSender> telegramSenderProvider) {
         this.telegramSender = telegramSenderProvider.getIfAvailable();
     }
 

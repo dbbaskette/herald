@@ -4,7 +4,7 @@ import com.herald.config.HeraldConfig;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,11 +13,11 @@ import org.springframework.context.annotation.Configuration;
  * Both use the OpenAI-compatible {@code /v1/chat/completions} format — Ollama differs only in base URL.
  */
 @Configuration
-class ModelProviderConfig {
+public class ModelProviderConfig {
 
     @Bean("openaiChatModel")
-    @ConditionalOnProperty("herald.providers.openai.api-key")
-    ChatModel openaiChatModel(HeraldConfig config) {
+    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.openai.api-key:}')")
+    public ChatModel openaiChatModel(HeraldConfig config) {
         var openaiConfig = config.providers().openai();
         String baseUrl = openaiConfig.baseUrl() != null ? openaiConfig.baseUrl() : "https://api.openai.com";
         OpenAiApi api = OpenAiApi.builder()
@@ -30,8 +30,8 @@ class ModelProviderConfig {
     }
 
     @Bean("ollamaChatModel")
-    @ConditionalOnProperty("herald.providers.ollama.base-url")
-    ChatModel ollamaChatModel(HeraldConfig config) {
+    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.ollama.base-url:}')")
+    public ChatModel ollamaChatModel(HeraldConfig config) {
         var ollamaConfig = config.providers().ollama();
         String apiKey = ollamaConfig.apiKey() != null ? ollamaConfig.apiKey() : "ollama";
         String baseUrl = ollamaConfig.baseUrl() != null ? ollamaConfig.baseUrl() : "http://localhost:11434";

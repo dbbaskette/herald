@@ -51,7 +51,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 @Configuration
-class HeraldAgentConfig {
+public class HeraldAgentConfig {
 
     private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter DATETIME_FORMAT =
@@ -59,7 +59,7 @@ class HeraldAgentConfig {
     private static final int MAX_CONVERSATION_MESSAGES = 100;
 
     @Bean
-    TaskScheduler taskScheduler() {
+    public TaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(4);
         scheduler.setThreadNamePrefix("cron-");
@@ -71,12 +71,12 @@ class HeraldAgentConfig {
     // Keep in sync with .defaultTools() and .defaultToolCallbacks() in modelSwitcher()
     @Bean
     @Qualifier("activeToolNames")
-    List<String> activeToolNames() {
+    public List<String> activeToolNames() {
         return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
     }
 
     @Bean
-    ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
+    public ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(MAX_CONVERSATION_MESSAGES)
@@ -84,14 +84,14 @@ class HeraldAgentConfig {
     }
 
     @Bean
-    ReloadableSkillsTool reloadableSkillsTool(
+    public ReloadableSkillsTool reloadableSkillsTool(
             @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
         return new ReloadableSkillsTool(skillsDirectory);
     }
 
     @Bean
-    ModelSwitcher modelSwitcher(
-            ChatModel chatModel,
+    public ModelSwitcher modelSwitcher(
+            @Qualifier("anthropicChatModel") ChatModel chatModel,
             HeraldConfig config,
             ChatMemory chatMemory,
             MemoryTools memoryTools,
