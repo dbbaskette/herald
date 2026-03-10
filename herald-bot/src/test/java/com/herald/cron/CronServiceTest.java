@@ -7,6 +7,7 @@ import com.herald.config.HeraldConfig;
 import com.herald.telegram.TelegramSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.memory.ChatMemory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,6 +18,7 @@ class CronServiceTest {
     private CronRepository cronRepository;
     private AgentService agentService;
     private TelegramSender telegramSender;
+    private ChatMemory chatMemory;
     private CronService cronService;
 
     @BeforeEach
@@ -24,12 +26,13 @@ class CronServiceTest {
         cronRepository = mock(CronRepository.class);
         agentService = mock(AgentService.class);
         telegramSender = mock(TelegramSender.class);
+        chatMemory = mock(ChatMemory.class);
 
         when(cronRepository.findAll()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"));
-        cronService = new CronService(cronRepository, agentService, telegramSender, config);
+        cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         cronService.loadJobs();
     }
 
@@ -102,7 +105,7 @@ class CronServiceTest {
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"));
-        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
         // findAll called at least twice: once in setUp, once here
@@ -112,13 +115,13 @@ class CronServiceTest {
     @Test
     void deleteBuiltInJobReturnsFalseAndKeepsSchedule() {
         // First, create and schedule a built-in job
-        CronJob builtIn = new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true);
+        CronJob builtIn = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt", null, true, true);
         when(cronRepository.findAll()).thenReturn(List.of(builtIn));
         when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"));
-        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
         // DB delete returns false for built-in job
@@ -137,7 +140,7 @@ class CronServiceTest {
     @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         assertThat(service).isNotNull();
     }
 }
