@@ -1,6 +1,7 @@
 package com.herald.cron;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
@@ -8,6 +9,8 @@ import com.herald.telegram.TelegramSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,8 +38,18 @@ class CronServiceTest {
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
-        cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
+        TaskScheduler scheduler = createTaskScheduler();
+        cronService = new CronService(cronRepository, agentService,
+                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         cronService.loadJobs();
+    }
+
+    private static TaskScheduler createTaskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("test-cron-");
+        scheduler.initialize();
+        return scheduler;
     }
 
     @Test
@@ -52,8 +65,9 @@ class CronServiceTest {
 
     @Test
     void updateJobCancelsAndReschedules() {
+        CronJob existing = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         CronJob updated = new CronJob(1, "test-job", "0 0 10 * * *", "updated", null, true, false);
-        when(cronRepository.findByName("test-job")).thenReturn(updated);
+        when(cronRepository.findByName("test-job")).thenReturn(existing, updated);
 
         CronJob result = cronService.updateJob("test-job", "0 0 10 * * *", "updated");
 
@@ -73,6 +87,9 @@ class CronServiceTest {
 
     @Test
     void disableJobCancelsIt() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(cronRepository.findByName("test-job")).thenReturn(job);
+
         cronService.disableJob("test-job");
 
         verify(cronRepository).setEnabled("test-job", false);
@@ -80,6 +97,8 @@ class CronServiceTest {
 
     @Test
     void deleteJobRemovesFromDb() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(cronRepository.findByName("test-job")).thenReturn(job);
         when(cronRepository.delete("test-job")).thenReturn(true);
 
         boolean result = cronService.deleteJob("test-job");
@@ -107,7 +126,9 @@ class CronServiceTest {
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
+        TaskScheduler scheduler = createTaskScheduler();
+        CronService service = new CronService(cronRepository, agentService,
+                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         service.loadJobs();
 
         // findEnabled called at least twice: once in setUp, once here
@@ -116,6 +137,8 @@ class CronServiceTest {
 
     @Test
     void deleteBuiltInJobThrowsIllegalStateException() {
+        when(cronRepository.findByName("morning-briefing"))
+                .thenReturn(new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true));
         when(cronRepository.delete("morning-briefing"))
                 .thenThrow(new IllegalStateException("Built-in jobs cannot be deleted"));
 
@@ -145,8 +168,17 @@ class CronServiceTest {
         cronService.executeJob(job);
 
         verify(chatMemory).clear("cron-test-job");
-        verify(telegramSender, never()).sendMessage(any());
         verify(cronRepository, never()).updateLastRun(any(), any());
+    }
+
+    @Test
+    void executeJobSendsErrorViaTelegramOnFailure() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenThrow(new RuntimeException("agent error"));
+
+        cronService.executeJob(job);
+
+        verify(telegramSender).sendMessage("Cron job 'test-job' failed: agent error");
     }
 
     @Test
@@ -164,8 +196,9 @@ class CronServiceTest {
 
     @Test
     void rescheduleJobUpdatesScheduleAndReschedules() {
+        CronJob existing = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         CronJob updated = new CronJob(1, "test-job", "0 0 8 * * *", "hello", null, true, false);
-        when(cronRepository.findByName("test-job")).thenReturn(updated);
+        when(cronRepository.findByName("test-job")).thenReturn(existing, updated);
 
         CronJob result = cronService.rescheduleJob("test-job", "0 0 8 * * *");
 
@@ -174,9 +207,51 @@ class CronServiceTest {
     }
 
     @Test
+    void rescheduleJobWithCronJobObject() {
+        CronJob job = new CronJob(1, "test-job", "0 0 8 * * *", "hello", null, true, false);
+
+        cronService.rescheduleJob(job);
+
+        // Should not throw - job gets scheduled
+    }
+
+    @Test
+    void cancelJobByIdCancelsWithoutDeleting() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(cronRepository.findByName("test-job")).thenReturn(job);
+
+        // Schedule then cancel
+        cronService.createJob("test-job", "0 0 9 * * *", "hello");
+        cronService.cancelJob(1L);
+
+        // No delete should have occurred
+        verify(cronRepository, never()).delete(any());
+    }
+
+    @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
+        TaskScheduler scheduler = createTaskScheduler();
+        CronService service = new CronService(cronRepository, agentService,
+                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
         assertThat(service).isNotNull();
+    }
+
+    @Test
+    void worksWithoutTelegramSender() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null,
+                new HeraldConfig.Cron("America/New_York"), null);
+        TaskScheduler scheduler = createTaskScheduler();
+        CronService service = new CronService(cronRepository, agentService,
+                Optional.empty(), chatMemory, config, briefingJob, scheduler);
+
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenReturn("result");
+
+        service.executeJob(job);
+
+        verify(agentService).chat("hello", "cron-test-job");
+        verify(telegramSender, never()).sendMessage(any());
+        verify(cronRepository).updateLastRun(eq("test-job"), any());
     }
 }
