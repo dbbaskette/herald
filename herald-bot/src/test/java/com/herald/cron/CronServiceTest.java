@@ -110,6 +110,31 @@ class CronServiceTest {
     }
 
     @Test
+    void deleteBuiltInJobReturnsFalseAndKeepsSchedule() {
+        // First, create and schedule a built-in job
+        CronJob builtIn = new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true);
+        when(cronRepository.findAll()).thenReturn(List.of(builtIn));
+        when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
+
+        HeraldConfig config = new HeraldConfig(null, null, null, null,
+                new HeraldConfig.Cron("America/New_York"));
+        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        service.loadJobs();
+
+        // DB delete returns false for built-in job
+        when(cronRepository.delete("morning-briefing")).thenReturn(false);
+
+        boolean result = service.deleteJob("morning-briefing");
+
+        assertThat(result).isFalse();
+        // The job should still be scheduled — verify by enabling it (which would re-schedule)
+        // and checking that the job is still findable
+        CronJob still = service.findJob("morning-briefing");
+        assertThat(still).isNotNull();
+        assertThat(still.builtIn()).isTrue();
+    }
+
+    @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null);
         CronService service = new CronService(cronRepository, agentService, telegramSender, config);

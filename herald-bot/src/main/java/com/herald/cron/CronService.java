@@ -96,12 +96,16 @@ public class CronService {
     }
 
     public boolean deleteJob(String name) {
-        cancelJob(name);
         boolean deleted = cronRepository.delete(name);
         if (deleted) {
+            cancelJob(name);
             log.info("Deleted cron job '{}'", name);
         }
         return deleted;
+    }
+
+    public CronJob findJob(String name) {
+        return cronRepository.findByName(name);
     }
 
     public List<CronJob> listJobs() {

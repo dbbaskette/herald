@@ -44,9 +44,7 @@ public class CronTools {
         if (deleted) {
             return "Deleted cron job '%s'.".formatted(name);
         }
-        CronJob job = cronService.listJobs().stream()
-                .filter(j -> j.name().equals(name))
-                .findFirst().orElse(null);
+        CronJob job = cronService.findJob(name);
         if (job != null && job.builtIn()) {
             return "Cannot delete built-in cron job '%s'. You can disable it instead.".formatted(name);
         }
@@ -60,12 +58,12 @@ public class CronTools {
             return "No cron jobs configured.";
         }
         return jobs.stream()
-                .map(j -> "%s | %s | %s | %s%s".formatted(
+                .map(j -> "%s | %s | %s | %s | %s".formatted(
                         j.name(),
                         j.schedule(),
                         j.enabled() ? "enabled" : "disabled",
                         j.lastRun() != null ? j.lastRun().format(FMT) : "never",
-                        j.builtIn() ? " | built-in" : ""))
+                        j.builtIn() ? "built-in" : "custom"))
                 .collect(Collectors.joining("\n"));
     }
 }

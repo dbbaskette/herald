@@ -55,7 +55,7 @@ class CronToolsTest {
     @Test
     void cronDeleteWhenNotFound() {
         when(cronService.deleteJob("missing")).thenReturn(false);
-        when(cronService.listJobs()).thenReturn(List.of());
+        when(cronService.findJob("missing")).thenReturn(null);
 
         String result = cronTools.cron_delete("missing");
 
@@ -65,8 +65,8 @@ class CronToolsTest {
     @Test
     void cronDeleteBuiltInJobReturnsProtectionMessage() {
         when(cronService.deleteJob("morning-briefing")).thenReturn(false);
-        when(cronService.listJobs()).thenReturn(List.of(
-                new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true)));
+        when(cronService.findJob("morning-briefing")).thenReturn(
+                new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true));
 
         String result = cronTools.cron_delete("morning-briefing");
 
@@ -84,7 +84,7 @@ class CronToolsTest {
         String result = cronTools.cron_list();
 
         assertThat(result).contains("morning").contains("enabled").contains("2026-03-09 09:00").contains("built-in");
-        assertThat(result).contains("weekly").contains("disabled").contains("never");
+        assertThat(result).contains("weekly").contains("disabled").contains("never").contains("custom");
     }
 
     @Test
