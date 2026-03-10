@@ -7,6 +7,7 @@ import com.herald.config.HeraldConfig;
 import com.herald.telegram.TelegramSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.memory.ChatMemory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,6 +18,7 @@ class CronServiceTest {
     private CronRepository cronRepository;
     private AgentService agentService;
     private TelegramSender telegramSender;
+    private ChatMemory chatMemory;
     private CronService cronService;
 
     @BeforeEach
@@ -24,12 +26,13 @@ class CronServiceTest {
         cronRepository = mock(CronRepository.class);
         agentService = mock(AgentService.class);
         telegramSender = mock(TelegramSender.class);
+        chatMemory = mock(ChatMemory.class);
 
         when(cronRepository.findAll()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"));
-        cronService = new CronService(cronRepository, agentService, telegramSender, config);
+        cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         cronService.loadJobs();
     }
 
@@ -102,7 +105,7 @@ class CronServiceTest {
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"));
-        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
         // findAll called at least twice: once in setUp, once here
@@ -110,9 +113,54 @@ class CronServiceTest {
     }
 
     @Test
+    void deleteBuiltInJobReturnsFalseAndKeepsSchedule() {
+        CronJob builtIn = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt", null, true, true);
+        when(cronRepository.findAll()).thenReturn(List.of(builtIn));
+        when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
+
+        HeraldConfig config = new HeraldConfig(null, null, null, null,
+                new HeraldConfig.Cron("America/New_York"));
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
+        service.loadJobs();
+
+        when(cronRepository.delete("morning-briefing")).thenReturn(false);
+
+        boolean result = service.deleteJob("morning-briefing");
+
+        assertThat(result).isFalse();
+        // Built-in job still exists in the repository
+        assertThat(service.findJob("morning-briefing")).isNotNull();
+    }
+
+    @Test
+    void executeJobClearsChatMemoryOnSuccess() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenReturn("result");
+
+        cronService.executeJob(job);
+
+        verify(agentService).chat("hello", "cron-test-job");
+        verify(telegramSender).sendMessage("result");
+        verify(cronRepository).updateLastRun(eq("test-job"), any());
+        verify(chatMemory).clear("cron-test-job");
+    }
+
+    @Test
+    void executeJobClearsChatMemoryOnFailure() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenThrow(new RuntimeException("agent error"));
+
+        cronService.executeJob(job);
+
+        verify(chatMemory).clear("cron-test-job");
+        verify(telegramSender, never()).sendMessage(any());
+        verify(cronRepository, never()).updateLastRun(any(), any());
+    }
+
+    @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, config);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         assertThat(service).isNotNull();
     }
 }

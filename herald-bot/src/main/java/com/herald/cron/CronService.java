@@ -17,6 +17,8 @@ import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
 import com.herald.telegram.TelegramSender;
 
+import org.springframework.ai.chat.memory.ChatMemory;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
@@ -28,15 +30,17 @@ public class CronService {
     private final CronRepository cronRepository;
     private final AgentService agentService;
     private final TelegramSender telegramSender;
+    private final ChatMemory chatMemory;
     private final ZoneId timezone;
     private final ThreadPoolTaskScheduler scheduler;
     private final Map<String, ScheduledFuture<?>> scheduledJobs = new ConcurrentHashMap<>();
 
     public CronService(CronRepository cronRepository, AgentService agentService,
-                       TelegramSender telegramSender, HeraldConfig config) {
+                       TelegramSender telegramSender, ChatMemory chatMemory, HeraldConfig config) {
         this.cronRepository = cronRepository;
         this.agentService = agentService;
         this.telegramSender = telegramSender;
+        this.chatMemory = chatMemory;
         this.timezone = ZoneId.of(config.cronTimezone());
 
         this.scheduler = new ThreadPoolTaskScheduler();
@@ -96,12 +100,16 @@ public class CronService {
     }
 
     public boolean deleteJob(String name) {
-        cancelJob(name);
         boolean deleted = cronRepository.delete(name);
         if (deleted) {
+            cancelJob(name);
             log.info("Deleted cron job '{}'", name);
         }
         return deleted;
+    }
+
+    public CronJob findJob(String name) {
+        return cronRepository.findByName(name);
     }
 
     public List<CronJob> listJobs() {
@@ -123,15 +131,18 @@ public class CronService {
         }
     }
 
-    private void executeJob(CronJob job) {
+    void executeJob(CronJob job) {
+        String conversationId = "cron-" + job.name();
         try {
             log.info("Executing cron job '{}'", job.name());
-            String response = agentService.chat(job.prompt(), "cron-" + job.name());
+            String response = agentService.chat(job.prompt(), conversationId);
             telegramSender.sendMessage(response);
             cronRepository.updateLastRun(job.name(), LocalDateTime.now());
             log.info("Cron job '{}' completed successfully", job.name());
         } catch (Exception e) {
             log.error("Cron job '{}' failed", job.name(), e);
+        } finally {
+            chatMemory.clear(conversationId);
         }
     }
 }
