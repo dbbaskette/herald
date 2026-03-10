@@ -17,7 +17,7 @@ class CommandRepository {
 
     List<Map<String, Object>> listRecent(int limit) {
         return jdbcTemplate.queryForList(
-                "SELECT id, type, payload, status, created_at, completed_at FROM commands ORDER BY created_at DESC LIMIT ?",
+                "SELECT id, type, payload, status, created_at, completed_at FROM commands ORDER BY id DESC LIMIT ?",
                 limit);
     }
 
