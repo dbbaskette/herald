@@ -105,7 +105,7 @@ class CommandHandlerTest {
     @Test
     void debugShowsContextSizeMemoryCountAndTools() {
         when(memoryTools.count()).thenReturn(7);
-        when(chatMemory.get("default", Integer.MAX_VALUE))
+        when(chatMemory.get("default"))
                 .thenReturn(List.of(mock(Message.class), mock(Message.class), mock(Message.class)));
         handler.handle("/debug");
         verify(sender).sendMessage(argThat(msg ->
@@ -158,9 +158,18 @@ class CommandHandlerTest {
 
     @Test
     void memoryClearConfirmDeletesAllEntries() {
+        // Must go through two-step flow: first /memory clear, then confirm
+        handler.handle("/memory clear");
         handler.handle("/memory clear confirm");
         verify(memoryTools).clearAll();
         verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
+    }
+
+    @Test
+    void memoryClearConfirmWithoutPendingShowsError() {
+        handler.handle("/memory clear confirm");
+        verify(memoryTools, never()).clearAll();
+        verify(sender).sendMessage(argThat(msg -> msg.contains("No pending confirmation")));
     }
 
     @Test
@@ -174,6 +183,15 @@ class CommandHandlerTest {
         handler.handle("/memory clear confirm");
         verify(memoryTools).clearAll();
         verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
+    }
+
+    @Test
+    void memoryClearDoubleCallShowsAlreadyPending() {
+        handler.handle("/memory clear");
+        reset(sender);
+        handler.handle("/memory clear");
+        verify(memoryTools, never()).clearAll();
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Confirmation already pending")));
     }
 
     // --- /memory (no subcommand) ---

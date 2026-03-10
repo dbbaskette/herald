@@ -7,6 +7,7 @@ import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
@@ -30,7 +31,7 @@ class CommandHandler {
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
                    UsageTracker usageTracker, ModelSwitcher modelSwitcher,
-                   List<String> activeToolNames) {
+                   @Qualifier("activeToolNames") List<String> activeToolNames) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -135,11 +136,13 @@ class CommandHandler {
                 sender.sendMessage(result);
             }
             case "clear" -> {
-                if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2])) {
+                if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2]) && pendingMemoryClear.get()) {
                     pendingMemoryClear.set(false);
                     memoryTools.clearAll();
                     sender.sendMessage("All memory entries cleared.");
                     log.info("Memory cleared via /memory clear confirm command");
+                } else if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2])) {
+                    sender.sendMessage("No pending confirmation. Use `/memory clear` first.");
                 } else if (pendingMemoryClear.compareAndSet(false, true)) {
                     sender.sendMessage("Are you sure? Reply `/memory clear confirm` to proceed.");
                 } else {
