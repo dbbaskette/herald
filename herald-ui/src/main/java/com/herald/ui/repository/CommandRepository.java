@@ -7,11 +7,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-class CommandRepository {
+public class CommandRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    CommandRepository(JdbcTemplate jdbcTemplate) {
+    public CommandRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -21,10 +21,16 @@ class CommandRepository {
                 limit);
     }
 
-    Map<String, Object> insert(String type, String payload) {
+    public Map<String, Object> insert(String type, String payload) {
         jdbcTemplate.update(
-                "INSERT INTO commands (type, payload) VALUES (?, ?)", type, payload);
+                "INSERT INTO commands (type, payload, status) VALUES (?, ?, 'pending')", type, payload);
         return jdbcTemplate.queryForMap(
                 "SELECT id, type, payload, status, created_at, completed_at FROM commands WHERE rowid = last_insert_rowid()");
+    }
+
+    int countPending() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM commands WHERE status = 'pending'", Integer.class);
+        return count != null ? count : 0;
     }
 }

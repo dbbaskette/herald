@@ -41,7 +41,7 @@ class MemoryController {
     @DeleteMapping("/{key}")
     ResponseEntity<Void> delete(@PathVariable String key) {
         boolean deleted = repository.delete(key);
-        return deleted ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
     private static MemoryEntry toEntry(Map<String, Object> row) {
