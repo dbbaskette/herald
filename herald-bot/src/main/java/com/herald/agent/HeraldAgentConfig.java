@@ -137,16 +137,19 @@ class HeraldAgentConfig {
                 .taskRepository(taskRepository)
                 .build();
 
-        ToolCallback skillsTool = SkillsTool.builder()
-                .addSkillsDirectory(skillsDirectory)
-                .build();
+        ToolCallback skillsTool = buildSkillsTool(skillsDirectory);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
-        Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
-                ChatClient.builder(cm)
+        Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm -> {
+                var builder = ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
-                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
-                        .defaultToolCallbacks(taskTool, taskOutputTool, skillsTool)
+                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool);
+                if (skillsTool != null) {
+                    builder.defaultToolCallbacks(taskTool, taskOutputTool, skillsTool);
+                } else {
+                    builder.defaultToolCallbacks(taskTool, taskOutputTool);
+                }
+                return builder
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 contextMdAdvisor,
@@ -156,6 +159,7 @@ class HeraldAgentConfig {
                                         .conversationHistoryEnabled(false)
                                         .build()
                         );
+        };
 
         // Build the initial client from the default Anthropic ChatModel
         ChatClient initialClient = clientBuilderFactory.apply(chatModel).build();
@@ -195,6 +199,20 @@ class HeraldAgentConfig {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
+    }
+
+    static ToolCallback buildSkillsTool(String skillsDirectory) {
+        Path skillsPath = Path.of(skillsDirectory);
+        if (!Files.isDirectory(skillsPath)) {
+            return null;
+        }
+        var skills = org.springaicommunity.agent.utils.Skills.loadDirectory(skillsDirectory);
+        if (skills.isEmpty()) {
+            return null;
+        }
+        return SkillsTool.builder()
+                .addSkillsDirectory(skillsDirectory)
+                .build();
     }
 
     List<SubagentReference> loadSubagentReferences(String agentsDirectory) {
