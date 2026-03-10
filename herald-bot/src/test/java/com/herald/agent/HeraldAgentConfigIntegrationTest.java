@@ -6,6 +6,7 @@ import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
+import com.herald.tools.TelegramSendTool;
 import com.herald.tools.TodoWriteTool;
 import com.herald.tools.WebTools;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -106,7 +107,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -138,7 +139,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
