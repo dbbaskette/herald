@@ -64,9 +64,8 @@ class CronToolsTest {
 
     @Test
     void cronDeleteBuiltInJobReturnsProtectionMessage() {
-        when(cronService.deleteJob("morning-briefing")).thenReturn(false);
-        when(cronService.findJob("morning-briefing")).thenReturn(
-                new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true));
+        when(cronService.deleteJob("morning-briefing"))
+                .thenThrow(new IllegalStateException("Built-in jobs cannot be deleted"));
 
         String result = cronTools.cron_delete("morning-briefing");
 

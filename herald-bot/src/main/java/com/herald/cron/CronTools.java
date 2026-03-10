@@ -40,15 +40,15 @@ public class CronTools {
     @Tool(description = "Delete a scheduled cron job by name. Built-in jobs cannot be deleted but can be disabled.")
     public String cron_delete(
             @ToolParam(description = "Name of the cron job to delete") String name) {
-        boolean deleted = cronService.deleteJob(name);
-        if (deleted) {
-            return "Deleted cron job '%s'.".formatted(name);
-        }
-        CronJob job = cronService.findJob(name);
-        if (job != null && job.builtIn()) {
+        try {
+            boolean deleted = cronService.deleteJob(name);
+            if (deleted) {
+                return "Deleted cron job '%s'.".formatted(name);
+            }
+            return "No cron job found with name '%s'.".formatted(name);
+        } catch (IllegalStateException e) {
             return "Cannot delete built-in cron job '%s'. You can disable it instead.".formatted(name);
         }
-        return "No cron job found with name '%s'.".formatted(name);
     }
 
     @Tool(description = "List all scheduled cron jobs with their name, schedule, enabled status, and last run time.")
