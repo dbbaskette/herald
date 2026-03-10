@@ -52,6 +52,11 @@ class HeraldAgentConfig {
     private static final int MAX_CONVERSATION_MESSAGES = 100;
 
     @Bean
+    List<String> activeToolNames() {
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput");
+    }
+
+    @Bean
     ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)

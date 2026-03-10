@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.AgentService;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
@@ -12,12 +13,12 @@ import java.lang.management.ManagementFactory;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 class CommandHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
-    private static final String DEFAULT_CONVERSATION_ID = "default";
 
     private final MemoryTools memoryTools;
     private final ChatMemory chatMemory;
@@ -25,16 +26,17 @@ class CommandHandler {
     private final UsageTracker usageTracker;
     private final ModelSwitcher modelSwitcher;
     private final int activeToolsCount;
+    private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
-                   UsageTracker usageTracker, ModelSwitcher modelSwitcher) {
+                   UsageTracker usageTracker, ModelSwitcher modelSwitcher,
+                   List<String> activeToolNames) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
         this.usageTracker = usageTracker;
         this.modelSwitcher = modelSwitcher;
-        // Default tools configured in HeraldAgentConfig: memory, shell, fs, todo, ask
-        this.activeToolsCount = 5;
+        this.activeToolsCount = activeToolNames.size();
     }
 
     boolean handle(String text) {
@@ -97,23 +99,25 @@ class CommandHandler {
     }
 
     private void handleReset() {
-        chatMemory.clear(DEFAULT_CONVERSATION_ID);
+        chatMemory.clear(AgentService.DEFAULT_CONVERSATION_ID);
         sender.sendMessage("Conversation history cleared. Memory entries are preserved.");
         log.info("Conversation history cleared via /reset command");
     }
 
     private void handleDebug() {
         int memoryCount = memoryTools.count();
+        int contextMessages = chatMemory.get(AgentService.DEFAULT_CONVERSATION_ID).size();
 
         String modelName = modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel();
         String debug = """
                 *Debug Info*
 
+                Context messages: %d
                 Memory entries: %d
                 Active tools: %d
                 Model: %s
                 Available providers: %s
-                """.formatted(memoryCount, activeToolsCount, modelName,
+                """.formatted(contextMessages, memoryCount, activeToolsCount, modelName,
                 String.join(", ", modelSwitcher.getAvailableProviders()));
         sender.sendMessage(debug);
     }
@@ -131,9 +135,16 @@ class CommandHandler {
                 sender.sendMessage(result);
             }
             case "clear" -> {
-                memoryTools.clearAll();
-                sender.sendMessage("All memory entries cleared.");
-                log.info("Memory cleared via /memory clear command");
+                if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2])) {
+                    pendingMemoryClear.set(false);
+                    memoryTools.clearAll();
+                    sender.sendMessage("All memory entries cleared.");
+                    log.info("Memory cleared via /memory clear confirm command");
+                } else if (pendingMemoryClear.compareAndSet(false, true)) {
+                    sender.sendMessage("Are you sure? Reply `/memory clear confirm` to proceed.");
+                } else {
+                    sender.sendMessage("Confirmation already pending. Reply `/memory clear confirm` to proceed.");
+                }
             }
             case "set" -> {
                 if (parts.length < 4) {

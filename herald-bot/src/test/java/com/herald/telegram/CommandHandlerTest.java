@@ -7,7 +7,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
 
+import org.springframework.ai.chat.messages.Message;
+
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -33,7 +36,9 @@ class CommandHandlerTest {
         when(modelSwitcher.getActiveProvider()).thenReturn("anthropic");
         when(modelSwitcher.getActiveModel()).thenReturn("claude-sonnet-4-5");
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
-        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher);
+        when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
+        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher,
+                List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput"));
     }
 
     // --- handle() routing ---
@@ -77,12 +82,12 @@ class CommandHandlerTest {
     // --- /status ---
 
     @Test
-    void statusShowsUptimeAndModel() {
+    void statusShowsUptimeModelAndToolCount() {
         when(memoryTools.count()).thenReturn(3);
         handler.handle("/status");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("anthropic/claude-sonnet-4-5") && msg.contains("3")
-                        && msg.contains("Uptime")));
+                        && msg.contains("Uptime") && msg.contains("Active tools: 7")));
     }
 
     // --- /reset ---
@@ -98,11 +103,14 @@ class CommandHandlerTest {
     // --- /debug ---
 
     @Test
-    void debugShowsMemoryCountAndTools() {
+    void debugShowsContextSizeMemoryCountAndTools() {
         when(memoryTools.count()).thenReturn(7);
+        when(chatMemory.get("default", Integer.MAX_VALUE))
+                .thenReturn(List.of(mock(Message.class), mock(Message.class), mock(Message.class)));
         handler.handle("/debug");
         verify(sender).sendMessage(argThat(msg ->
-                msg.contains("7") && msg.contains("Active tools")));
+                msg.contains("Context messages: 3")
+                        && msg.contains("7") && msg.contains("Active tools")));
     }
 
     // --- /memory list ---
@@ -139,11 +147,31 @@ class CommandHandlerTest {
         verify(memoryTools, never()).memory_set(any(), any());
     }
 
-    // --- /memory clear ---
+    // --- /memory clear (two-step confirmation) ---
 
     @Test
-    void memoryClearDeletesAllEntries() {
+    void memoryClearWithoutConfirmShowsPrompt() {
         handler.handle("/memory clear");
+        verify(memoryTools, never()).clearAll();
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Are you sure")));
+    }
+
+    @Test
+    void memoryClearConfirmDeletesAllEntries() {
+        handler.handle("/memory clear confirm");
+        verify(memoryTools).clearAll();
+        verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
+    }
+
+    @Test
+    void memoryClearTwoStepFlow() {
+        // First call: prompts for confirmation
+        handler.handle("/memory clear");
+        verify(memoryTools, never()).clearAll();
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Are you sure")));
+
+        // Second call with confirm: clears
+        handler.handle("/memory clear confirm");
         verify(memoryTools).clearAll();
         verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
     }
