@@ -20,10 +20,23 @@ public class GwsTools {
     private static final String UNAVAILABLE_ERROR =
             "{\"error\": \"Google Workspace CLI (gws) not configured. Run 'gws auth login' to set up.\"}";
 
+    @FunctionalInterface
+    interface ProcessRunner {
+        ProcessResult run(List<String> command) throws Exception;
+    }
+
+    record ProcessResult(int exitCode, String output, boolean timedOut) {}
+
     private final GwsAvailabilityChecker gwsAvailabilityChecker;
+    private final ProcessRunner processRunner;
 
     GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker) {
+        this(gwsAvailabilityChecker, GwsTools::executeProcess);
+    }
+
+    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, ProcessRunner processRunner) {
         this.gwsAvailabilityChecker = gwsAvailabilityChecker;
+        this.processRunner = processRunner;
     }
 
     @Tool(description = "List Gmail threads. Returns JSON array of recent email threads with subject, sender, and snippet. Output is always JSON (--format json).")
@@ -41,25 +54,16 @@ public class GwsTools {
             return UNAVAILABLE_ERROR;
         }
         try {
-            ProcessBuilder pb = new ProcessBuilder(command);
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            String output;
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                output = reader.lines().collect(Collectors.joining("\n"));
-            }
-            boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
+            ProcessResult result = processRunner.run(command);
+            if (result.timedOut()) {
                 return "{\"error\": \"Command timed out after " + TIMEOUT_SECONDS + " seconds\"}";
             }
-            int exitCode = process.exitValue();
-            if (exitCode != 0) {
-                log.warn("gws command {} exited with code {}: {}", command, exitCode, output);
-                return "{\"error\": \"gws command failed with exit code " + exitCode + "\", \"output\": \"" + escapeJson(output) + "\"}";
+            if (result.exitCode() != 0) {
+                log.warn("gws command {} exited with code {}", command, result.exitCode());
+                log.debug("gws output: {}", result.output());
+                return "{\"error\": \"gws command failed with exit code " + result.exitCode() + "\", \"output\": \"" + escapeJson(result.output()) + "\"}";
             }
-            return output.isEmpty() ? "[]" : output;
+            return result.output().isEmpty() ? "[]" : result.output();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return "{\"error\": \"Command execution was interrupted.\"}";
@@ -69,8 +73,26 @@ public class GwsTools {
         }
     }
 
+    private static ProcessResult executeProcess(List<String> command) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        String output;
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            output = reader.lines().collect(Collectors.joining("\n"));
+        }
+        boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            return new ProcessResult(-1, output, true);
+        }
+        return new ProcessResult(process.exitValue(), output, false);
+    }
+
     private static String escapeJson(String value) {
         if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }
