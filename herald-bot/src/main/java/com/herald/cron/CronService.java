@@ -167,9 +167,14 @@ public class CronService {
         String conversationId = "cron-" + job.name();
         try {
             log.info("Executing cron job '{}'", job.name());
-            String prompt = BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())
-                    ? briefingJob.buildPrompt(job.prompt())
-                    : job.prompt();
+            String prompt;
+            if (BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())) {
+                prompt = briefingJob.buildMorningPrompt();
+            } else if (BriefingJob.WEEKLY_REVIEW_NAME.equals(job.name())) {
+                prompt = briefingJob.buildWeeklyPrompt();
+            } else {
+                prompt = job.prompt();
+            }
             String response = agentService.chat(prompt, conversationId);
             if (telegramSender != null) {
                 telegramSender.sendMessage(response);

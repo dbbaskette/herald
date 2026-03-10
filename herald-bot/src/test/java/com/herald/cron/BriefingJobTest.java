@@ -1,6 +1,7 @@
 package com.herald.cron;
 
 import com.herald.config.HeraldConfig;
+import com.herald.memory.MemoryRepository;
 import com.herald.tools.GwsAvailabilityChecker;
 import org.junit.jupiter.api.Test;
 
@@ -14,15 +15,29 @@ import static org.mockito.Mockito.*;
 
 class BriefingJobTest {
 
+    private final HeraldConfig defaultConfig = new HeraldConfig(null, null, null, null, null, null);
+
+    private BriefingJob createJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
+                                  MemoryRepository memRepo, boolean webSearch,
+                                  BriefingJob.WeatherFetcher fetcher) {
+        return new BriefingJob(config, gwsChecker, memRepo, webSearch, fetcher);
+    }
+
+    private MemoryRepository mockMemoryRepository() {
+        return mock(MemoryRepository.class);
+    }
+
+    // --- buildMorningPrompt tests ---
+
     @Test
-    void buildPromptIncludesDateAndDay() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+    void morningPromptIncludesDateAndDay() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> "London: +15°C");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
 
-        String result = briefingJob.buildPrompt("base prompt");
+        String result = job.buildMorningPrompt();
 
         LocalDate today = LocalDate.now();
         String expectedDay = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
@@ -30,96 +45,237 @@ class BriefingJobTest {
 
         assertThat(result).contains("Today is " + expectedDay);
         assertThat(result).contains(expectedDate);
-        assertThat(result).contains("base prompt");
     }
 
     @Test
-    void buildPromptIncludesWeather() {
+    void morningPromptIncludesWeatherViaWebSearchWhenAvailable() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("London"));
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(true);
+        MemoryRepository memRepo = mockMemoryRepository();
+
+        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> {
+            throw new AssertionError("Should not pre-fetch weather when web search is available");
+        });
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("Use web_search to find the current weather");
+        assertThat(result).contains("London");
+    }
+
+    @Test
+    void morningPromptFallsBackToWttrWhenNoWebSearch() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("London"));
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(true);
+        MemoryRepository memRepo = mockMemoryRepository();
+
+        BriefingJob job = createJob(config, gwsChecker, memRepo, false, url -> {
+            assertThat(url).contains("London");
+            return "London: +15°C";
+        });
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("Current weather: London: +15°C");
+        assertThat(result).doesNotContain("web_search");
+    }
+
+    @Test
+    void morningPromptOmitsWeatherOnFetchFailure() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
                 new HeraldConfig.Weather("London"));
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> {
-            assertThat(url).contains("London");
-            return "London: +15°C";
-        });
+        BriefingJob job = createJob(config, gwsChecker, mockMemoryRepository(), false,
+                url -> { throw new RuntimeException("network error"); });
 
-        String result = briefingJob.buildPrompt("base prompt");
+        String result = job.buildMorningPrompt();
 
-        assertThat(result).contains("Current weather: London: +15°C");
+        assertThat(result).doesNotContain("Current weather");
     }
 
     @Test
-    void buildPromptOmitsWeatherOnFailure() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+    void morningPromptIncludesCalendarAndEmailWhenGwsAvailable() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> {
-            throw new RuntimeException("network error");
-        });
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
 
-        String result = briefingJob.buildPrompt("base prompt");
+        String result = job.buildMorningPrompt();
 
-        assertThat(result).doesNotContain("Current weather");
-        assertThat(result).contains("base prompt");
+        assertThat(result).contains("calendar_events_list");
+        assertThat(result).contains("gmail_search");
     }
 
     @Test
-    void buildPromptIncludesGwsUnavailableNote() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+    void morningPromptOmitsCalendarAndEmailWhenGwsUnavailable() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
 
-        String result = briefingJob.buildPrompt("base prompt");
+        String result = job.buildMorningPrompt();
 
-        assertThat(result).contains("Google Workspace CLI (gws) is not available");
-        assertThat(result).contains("Calendar and email sections should be omitted");
+        assertThat(result).doesNotContain("calendar_events_list");
+        assertThat(result).doesNotContain("gmail_search");
     }
 
     @Test
-    void buildPromptOmitsGwsNoteWhenAvailable() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+    void morningPromptAlwaysIncludesMemoryPriorities() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("memory_list");
+        assertThat(result).contains("Top Priorities");
+    }
+
+    @Test
+    void morningPromptAlwaysIncludesAdaptiveSection() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("Things You'd Want to Know Today");
+    }
+
+    @Test
+    void morningPromptIncludesFormattingInstructions() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
 
-        String result = briefingJob.buildPrompt("base prompt");
+        String result = job.buildMorningPrompt();
 
-        assertThat(result).doesNotContain("gws");
-        assertThat(result).contains("base prompt");
+        assertThat(result).contains("*bold headers*");
+        assertThat(result).contains("bullet points");
     }
 
+    // --- buildWeeklyPrompt tests ---
+
     @Test
-    void buildPromptUsesDefaultLocationWhenNotConfigured() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+    void weeklyPromptIncludesDateAndDay() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> {
-            assertThat(url).isEqualTo("https://wttr.in/?format=3");
-            return "Somewhere: +20°C";
-        });
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
 
-        briefingJob.buildPrompt("test");
+        String result = job.buildWeeklyPrompt();
+
+        LocalDate today = LocalDate.now();
+        String expectedDay = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
+        assertThat(result).contains("Today is " + expectedDay);
+        assertThat(result).contains("weekly review");
     }
 
     @Test
-    void buildPromptUsesConfiguredLocation() {
+    void weeklyPromptIncludesNextWeekPreviewWhenGwsAvailable() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(true);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
+
+        String result = job.buildWeeklyPrompt();
+
+        assertThat(result).contains("calendar_events_list");
+        assertThat(result).contains("Next Week Preview");
+    }
+
+    @Test
+    void weeklyPromptOmitsCalendarWhenGwsUnavailable() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
+
+        String result = job.buildWeeklyPrompt();
+
+        assertThat(result).doesNotContain("calendar_events_list");
+    }
+
+    @Test
+    void weeklyPromptAlwaysIncludesRecapAndOpenItems() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
+                false, url -> "");
+
+        String result = job.buildWeeklyPrompt();
+
+        assertThat(result).contains("Week Recap");
+        assertThat(result).contains("Open Items");
+        assertThat(result).contains("Suggestions");
+        assertThat(result).contains("memory_list");
+    }
+
+    // --- resolveCity tests ---
+
+    @Test
+    void resolveCityUsesMemoryFirst() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        MemoryRepository memRepo = mockMemoryRepository();
+        when(memRepo.get("user.city")).thenReturn("San Francisco");
+
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("New+York"));
+                new HeraldConfig.Weather("London"));
+
+        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("San Francisco");
+        assertThat(result).doesNotContain("London");
+    }
+
+    @Test
+    void resolveCityFallsBackToConfig() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
-        when(gwsChecker.isAvailable()).thenReturn(true);
+        MemoryRepository memRepo = mockMemoryRepository();
+        when(memRepo.get("user.city")).thenReturn(null);
 
-        BriefingJob briefingJob = new BriefingJob(config, gwsChecker, url -> {
-            assertThat(url).isEqualTo("https://wttr.in/New+York?format=3");
-            return "New York: +10°C";
-        });
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("London"));
 
-        briefingJob.buildPrompt("test");
+        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).contains("London");
+    }
+
+    @Test
+    void resolveCityNoLocationSkipsWeatherSection() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        MemoryRepository memRepo = mockMemoryRepository();
+        when(memRepo.get("user.city")).thenReturn(null);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, memRepo, true,
+                url -> { throw new AssertionError("Should not fetch weather without city"); });
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).doesNotContain("Weather");
     }
 }
