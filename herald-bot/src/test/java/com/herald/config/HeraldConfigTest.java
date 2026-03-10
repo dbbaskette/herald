@@ -22,7 +22,7 @@ class HeraldConfigTest {
     @Test
     void dbPathUsesConfiguredTildePath() {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory("~/custom/herald.db"), null, null, null, null);
+                new HeraldConfig.Memory("~/custom/herald.db"), null, null, null, null, null);
         assertThat(config.dbPath()).isEqualTo("~/custom/herald.db");
     }
 
@@ -63,5 +63,25 @@ class HeraldConfigTest {
         HeraldConfig config = new HeraldConfig(null, null,
                 new HeraldConfig.Agent(null, null, "/custom/CONTEXT.md", null), null, null, null);
         assertThat(config.contextFile()).isEqualTo("/custom/CONTEXT.md");
+    }
+
+    @Test
+    void weatherLocationDefaultsToEmptyWhenNull() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+        assertThat(config.weatherLocation()).isEmpty();
+    }
+
+    @Test
+    void weatherLocationUsesConfiguredValue() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("New+York"));
+        assertThat(config.weatherLocation()).isEqualTo("New+York");
+    }
+
+    @Test
+    void weatherLocationDefaultsToEmptyWhenBlank() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("  "));
+        assertThat(config.weatherLocation()).isEmpty();
     }
 }

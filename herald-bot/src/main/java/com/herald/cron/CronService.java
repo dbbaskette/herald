@@ -31,16 +31,19 @@ public class CronService {
     private final AgentService agentService;
     private final TelegramSender telegramSender;
     private final ChatMemory chatMemory;
+    private final BriefingJob briefingJob;
     private final ZoneId timezone;
     private final ThreadPoolTaskScheduler scheduler;
     private final Map<String, ScheduledFuture<?>> scheduledJobs = new ConcurrentHashMap<>();
 
     public CronService(CronRepository cronRepository, AgentService agentService,
-                       TelegramSender telegramSender, ChatMemory chatMemory, HeraldConfig config) {
+                       TelegramSender telegramSender, ChatMemory chatMemory, HeraldConfig config,
+                       BriefingJob briefingJob) {
         this.cronRepository = cronRepository;
         this.agentService = agentService;
         this.telegramSender = telegramSender;
         this.chatMemory = chatMemory;
+        this.briefingJob = briefingJob;
         this.timezone = ZoneId.of(config.cronTimezone());
 
         this.scheduler = new ThreadPoolTaskScheduler();
@@ -108,6 +111,17 @@ public class CronService {
         return deleted;
     }
 
+    public CronJob rescheduleJob(String name, String schedule) {
+        cancelJob(name);
+        cronRepository.updateSchedule(name, schedule);
+        CronJob updated = cronRepository.findByName(name);
+        if (updated != null && updated.enabled()) {
+            scheduleJob(updated);
+        }
+        log.info("Rescheduled cron job '{}' with schedule '{}'", name, schedule);
+        return updated;
+    }
+
     public CronJob findJob(String name) {
         return cronRepository.findByName(name);
     }
@@ -135,7 +149,10 @@ public class CronService {
         String conversationId = "cron-" + job.name();
         try {
             log.info("Executing cron job '{}'", job.name());
-            String response = agentService.chat(job.prompt(), conversationId);
+            String prompt = BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())
+                    ? briefingJob.buildPrompt(job.prompt())
+                    : job.prompt();
+            String response = agentService.chat(prompt, conversationId);
             telegramSender.sendMessage(response);
             cronRepository.updateLastRun(job.name(), LocalDateTime.now());
             log.info("Cron job '{}' completed successfully", job.name());

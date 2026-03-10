@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
-class GwsAvailabilityChecker {
+public class GwsAvailabilityChecker {
 
     private static final Logger log = LoggerFactory.getLogger(GwsAvailabilityChecker.class);
 
@@ -54,7 +54,7 @@ class GwsAvailabilityChecker {
         }
     }
 
-    boolean isAvailable() {
+    public boolean isAvailable() {
         return gwsAvailable;
     }
 
