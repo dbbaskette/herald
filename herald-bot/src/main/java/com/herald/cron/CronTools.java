@@ -37,12 +37,18 @@ public class CronTools {
         return "Updated cron job '%s' with schedule: %s".formatted(job.name(), job.schedule());
     }
 
-    @Tool(description = "Delete a scheduled cron job by name.")
+    @Tool(description = "Delete a scheduled cron job by name. Built-in jobs cannot be deleted but can be disabled.")
     public String cron_delete(
             @ToolParam(description = "Name of the cron job to delete") String name) {
         boolean deleted = cronService.deleteJob(name);
         if (deleted) {
             return "Deleted cron job '%s'.".formatted(name);
+        }
+        CronJob job = cronService.listJobs().stream()
+                .filter(j -> j.name().equals(name))
+                .findFirst().orElse(null);
+        if (job != null && job.builtIn()) {
+            return "Cannot delete built-in cron job '%s'. You can disable it instead.".formatted(name);
         }
         return "No cron job found with name '%s'.".formatted(name);
     }
@@ -54,11 +60,12 @@ public class CronTools {
             return "No cron jobs configured.";
         }
         return jobs.stream()
-                .map(j -> "%s | %s | %s | %s".formatted(
+                .map(j -> "%s | %s | %s | %s%s".formatted(
                         j.name(),
                         j.schedule(),
                         j.enabled() ? "enabled" : "disabled",
-                        j.lastRun() != null ? j.lastRun().format(FMT) : "never"))
+                        j.lastRun() != null ? j.lastRun().format(FMT) : "never",
+                        j.builtIn() ? " | built-in" : ""))
                 .collect(Collectors.joining("\n"));
     }
 }

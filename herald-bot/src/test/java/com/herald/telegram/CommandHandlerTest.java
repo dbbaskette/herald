@@ -389,9 +389,9 @@ class CommandHandlerTest {
     void cronListShowsJobs() {
         when(cronService.listJobs()).thenReturn(List.of(
                 new CronJob(1, "morning-brief", "0 0 9 * * MON-FRI", "Give me a morning briefing",
-                        java.time.LocalDateTime.of(2026, 3, 9, 9, 0), true),
+                        java.time.LocalDateTime.of(2026, 3, 9, 9, 0), true, false),
                 new CronJob(2, "weekly-review", "0 0 17 * * FRI", "Weekly review",
-                        null, false)));
+                        null, false, false)));
         handler.handle("/cron list");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("morning-brief") && msg.contains("enabled")

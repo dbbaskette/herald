@@ -23,7 +23,8 @@ class CronRepository {
                 rs.getString("schedule"),
                 rs.getString("prompt"),
                 lastRun,
-                rs.getInt("enabled") == 1);
+                rs.getInt("enabled") == 1,
+                rs.getInt("built_in") == 1);
     };
 
     CronRepository(JdbcTemplate jdbcTemplate) {
@@ -31,13 +32,13 @@ class CronRepository {
     }
 
     List<CronJob> findAll() {
-        return jdbcTemplate.query("SELECT id, name, schedule, prompt, last_run, enabled FROM cron_jobs ORDER BY name",
+        return jdbcTemplate.query("SELECT id, name, schedule, prompt, last_run, enabled, built_in FROM cron_jobs ORDER BY name",
                 ROW_MAPPER);
     }
 
     CronJob findByName(String name) {
         List<CronJob> results = jdbcTemplate.query(
-                "SELECT id, name, schedule, prompt, last_run, enabled FROM cron_jobs WHERE name = ?",
+                "SELECT id, name, schedule, prompt, last_run, enabled, built_in FROM cron_jobs WHERE name = ?",
                 ROW_MAPPER, name);
         return results.isEmpty() ? null : results.get(0);
     }
@@ -61,7 +62,7 @@ class CronRepository {
     }
 
     boolean delete(String name) {
-        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ?", name);
+        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ? AND built_in = 0", name);
         return rows > 0;
     }
 }

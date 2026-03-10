@@ -35,7 +35,7 @@ class CronServiceTest {
 
     @Test
     void createJobSavesAndReturnsJob() {
-        CronJob saved = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true);
+        CronJob saved = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         when(cronRepository.findByName("test-job")).thenReturn(saved);
 
         CronJob result = cronService.createJob("test-job", "0 0 9 * * *", "hello");
@@ -46,7 +46,7 @@ class CronServiceTest {
 
     @Test
     void updateJobCancelsAndReschedules() {
-        CronJob updated = new CronJob(1, "test-job", "0 0 10 * * *", "updated", null, true);
+        CronJob updated = new CronJob(1, "test-job", "0 0 10 * * *", "updated", null, true, false);
         when(cronRepository.findByName("test-job")).thenReturn(updated);
 
         CronJob result = cronService.updateJob("test-job", "0 0 10 * * *", "updated");
@@ -57,7 +57,7 @@ class CronServiceTest {
 
     @Test
     void enableJobSchedulesIt() {
-        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true);
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         when(cronRepository.findByName("test-job")).thenReturn(job);
 
         cronService.enableJob("test-job");
@@ -85,7 +85,7 @@ class CronServiceTest {
     @Test
     void listJobsDelegatesToRepository() {
         List<CronJob> jobs = List.of(
-                new CronJob(1, "job-a", "0 0 9 * * *", "prompt a", null, true));
+                new CronJob(1, "job-a", "0 0 9 * * *", "prompt a", null, true, false));
         when(cronRepository.findAll()).thenReturn(jobs);
 
         List<CronJob> result = cronService.listJobs();
@@ -96,8 +96,8 @@ class CronServiceTest {
 
     @Test
     void loadJobsSchedulesEnabledJobs() {
-        CronJob enabled = new CronJob(1, "enabled-job", "0 0 9 * * *", "prompt", null, true);
-        CronJob disabled = new CronJob(2, "disabled-job", "0 0 10 * * *", "prompt", null, false);
+        CronJob enabled = new CronJob(1, "enabled-job", "0 0 9 * * *", "prompt", null, true, false);
+        CronJob disabled = new CronJob(2, "disabled-job", "0 0 10 * * *", "prompt", null, false, false);
         when(cronRepository.findAll()).thenReturn(List.of(enabled, disabled));
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,

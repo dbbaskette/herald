@@ -47,7 +47,7 @@ class CronRepositoryTest {
 
     @Test
     void saveAndFindByName() {
-        CronJob job = new CronJob(null, "daily-report", "0 0 9 * * *", "Give me a daily summary", null, true);
+        CronJob job = new CronJob(null, "daily-report", "0 0 9 * * *", "Give me a daily summary", null, true, false);
         repository.save(job);
 
         CronJob found = repository.findByName("daily-report");
@@ -66,18 +66,19 @@ class CronRepositoryTest {
 
     @Test
     void findAllReturnsAllJobs() {
-        repository.save(new CronJob(null, "job-a", "0 0 9 * * *", "prompt a", null, true));
-        repository.save(new CronJob(null, "job-b", "0 0 10 * * *", "prompt b", null, false));
+        repository.save(new CronJob(null, "job-a", "0 0 9 * * *", "prompt a", null, true, false));
+        repository.save(new CronJob(null, "job-b", "0 0 10 * * *", "prompt b", null, false, false));
 
         List<CronJob> jobs = repository.findAll();
-        assertThat(jobs).hasSize(2);
-        assertThat(jobs).extracting(CronJob::name).containsExactly("job-a", "job-b");
+        // 2 seed built-in jobs + 2 custom jobs
+        assertThat(jobs).hasSize(4);
+        assertThat(jobs).extracting(CronJob::name).contains("job-a", "job-b");
     }
 
     @Test
     void saveUpdatesExistingJob() {
-        repository.save(new CronJob(null, "job", "0 0 9 * * *", "old prompt", null, true));
-        repository.save(new CronJob(null, "job", "0 0 10 * * *", "new prompt", null, false));
+        repository.save(new CronJob(null, "job", "0 0 9 * * *", "old prompt", null, true, false));
+        repository.save(new CronJob(null, "job", "0 0 10 * * *", "new prompt", null, false, false));
 
         CronJob found = repository.findByName("job");
         assertThat(found.schedule()).isEqualTo("0 0 10 * * *");
@@ -87,7 +88,7 @@ class CronRepositoryTest {
 
     @Test
     void updateLastRun() {
-        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true));
+        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true, false));
         LocalDateTime now = LocalDateTime.of(2026, 3, 10, 12, 0, 0);
         repository.updateLastRun("job", now);
 
@@ -97,7 +98,7 @@ class CronRepositoryTest {
 
     @Test
     void setEnabled() {
-        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true));
+        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true, false));
 
         repository.setEnabled("job", false);
         assertThat(repository.findByName("job").enabled()).isFalse();
@@ -108,7 +109,7 @@ class CronRepositoryTest {
 
     @Test
     void deleteRemovesJob() {
-        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true));
+        repository.save(new CronJob(null, "job", "0 0 9 * * *", "prompt", null, true, false));
         assertThat(repository.delete("job")).isTrue();
         assertThat(repository.findByName("job")).isNull();
     }
@@ -116,5 +117,40 @@ class CronRepositoryTest {
     @Test
     void deleteReturnsFalseForMissing() {
         assertThat(repository.delete("nonexistent")).isFalse();
+    }
+
+    @Test
+    void seedDataContainsMorningBriefing() {
+        CronJob job = repository.findByName("morning-briefing");
+        assertThat(job).isNotNull();
+        assertThat(job.schedule()).isEqualTo("0 7 * * 1-5");
+        assertThat(job.builtIn()).isTrue();
+        assertThat(job.enabled()).isTrue();
+        assertThat(job.prompt()).contains("weather");
+    }
+
+    @Test
+    void seedDataContainsWeeklyReview() {
+        CronJob job = repository.findByName("weekly-review");
+        assertThat(job).isNotNull();
+        assertThat(job.schedule()).isEqualTo("0 18 * * 5");
+        assertThat(job.builtIn()).isTrue();
+        assertThat(job.enabled()).isTrue();
+        assertThat(job.prompt()).contains("recap");
+    }
+
+    @Test
+    void deleteReturnsFalseForBuiltInJob() {
+        CronJob job = repository.findByName("morning-briefing");
+        assertThat(job).isNotNull();
+        assertThat(repository.delete("morning-briefing")).isFalse();
+        assertThat(repository.findByName("morning-briefing")).isNotNull();
+    }
+
+    @Test
+    void findAllIncludesBuiltInFlag() {
+        List<CronJob> jobs = repository.findAll();
+        assertThat(jobs).anyMatch(j -> j.name().equals("morning-briefing") && j.builtIn());
+        assertThat(jobs).anyMatch(j -> j.name().equals("weekly-review") && j.builtIn());
     }
 }
