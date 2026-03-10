@@ -6,7 +6,6 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -23,11 +22,11 @@ public class AgentService {
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
     private static final String DEFAULT_CONVERSATION_ID = "default";
 
-    private final ChatClient mainClient;
+    private final ModelSwitcher modelSwitcher;
     private final AgentMetrics agentMetrics;
 
-    AgentService(ChatClient mainClient, AgentMetrics agentMetrics) {
-        this.mainClient = mainClient;
+    AgentService(ModelSwitcher modelSwitcher, AgentMetrics agentMetrics) {
+        this.modelSwitcher = modelSwitcher;
         this.agentMetrics = agentMetrics;
     }
 
@@ -55,7 +54,7 @@ public class AgentService {
         ChatResponse chatResponse = null;
 
         try {
-            chatResponse = mainClient.prompt()
+            chatResponse = modelSwitcher.getActiveClient().prompt()
                     .user(userMessage)
                     .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                     .call()

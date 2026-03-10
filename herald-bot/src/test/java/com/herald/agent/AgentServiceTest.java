@@ -28,6 +28,7 @@ class AgentServiceTest {
     private ChatClientRequestSpec requestSpec;
     private CallResponseSpec callResponseSpec;
     private AgentMetrics agentMetrics;
+    private ModelSwitcher modelSwitcher;
     private AgentService agentService;
 
     @BeforeEach
@@ -36,13 +37,15 @@ class AgentServiceTest {
         requestSpec = mock(ChatClientRequestSpec.class);
         callResponseSpec = mock(CallResponseSpec.class);
         agentMetrics = mock(AgentMetrics.class);
+        modelSwitcher = mock(ModelSwitcher.class);
 
+        when(modelSwitcher.getActiveClient()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.user(anyString())).thenReturn(requestSpec);
         when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(callResponseSpec);
 
-        agentService = new AgentService(chatClient, agentMetrics);
+        agentService = new AgentService(modelSwitcher, agentMetrics);
     }
 
     @Test
@@ -117,6 +120,16 @@ class AgentServiceTest {
 
         verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(),
                 eq(List.of("shell_exec", "file_read")), isNull());
+    }
+
+    @Test
+    void chatUsesActiveClientFromModelSwitcher() {
+        when(callResponseSpec.chatResponse()).thenReturn(mockChatResponse("response"));
+
+        agentService.chat("test");
+
+        verify(modelSwitcher).getActiveClient();
+        verify(chatClient).prompt();
     }
 
     private ChatResponse mockChatResponse(String content) {

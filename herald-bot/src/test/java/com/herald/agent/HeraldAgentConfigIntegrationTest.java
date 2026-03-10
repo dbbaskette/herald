@@ -16,6 +16,7 @@ import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryReposito
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,7 +25,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Integration test verifying the ChatClient bean is properly wired with all tools and advisors.
@@ -39,7 +42,7 @@ class HeraldAgentConfigIntegrationTest {
     private static final String OLLAMA_MODEL = "llama3.2";
 
     @Test
-    void mainClientBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
+    void modelSwitcherBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
@@ -47,24 +50,29 @@ class HeraldAgentConfigIntegrationTest {
         assertThat(chatMemory).isInstanceOf(MessageWindowChatMemory.class);
 
         ChatModel mockModel = mock(ChatModel.class);
-        ChatClient.Builder builder = ChatClient.builder(mockModel);
 
         HeraldConfig config = new HeraldConfig(null, null,
                 new HeraldConfig.Agent("TestBot", null), null);
 
-        ChatClient client = agentConfig.mainClient(
-                builder, mockModel, config, chatMemory,
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(List.of());
+
+        ModelSwitcher switcher = agentConfig.modelSwitcher(
+                mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
 
-        assertThat(client).isNotNull();
+        assertThat(switcher).isNotNull();
+        assertThat(switcher.getActiveClient()).isNotNull();
     }
 
     @Test
-    void mainClientLoadsSubagentDefinitionsFromDirectory(@TempDir Path tempDir) throws IOException {
+    void modelSwitcherLoadsSubagentDefinitionsFromDirectory(@TempDir Path tempDir) throws IOException {
         Files.writeString(tempDir.resolve("test-agent.md"),
                 """
                 ---
@@ -79,7 +87,6 @@ class HeraldAgentConfigIntegrationTest {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
 
         ChatModel mockModel = mock(ChatModel.class);
-        ChatClient.Builder builder = ChatClient.builder(mockModel);
 
         HeraldConfig config = new HeraldConfig(null, null,
                 new HeraldConfig.Agent("TestBot", null), null);
@@ -87,15 +94,21 @@ class HeraldAgentConfigIntegrationTest {
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
 
-        ChatClient client = agentConfig.mainClient(
-                builder, mockModel, config, chatMemory,
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(List.of());
+
+        ModelSwitcher switcher = agentConfig.modelSwitcher(
+                mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
 
-        assertThat(client).isNotNull();
+        assertThat(switcher).isNotNull();
+        assertThat(switcher.getActiveClient()).isNotNull();
     }
 
     @Test
