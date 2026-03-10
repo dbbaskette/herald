@@ -1,4 +1,4 @@
-package com.herald.ui;
+package com.herald.ui.config;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,13 +12,9 @@ import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.init.DataSourceInitializer;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 @Configuration
 class DataSourceConfig {
@@ -26,32 +22,20 @@ class DataSourceConfig {
     private static final Logger log = LoggerFactory.getLogger(DataSourceConfig.class);
 
     @Bean
-    DataSource dataSource(@Value("${herald.memory.db-path:~/.herald/herald.db}") String dbPath) {
-        String resolved = resolveDbPath(dbPath);
-        ensureParentDirectory(resolved);
+    DataSource dataSource(HeraldUiConfig heraldUiConfig) {
+        String dbPath = resolveDbPath(heraldUiConfig.dbPath());
+        ensureParentDirectory(dbPath);
 
         DataSource dataSource = DataSourceBuilder.create()
                 .driverClassName("org.sqlite.JDBC")
-                .url("jdbc:sqlite:" + resolved)
+                .url("jdbc:sqlite:" + dbPath)
                 .build();
 
         enableWalMode(dataSource);
         return dataSource;
     }
 
-    @Bean
-    DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-        populator.addScript(new ClassPathResource("schema.sql"));
-        populator.setContinueOnError(true);
-
-        DataSourceInitializer initializer = new DataSourceInitializer();
-        initializer.setDataSource(dataSource);
-        initializer.setDatabasePopulator(populator);
-        return initializer;
-    }
-
-    private String resolveDbPath(String path) {
+    String resolveDbPath(String path) {
         if (path.startsWith("~")) {
             return System.getProperty("user.home") + path.substring(1);
         }
@@ -74,6 +58,7 @@ class DataSourceConfig {
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute("PRAGMA journal_mode=WAL");
+            log.info("SQLite WAL mode enabled");
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to enable WAL mode", e);
         }
