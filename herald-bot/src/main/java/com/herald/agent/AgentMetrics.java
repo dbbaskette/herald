@@ -23,25 +23,17 @@ class AgentMetrics {
     private static final Logger log = LoggerFactory.getLogger(AgentMetrics.class);
 
     private final Counter turnsCounter;
-    private final Counter tokensInCounter;
-    private final Counter tokensOutCounter;
     private final Timer latencyTimer;
+    private final MeterRegistry meterRegistry;
     private final JdbcTemplate jdbcTemplate;
 
     AgentMetrics(MeterRegistry meterRegistry, JdbcTemplate jdbcTemplate) {
+        this.meterRegistry = meterRegistry;
         this.turnsCounter = Counter.builder("herald.agent.turns")
                 .description("Number of agent turns processed")
                 .register(meterRegistry);
         this.latencyTimer = Timer.builder("herald.agent.latency")
                 .description("Agent turn latency")
-                .register(meterRegistry);
-        this.tokensInCounter = Counter.builder("herald.tokens.total")
-                .tag("direction", "in")
-                .description("Total input tokens consumed")
-                .register(meterRegistry);
-        this.tokensOutCounter = Counter.builder("herald.tokens.total")
-                .tag("direction", "out")
-                .description("Total output tokens produced")
                 .register(meterRegistry);
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -49,26 +41,58 @@ class AgentMetrics {
     /**
      * Record metrics for a completed agent turn.
      */
-    void recordTurn(String model, long tokensIn, long tokensOut,
-                    long latencyMs, List<String> toolCalls) {
+    void recordTurn(String provider, String model, long tokensIn, long tokensOut,
+                    long latencyMs, List<String> toolCalls, String subagentId) {
         String turnId = UUID.randomUUID().toString();
 
         // Micrometer counters
         turnsCounter.increment();
-        tokensInCounter.increment(tokensIn);
-        tokensOutCounter.increment(tokensOut);
+        Counter.builder("herald.tokens.in")
+                .tag("provider", provider)
+                .tag("model", model)
+                .description("Input tokens consumed")
+                .register(meterRegistry)
+                .increment(tokensIn);
+        Counter.builder("herald.tokens.out")
+                .tag("provider", provider)
+                .tag("model", model)
+                .description("Output tokens produced")
+                .register(meterRegistry)
+                .increment(tokensOut);
         latencyTimer.record(Duration.ofMillis(latencyMs));
 
         // Structured JSON log entry
         String toolCallsJson = toolCalls.stream()
                 .map(name -> "\"" + name.replace("\"", "\\\"") + "\"")
                 .collect(Collectors.joining(",", "[", "]"));
-        log.info("{\"turn_id\":\"{}\",\"model\":\"{}\",\"tokens_in\":{},\"tokens_out\":{},\"latency_ms\":{},\"tool_calls\":{}}",
-                turnId, model, tokensIn, tokensOut, latencyMs, toolCallsJson);
+        log.info("{\"turn_id\":\"{}\",\"provider\":\"{}\",\"model\":\"{}\",\"subagent_id\":\"{}\",\"tokens_in\":{},\"tokens_out\":{},\"latency_ms\":{},\"tool_calls\":{}}",
+                turnId, provider, model, subagentId, tokensIn, tokensOut, latencyMs, toolCallsJson);
 
         // Persist to model_usage table
         jdbcTemplate.update(
-                "INSERT INTO model_usage (provider, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?)",
-                "anthropic", model, tokensIn, tokensOut);
+                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?, ?)",
+                subagentId, provider, model, tokensIn, tokensOut);
+    }
+
+    /**
+     * Derive the provider name from a model identifier.
+     */
+    static String deriveProvider(String model) {
+        if (model == null || model.isBlank()) {
+            return "unknown";
+        }
+        String lower = model.toLowerCase();
+        if (lower.startsWith("claude") || lower.contains("anthropic")) {
+            return "anthropic";
+        }
+        if (lower.startsWith("gpt") || lower.startsWith("o1") || lower.startsWith("o3")
+                || lower.startsWith("o4") || lower.contains("openai")) {
+            return "openai";
+        }
+        if (lower.startsWith("llama") || lower.startsWith("mistral") || lower.startsWith("gemma")
+                || lower.startsWith("phi") || lower.startsWith("qwen") || lower.startsWith("codellama")) {
+            return "ollama";
+        }
+        return "unknown";
     }
 }

@@ -1,9 +1,13 @@
 package com.herald.telegram;
 
+import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -13,6 +17,7 @@ class CommandHandlerTest {
     private MemoryTools memoryTools;
     private ChatMemory chatMemory;
     private TelegramSender sender;
+    private UsageTracker usageTracker;
     private CommandHandler handler;
 
     @BeforeEach
@@ -20,7 +25,8 @@ class CommandHandlerTest {
         memoryTools = mock(MemoryTools.class);
         chatMemory = mock(ChatMemory.class);
         sender = mock(TelegramSender.class);
-        handler = new CommandHandler(memoryTools, chatMemory, sender, "claude-sonnet-4-5");
+        usageTracker = mock(UsageTracker.class);
+        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, "claude-sonnet-4-5");
     }
 
     // --- handle() routing ---
@@ -50,7 +56,8 @@ class CommandHandlerTest {
         handler.handle("/help");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("/help") && msg.contains("/status")
-                        && msg.contains("/reset") && msg.contains("/memory")));
+                        && msg.contains("/reset") && msg.contains("/memory")
+                        && msg.contains("/model status")));
     }
 
     @Test
@@ -147,6 +154,54 @@ class CommandHandlerTest {
     void memoryUnknownSubcommandShowsUsage() {
         handler.handle("/memory foo");
         verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown memory subcommand")));
+    }
+
+    // --- /model status ---
+
+    @Test
+    void modelStatusShowsCurrentModelAndDailyUsage() {
+        when(usageTracker.getDailyUsage())
+                .thenReturn(new UsageTracker.UsageSummary(15000, 3000));
+        when(usageTracker.getDailyUsageByAgent())
+                .thenReturn(List.of(
+                        new UsageTracker.AgentUsage("main", "anthropic", "claude-sonnet-4-5", 10000, 2000),
+                        new UsageTracker.AgentUsage("research-agent", "anthropic", "claude-haiku-4-5", 5000, 1000)));
+        when(usageTracker.estimateDailyCost()).thenReturn(new BigDecimal("0.0750"));
+
+        handler.handle("/model status");
+
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("claude-sonnet-4-5")
+                        && msg.contains("15.0K in")
+                        && msg.contains("3.0K out")
+                        && msg.contains("$0.0750")
+                        && msg.contains("main")
+                        && msg.contains("research-agent")));
+    }
+
+    @Test
+    void modelStatusWithNoUsage() {
+        when(usageTracker.getDailyUsage())
+                .thenReturn(new UsageTracker.UsageSummary(0, 0));
+        when(usageTracker.getDailyUsageByAgent()).thenReturn(List.of());
+        when(usageTracker.estimateDailyCost()).thenReturn(BigDecimal.ZERO.setScale(4));
+
+        handler.handle("/model status");
+
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Model Status") && msg.contains("0 in") && msg.contains("0 out")));
+    }
+
+    @Test
+    void modelWithNoSubcommandShowsUsage() {
+        handler.handle("/model");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void modelUnknownSubcommandShowsUsage() {
+        handler.handle("/model foo");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown model subcommand")));
     }
 
     // --- unknown command ---
