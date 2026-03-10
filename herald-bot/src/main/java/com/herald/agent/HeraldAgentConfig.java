@@ -7,6 +7,7 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
+import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
@@ -57,7 +58,7 @@ class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws");
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws", "web");
     }
 
     @Bean
@@ -85,6 +86,7 @@ class HeraldAgentConfig {
             TodoWriteTool todoTool,
             AskUserQuestionTool askTool,
             GwsTools gwsTools,
+            WebTools webTools,
             JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
@@ -142,7 +144,7 @@ class HeraldAgentConfig {
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
-                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool, gwsTools)
+                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool, gwsTools, webTools)
                         .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
