@@ -66,7 +66,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), tempDir.resolve("skills").toString(),
+                tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
 
@@ -107,7 +107,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), tempDir.resolve("skills").toString(),
+                tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
 
@@ -139,7 +139,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), tempDir.resolve("skills").toString(),
+                tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL,
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel));

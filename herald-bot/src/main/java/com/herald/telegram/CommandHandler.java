@@ -201,15 +201,15 @@ class CommandHandler {
             case "list" -> {
                 List<SkillsTool.Skill> skills = reloadableSkillsTool.getSkills();
                 if (skills.isEmpty()) {
-                    sender.sendMessage("No skills found in " + reloadableSkillsTool.getSkillsDirectory());
+                    sender.sendMessage("No skills currently loaded.");
                     return;
                 }
                 var sb = new StringBuilder("*Loaded Skills*\n\n");
                 for (SkillsTool.Skill skill : skills) {
                     String name = skill.name();
-                    String desc = String.valueOf(skill.frontMatter().get("description"));
+                    Object desc = skill.frontMatter().get("description");
                     sb.append("- *").append(name).append("*");
-                    if (!"null".equals(desc)) {
+                    if (desc != null) {
                         sb.append(" — ").append(desc);
                     }
                     sb.append("\n");
@@ -218,9 +218,9 @@ class CommandHandler {
             }
             case "reload" -> {
                 int count = reloadableSkillsTool.reload();
-                String dir = reloadableSkillsTool.getSkillsDirectory();
-                sender.sendMessage("Reloaded %d skill(s) from %s".formatted(count, dir));
-                log.info("Skills reloaded from {}: {} skill(s)", dir, count);
+                sender.sendMessage("Reloaded %d skill(s).".formatted(count));
+                log.info("Skills reloaded from {}: {} skill(s)",
+                        reloadableSkillsTool.getSkillsDirectory(), count);
             }
             default -> sender.sendMessage(
                     "Unknown skills subcommand: " + subcommand

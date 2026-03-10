@@ -1,6 +1,7 @@
 package com.herald.telegram;
 
 import com.herald.agent.ModelSwitcher;
+import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,7 @@ class CommandHandlerTest {
     private TelegramSender sender;
     private UsageTracker usageTracker;
     private ModelSwitcher modelSwitcher;
+    private ReloadableSkillsTool reloadableSkillsTool;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -43,9 +45,10 @@ class CommandHandlerTest {
         when(modelSwitcher.getActiveModel()).thenReturn("claude-sonnet-4-5");
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
+        reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
         handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills"),
-                tempDir.toString());
+                reloadableSkillsTool);
     }
 
     // --- handle() routing ---
@@ -321,6 +324,9 @@ class CommandHandlerTest {
                 You are a weather skill.
                 """);
 
+        // Reload to pick up the newly created skill files
+        reloadableSkillsTool.reload();
+
         handler.handle("/skills list");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("weather") && msg.contains("Look up current weather conditions")));
@@ -329,7 +335,7 @@ class CommandHandlerTest {
     @Test
     void skillsListShowsEmptyWhenNoSkills() {
         handler.handle("/skills list");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("No skills found")));
+        verify(sender).sendMessage(argThat(msg -> msg.contains("No skills currently loaded")));
     }
 
     // --- /skills reload ---
