@@ -4,6 +4,13 @@ spring:
   threads:
     virtual:
       enabled: true
+  sql:
+    init:
+      mode: never
+
+herald:
+  memory:
+    db-path: ${HERALD_MEMORY_DB_PATH:~/.herald/herald.db}
 
 server:
   port: 8080
