@@ -1,6 +1,7 @@
 package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
+import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
 import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
@@ -67,7 +68,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
-                mock(GwsTools.class), new WebTools(""), jdbcTemplate,
+                mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -108,7 +109,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
-                mock(GwsTools.class), new WebTools(""), jdbcTemplate,
+                mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -140,7 +141,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class), mock(TelegramSendTool.class),
-                mock(GwsTools.class), new WebTools(""), jdbcTemplate,
+                mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,

@@ -3,6 +3,8 @@ package com.herald.telegram;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
+import com.herald.cron.CronJob;
+import com.herald.cron.CronService;
 import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.*;
 class CommandHandlerTest {
 
     private MemoryTools memoryTools;
+    private CronService cronService;
     private ChatMemory chatMemory;
     private TelegramSender sender;
     private UsageTracker usageTracker;
@@ -37,6 +40,7 @@ class CommandHandlerTest {
     @BeforeEach
     void setUp() {
         memoryTools = mock(MemoryTools.class);
+        cronService = mock(CronService.class);
         chatMemory = mock(ChatMemory.class);
         sender = mock(TelegramSender.class);
         usageTracker = mock(UsageTracker.class);
@@ -46,8 +50,8 @@ class CommandHandlerTest {
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
         reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
-        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher,
-                List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills"),
+        handler = new CommandHandler(memoryTools, cronService, chatMemory, sender, usageTracker, modelSwitcher,
+                List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
                 reloadableSkillsTool, 200_000);
     }
 
@@ -82,7 +86,10 @@ class CommandHandlerTest {
                         && msg.contains("/model status")
                         && msg.contains("/model <provider> <model>")
                         && msg.contains("/skills list")
-                        && msg.contains("/skills reload")));
+                        && msg.contains("/skills reload")
+                        && msg.contains("/cron list")
+                        && msg.contains("/cron enable")
+                        && msg.contains("/cron disable")));
     }
 
     @Test
@@ -374,6 +381,75 @@ class CommandHandlerTest {
     void skillsUnknownSubcommandShowsUsage() {
         handler.handle("/skills foo");
         verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown skills subcommand")));
+    }
+
+    // --- /cron list ---
+
+    @Test
+    void cronListShowsJobs() {
+        when(cronService.listJobs()).thenReturn(List.of(
+                new CronJob(1, "morning-brief", "0 0 9 * * MON-FRI", "Give me a morning briefing",
+                        java.time.LocalDateTime.of(2026, 3, 9, 9, 0), true),
+                new CronJob(2, "weekly-review", "0 0 17 * * FRI", "Weekly review",
+                        null, false)));
+        handler.handle("/cron list");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("morning-brief") && msg.contains("enabled")
+                        && msg.contains("weekly-review") && msg.contains("disabled")
+                        && msg.contains("never")));
+    }
+
+    @Test
+    void cronListShowsEmptyMessage() {
+        when(cronService.listJobs()).thenReturn(List.of());
+        handler.handle("/cron list");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("No cron jobs configured")));
+    }
+
+    // --- /cron enable ---
+
+    @Test
+    void cronEnableCallsService() {
+        handler.handle("/cron enable morning-brief");
+        verify(cronService).enableJob("morning-brief");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Enabled") && msg.contains("morning-brief")));
+    }
+
+    @Test
+    void cronEnableWithNoNameShowsUsage() {
+        handler.handle("/cron enable");
+        verify(cronService, never()).enableJob(any());
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    // --- /cron disable ---
+
+    @Test
+    void cronDisableCallsService() {
+        handler.handle("/cron disable morning-brief");
+        verify(cronService).disableJob("morning-brief");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Disabled") && msg.contains("morning-brief")));
+    }
+
+    @Test
+    void cronDisableWithNoNameShowsUsage() {
+        handler.handle("/cron disable");
+        verify(cronService, never()).disableJob(any());
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    // --- /cron (no subcommand / unknown) ---
+
+    @Test
+    void cronWithNoSubcommandShowsUsage() {
+        handler.handle("/cron");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void cronUnknownSubcommandShowsUsage() {
+        handler.handle("/cron foo");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown cron subcommand")));
     }
 
     // --- formatUptime ---

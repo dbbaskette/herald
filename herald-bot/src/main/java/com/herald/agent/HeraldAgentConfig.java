@@ -1,6 +1,7 @@
 package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
+import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
 import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
@@ -59,7 +60,7 @@ class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws", "web", "telegram_send");
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
     }
 
     @Bean
@@ -89,6 +90,7 @@ class HeraldAgentConfig {
             TelegramSendTool telegramSendTool,
             GwsTools gwsTools,
             WebTools webTools,
+            CronTools cronTools,
             JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
@@ -150,7 +152,7 @@ class HeraldAgentConfig {
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
-                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool, telegramSendTool, gwsTools, webTools)
+                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool, telegramSendTool, gwsTools, webTools, cronTools)
                         .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
