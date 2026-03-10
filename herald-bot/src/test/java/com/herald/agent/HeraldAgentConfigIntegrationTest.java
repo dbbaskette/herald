@@ -26,6 +26,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import org.springframework.context.ApplicationEventPublisher;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -61,7 +63,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -101,7 +103,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -132,7 +134,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
                 jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,

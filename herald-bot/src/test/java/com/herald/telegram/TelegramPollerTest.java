@@ -103,6 +103,27 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(questionHandler).resolveAnswer("B");
+        verify(agentService, never()).chat(any());
+    }
+
+    @Test
+    void pollFallsThroughToAgentWhenResolveAnswerFails() throws Exception {
+        when(questionHandler.hasPendingQuestion()).thenReturn(true);
+        when(questionHandler.resolveAnswer("B")).thenReturn(false);
+        when(commandHandler.handle("B")).thenReturn(false);
+        when(agentService.chat("B")).thenReturn("agent reply");
+
+        Update update = createUpdate(12345L, "B");
+        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
+        when(response.isOk()).thenReturn(true);
+        when(response.updates()).thenReturn(List.of(update));
+        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
+
+        poller.poll();
+
+        verify(questionHandler).resolveAnswer("B");
+        verify(agentService).chat("B");
+        verify(sender).sendMessage("agent reply");
     }
 
     @Test
