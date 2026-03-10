@@ -31,7 +31,7 @@ class CronServiceTest {
         when(cronRepository.findAll()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
+                new HeraldConfig.Cron("America/New_York"), null);
         cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         cronService.loadJobs();
     }
@@ -104,7 +104,7 @@ class CronServiceTest {
         when(cronRepository.findAll()).thenReturn(List.of(enabled, disabled));
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
+                new HeraldConfig.Cron("America/New_York"), null);
         CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
@@ -119,7 +119,7 @@ class CronServiceTest {
         when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
+                new HeraldConfig.Cron("America/New_York"), null);
         CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
@@ -159,7 +159,7 @@ class CronServiceTest {
 
     @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null);
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
         CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         assertThat(service).isNotNull();
     }
