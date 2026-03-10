@@ -57,6 +57,10 @@ class CronRepository {
         jdbcTemplate.update("UPDATE cron_jobs SET last_run = ? WHERE name = ?", lastRun.toString(), name);
     }
 
+    void updateSchedule(String name, String schedule) {
+        jdbcTemplate.update("UPDATE cron_jobs SET schedule = ? WHERE name = ?", schedule, name);
+    }
+
     void setEnabled(String name, boolean enabled) {
         jdbcTemplate.update("UPDATE cron_jobs SET enabled = ? WHERE name = ?", enabled ? 1 : 0, name);
     }

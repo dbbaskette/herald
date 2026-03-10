@@ -102,6 +102,7 @@ class CommandHandler {
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
+                /cron edit <name> schedule <expr> — Update cron schedule
                 """;
         sender.sendMessage(help);
     }
@@ -263,7 +264,7 @@ class CommandHandler {
 
     private void handleCron(String[] parts) {
         if (parts.length < 2) {
-            sender.sendMessage("Usage: /cron list | /cron enable <name> | /cron disable <name>");
+            sender.sendMessage("Usage: /cron list | enable | disable | edit <name> schedule <expr>");
             return;
         }
 
@@ -281,8 +282,11 @@ class CommandHandler {
                             .append(job.schedule()).append("` | ")
                             .append(job.enabled() ? "enabled" : "disabled")
                             .append(" | last run: ")
-                            .append(job.lastRun() != null ? job.lastRun().format(CRON_FMT) : "never")
-                            .append("\n");
+                            .append(job.lastRun() != null ? job.lastRun().format(CRON_FMT) : "never");
+                    if (job.builtIn()) {
+                        sb.append(" | built-in");
+                    }
+                    sb.append("\n");
                 }
                 sender.sendMessage(sb.toString());
             }
@@ -302,9 +306,30 @@ class CommandHandler {
                 cronService.disableJob(parts[2]);
                 sender.sendMessage("Disabled cron job '%s'.".formatted(parts[2]));
             }
+            case "edit" -> {
+                if (parts.length < 4) {
+                    sender.sendMessage("Usage: /cron edit <name> schedule <expr>");
+                    return;
+                }
+                String jobName = parts[2];
+                String[] editParts = parts[3].split("\\s+", 2);
+                String field = editParts[0].toLowerCase();
+                if (!"schedule".equals(field) || editParts.length < 2) {
+                    sender.sendMessage("Usage: /cron edit <name> schedule <expr>");
+                    return;
+                }
+                String newSchedule = editParts[1];
+                CronJob existing = cronService.findJob(jobName);
+                if (existing == null) {
+                    sender.sendMessage("Cron job '%s' not found.".formatted(jobName));
+                    return;
+                }
+                cronService.rescheduleJob(jobName, newSchedule);
+                sender.sendMessage("Updated schedule for '%s' to `%s`.".formatted(jobName, newSchedule));
+            }
             default -> sender.sendMessage(
                     "Unknown cron subcommand: " + subcommand
-                            + "\nUsage: /cron list | /cron enable <name> | /cron disable <name>");
+                            + "\nUsage: /cron list | enable | disable | edit <name> schedule <expr>");
         }
     }
 

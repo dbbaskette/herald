@@ -19,6 +19,7 @@ class CronServiceTest {
     private AgentService agentService;
     private TelegramSender telegramSender;
     private ChatMemory chatMemory;
+    private BriefingJob briefingJob;
     private CronService cronService;
 
     @BeforeEach
@@ -27,12 +28,13 @@ class CronServiceTest {
         agentService = mock(AgentService.class);
         telegramSender = mock(TelegramSender.class);
         chatMemory = mock(ChatMemory.class);
+        briefingJob = mock(BriefingJob.class);
 
         when(cronRepository.findAll()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
-        cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
+                new HeraldConfig.Cron("America/New_York"), null);
+        cronService = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
         cronService.loadJobs();
     }
 
@@ -104,8 +106,8 @@ class CronServiceTest {
         when(cronRepository.findAll()).thenReturn(List.of(enabled, disabled));
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
+                new HeraldConfig.Cron("America/New_York"), null);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
         service.loadJobs();
 
         // findAll called at least twice: once in setUp, once here
@@ -119,8 +121,8 @@ class CronServiceTest {
         when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"));
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
+                new HeraldConfig.Cron("America/New_York"), null);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
         service.loadJobs();
 
         when(cronRepository.delete("morning-briefing")).thenReturn(false);
@@ -158,9 +160,33 @@ class CronServiceTest {
     }
 
     @Test
+    void executeJobUsesBriefingJobForMorningBriefing() {
+        CronJob job = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "base prompt", null, true, true);
+        when(briefingJob.buildPrompt("base prompt")).thenReturn("enriched prompt");
+        when(agentService.chat("enriched prompt", "cron-morning-briefing")).thenReturn("briefing result");
+
+        cronService.executeJob(job);
+
+        verify(briefingJob).buildPrompt("base prompt");
+        verify(agentService).chat("enriched prompt", "cron-morning-briefing");
+        verify(telegramSender).sendMessage("briefing result");
+    }
+
+    @Test
+    void rescheduleJobUpdatesScheduleAndReschedules() {
+        CronJob updated = new CronJob(1, "test-job", "0 0 8 * * *", "hello", null, true, false);
+        when(cronRepository.findByName("test-job")).thenReturn(updated);
+
+        CronJob result = cronService.rescheduleJob("test-job", "0 0 8 * * *");
+
+        verify(cronRepository).updateSchedule("test-job", "0 0 8 * * *");
+        assertThat(result.schedule()).isEqualTo("0 0 8 * * *");
+    }
+
+    @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
+        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
         assertThat(service).isNotNull();
     }
 }

@@ -106,7 +106,7 @@ class CommandHandlerTest {
         handler.handle("/status");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("anthropic/claude-sonnet-4-5") && msg.contains("3")
-                        && msg.contains("Uptime") && msg.contains("Active tools: 8")));
+                        && msg.contains("Uptime") && msg.contains("Active tools: 9")));
     }
 
     // --- /reset ---
@@ -436,6 +436,62 @@ class CommandHandlerTest {
         handler.handle("/cron disable");
         verify(cronService, never()).disableJob(any());
         verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    // --- /cron edit ---
+
+    @Test
+    void cronEditUpdatesSchedule() {
+        CronJob existing = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt",
+                null, true, true);
+        when(cronService.findJob("morning-briefing")).thenReturn(existing);
+        when(cronService.rescheduleJob("morning-briefing", "0 0 8 * * MON-FRI"))
+                .thenReturn(new CronJob(1, "morning-briefing", "0 0 8 * * MON-FRI", "prompt",
+                        null, true, true));
+
+        handler.handle("/cron edit morning-briefing schedule 0 0 8 * * MON-FRI");
+
+        verify(cronService).rescheduleJob("morning-briefing", "0 0 8 * * MON-FRI");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Updated schedule") && msg.contains("morning-briefing")
+                        && msg.contains("0 0 8 * * MON-FRI")));
+    }
+
+    @Test
+    void cronEditWithNonexistentJobShowsError() {
+        when(cronService.findJob("nonexistent")).thenReturn(null);
+
+        handler.handle("/cron edit nonexistent schedule 0 0 8 * * *");
+
+        verify(cronService, never()).rescheduleJob(any(), any());
+        verify(sender).sendMessage(argThat(msg -> msg.contains("not found")));
+    }
+
+    @Test
+    void cronEditWithMissingFieldShowsUsage() {
+        handler.handle("/cron edit morning-briefing");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void cronEditWithUnsupportedFieldShowsUsage() {
+        handler.handle("/cron edit morning-briefing prompt new prompt");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    // --- /cron list built-in flag ---
+
+    @Test
+    void cronListShowsBuiltInFlag() {
+        when(cronService.listJobs()).thenReturn(List.of(
+                new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt",
+                        null, true, true),
+                new CronJob(2, "custom-job", "0 0 9 * * *", "prompt",
+                        null, true, false)));
+        handler.handle("/cron list");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("morning-briefing") && msg.contains("built-in")
+                        && msg.contains("custom-job") && !msg.contains("custom-job* | `0 0 9 * * *` | enabled | last run: never | built-in")));
     }
 
     // --- /cron (no subcommand / unknown) ---

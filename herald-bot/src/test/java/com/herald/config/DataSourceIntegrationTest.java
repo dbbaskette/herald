@@ -33,7 +33,7 @@ class DataSourceIntegrationTest {
     @Test
     void fullBeanWiringChainFunctional() throws SQLException {
         HeraldConfig config = new HeraldConfig(
-                new HeraldConfig.Memory(tempDir.resolve("herald-integration.db").toString()), null, null, null, null);
+                new HeraldConfig.Memory(tempDir.resolve("herald-integration.db").toString()), null, null, null, null, null);
 
         // Wire beans in the same order Spring would
         DataSourceConfig dsConfig = new DataSourceConfig();

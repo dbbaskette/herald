@@ -3,7 +3,8 @@ package com.herald.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
-public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron) {
+public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
+                           Weather weather) {
 
     public record Memory(String dbPath) {
     }
@@ -55,6 +56,16 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Cron(String timezone) {
+    }
+
+    public record Weather(String location) {
+    }
+
+    public String weatherLocation() {
+        if (weather != null && weather.location() != null && !weather.location().isBlank()) {
+            return weather.location();
+        }
+        return "";
     }
 
     public String cronTimezone() {
