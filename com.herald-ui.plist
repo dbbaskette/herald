@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.herald-ui</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>java</string>
+        <string>-jar</string>
+        <string>__HOME__/.herald/herald-ui.jar</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/.herald</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/herald-ui.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/herald-ui.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>SERVER_ADDRESS</key>
+        <string>0.0.0.0</string>
+    </dict>
+</dict>
+</plist>
