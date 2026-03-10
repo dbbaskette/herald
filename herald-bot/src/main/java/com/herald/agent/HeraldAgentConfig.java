@@ -108,6 +108,10 @@ class HeraldAgentConfig {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(contextFilePath);
         contextMdAdvisor.ensureTemplateExists(loadContextTemplate());
 
+        // Set up context compaction advisor — backstop against context window overflow
+        ContextCompactionAdvisor compactionAdvisor =
+                new ContextCompactionAdvisor(chatMemory, memoryTools, config.maxContextTokens());
+
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
@@ -150,6 +154,7 @@ class HeraldAgentConfig {
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 contextMdAdvisor,
                                 new MemoryBlockAdvisor(memoryTools),
+                                compactionAdvisor,
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                 ToolCallAdvisor.builder()
                                         .conversationHistoryEnabled(false)

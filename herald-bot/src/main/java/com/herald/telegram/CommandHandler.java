@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import com.herald.agent.ReloadableSkillsTool;
 import org.springaicommunity.agent.tools.SkillsTool;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
@@ -30,12 +32,14 @@ class CommandHandler {
     private final ModelSwitcher modelSwitcher;
     private final ReloadableSkillsTool reloadableSkillsTool;
     private final int activeToolsCount;
+    private final int maxContextTokens;
     private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
                    UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                    @Qualifier("activeToolNames") List<String> activeToolNames,
-                   ReloadableSkillsTool reloadableSkillsTool) {
+                   ReloadableSkillsTool reloadableSkillsTool,
+                   @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -43,6 +47,7 @@ class CommandHandler {
         this.modelSwitcher = modelSwitcher;
         this.reloadableSkillsTool = reloadableSkillsTool;
         this.activeToolsCount = activeToolNames.size();
+        this.maxContextTokens = maxContextTokens;
     }
 
     boolean handle(String text) {
@@ -115,20 +120,37 @@ class CommandHandler {
 
     private void handleDebug() {
         int memoryCount = memoryTools.count();
-        int contextMessages = chatMemory.get(AgentService.DEFAULT_CONVERSATION_ID).size();
+        List<Message> messages = chatMemory.get(AgentService.DEFAULT_CONVERSATION_ID);
+        int contextMessages = messages.size();
+        int estimatedTokens = estimateTokens(messages);
+        int ceiling = (int) (maxContextTokens * 0.8);
+        int usagePercent = maxContextTokens > 0 ? (estimatedTokens * 100) / maxContextTokens : 0;
 
         String modelName = modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel();
         String debug = """
                 *Debug Info*
 
                 Context messages: %d
+                Context size: ~%s tokens (%d%% of %s limit, ceiling %s)
                 Memory entries: %d
                 Active tools: %d
                 Model: %s
                 Available providers: %s
-                """.formatted(contextMessages, memoryCount, activeToolsCount, modelName,
+                """.formatted(contextMessages,
+                formatTokens(estimatedTokens), usagePercent,
+                formatTokens(maxContextTokens), formatTokens(ceiling),
+                memoryCount, activeToolsCount, modelName,
                 String.join(", ", modelSwitcher.getAvailableProviders()));
         sender.sendMessage(debug);
+    }
+
+    static int estimateTokens(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        return messages.stream()
+                .mapToInt(m -> m.getText() != null ? m.getText().length() / 4 : 0)
+                .sum();
     }
 
     private void handleMemory(String[] parts) {
