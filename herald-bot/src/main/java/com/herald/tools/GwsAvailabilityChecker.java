@@ -46,11 +46,11 @@ class GwsAvailabilityChecker {
                 log.info("Google Workspace CLI (gws) detected: {}", gwsVersion);
             } else {
                 gwsAvailable = false;
-                log.warn("Google Workspace CLI (gws) not found in PATH — Google skills will be unavailable");
+                log.warn("Google Workspace CLI (gws) not found in PATH — Google skills will be unavailable. See docs/gws-setup.md for setup instructions.");
             }
         } catch (Exception e) {
             gwsAvailable = false;
-            log.warn("Google Workspace CLI (gws) not found in PATH — Google skills will be unavailable");
+            log.warn("Google Workspace CLI (gws) not found in PATH — Google skills will be unavailable. See docs/gws-setup.md for setup instructions.");
         }
     }
 
