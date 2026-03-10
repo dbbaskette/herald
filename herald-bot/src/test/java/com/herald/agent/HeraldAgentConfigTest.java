@@ -34,15 +34,15 @@ class HeraldAgentConfigTest {
     }
 
     @Test
-    void resolvePromptInjectsDatetimeAndTimezone() throws IOException {
+    void resolvePromptLeavesDynamicPlaceholders() throws IOException {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, null);
 
         String result = agentConfig.resolvePrompt(template, config);
 
-        assertThat(result).doesNotContain("{current_datetime}");
-        assertThat(result).doesNotContain("{timezone}");
-        assertThat(result).contains("America/New_York");
+        // Dynamic placeholders are resolved per-turn by DateTimePromptAdvisor, not at startup
+        assertThat(result).contains("{current_datetime}");
+        assertThat(result).contains("{timezone}");
     }
 
     @Test
@@ -104,10 +104,11 @@ class HeraldAgentConfigTest {
     @Test
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
-                agentConfig.mainClient(null, null, configWith(null, null),
-                        null, null, null, null, null, null,
+                agentConfig.modelSwitcher(null, configWith(null, null),
+                        null, null, null, null, null, null, null,
                         new ClassPathResource("prompts/NONEXISTENT.md"),
-                        ".claude/agents", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5",
+                        ".claude/agents", "claude-sonnet-4-5", "claude-haiku-4-5",
+                        "claude-sonnet-4-5", "claude-opus-4-5",
                         "gpt-4o", "llama3.2", Optional.empty(), Optional.empty()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");

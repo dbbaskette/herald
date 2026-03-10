@@ -9,7 +9,6 @@ import com.herald.tools.TodoWriteTool;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
@@ -25,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -112,13 +112,12 @@ class HeraldAgentConfigIntegrationTest {
     }
 
     @Test
-    void mainClientWiresOpenAiAndOllamaProviders(@TempDir Path tempDir) {
+    void modelSwitcherWiresOpenAiAndOllamaProviders(@TempDir Path tempDir) {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
 
         ChatModel mockAnthropicModel = mock(ChatModel.class);
         ChatModel mockOpenAiModel = mock(OpenAiChatModel.class);
         ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
-        ChatClient.Builder builder = ChatClient.builder(mockAnthropicModel);
 
         HeraldConfig config = new HeraldConfig(null, null,
                 new HeraldConfig.Agent("TestBot", null), null);
@@ -126,16 +125,22 @@ class HeraldAgentConfigIntegrationTest {
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
 
-        ChatClient client = agentConfig.mainClient(
-                builder, mockAnthropicModel, config, chatMemory,
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(List.of());
+
+        ModelSwitcher switcher = agentConfig.modelSwitcher(
+                mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(), mock(AskUserQuestionTool.class),
+                jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                tempDir.toString(), HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                tempDir.toString(), SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL,
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel));
 
-        assertThat(client).isNotNull();
+        assertThat(switcher).isNotNull();
+        assertThat(switcher.getActiveClient()).isNotNull();
     }
 
     @Test
