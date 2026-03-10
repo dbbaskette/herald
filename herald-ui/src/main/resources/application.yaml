@@ -12,6 +12,7 @@ herald:
   ui:
     db-path: ${HERALD_DB_PATH:~/.herald/herald.db}
     skills-path: ${HERALD_SKILLS_PATH:~/.herald/skills}
+    bundled-skills-path: ${HERALD_BUNDLED_SKILLS_PATH:}
 
 server:
   port: 8080

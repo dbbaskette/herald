@@ -5,12 +5,15 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,15 +32,35 @@ public class StatusSseService {
     private final String botHealthUrl;
     private final HttpClient httpClient;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final List<Path> skillsDirs;
     private Instant botStartTime;
 
     public StatusSseService(JdbcTemplate jdbcTemplate,
-                            @Value("${herald.ui.bot-port:8081}") int botPort) {
+                            @Value("${herald.ui.bot-port:8081}") int botPort,
+                            @Value("${herald.ui.skills-path:~/.herald/skills}") String skillsPath,
+                            @Value("${herald.ui.bundled-skills-path:}") String bundledSkillsPath) {
         this.jdbcTemplate = jdbcTemplate;
         this.botHealthUrl = "http://localhost:" + botPort + "/actuator/health";
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
+        this.skillsDirs = buildSkillsDirs(skillsPath, bundledSkillsPath);
+    }
+
+    private static List<Path> buildSkillsDirs(String skillsPath, String bundledSkillsPath) {
+        var dirs = new java.util.ArrayList<Path>();
+        dirs.add(resolvePath(skillsPath));
+        if (bundledSkillsPath != null && !bundledSkillsPath.isBlank()) {
+            dirs.add(resolvePath(bundledSkillsPath));
+        }
+        return List.copyOf(dirs);
+    }
+
+    private static Path resolvePath(String path) {
+        if (path.startsWith("~")) {
+            path = System.getProperty("user.home") + path.substring(1);
+        }
+        return Path.of(path);
     }
 
     public SseEmitter register() {
@@ -97,7 +120,7 @@ public class StatusSseService {
         model.put("estimatedTokenSpend", "—");
 
         Map<String, Object> skills = new HashMap<>();
-        skills.put("totalLoaded", 0);
+        skills.put("totalLoaded", countSkills());
         skills.put("lastReload", null);
         skills.put("parseErrors", List.of());
 
@@ -116,6 +139,22 @@ public class StatusSseService {
         result.put("timestamp", Instant.now().toString());
 
         return result;
+    }
+
+    private int countSkills() {
+        int count = 0;
+        for (Path dir : skillsDirs) {
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> entries = Files.list(dir)) {
+                count += (int) entries
+                        .filter(Files::isDirectory)
+                        .filter(d -> Files.exists(d.resolve("SKILL.md")))
+                        .count();
+            } catch (IOException e) {
+                // skip unreadable dirs
+            }
+        }
+        return count;
     }
 
     private boolean checkBotHealth() {
