@@ -7,10 +7,13 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -27,15 +30,18 @@ class TelegramQuestionHandlerTest {
 
     @Test
     void askQuestionSendsFormattedMessageAndReturnsAnswer() {
-        // Resolve the answer from another thread shortly after asking
+        CountDownLatch messageSent = new CountDownLatch(1);
         doAnswer(invocation -> {
-            CompletableFuture.runAsync(() -> {
-                // Small delay to ensure the future is registered
-                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-                handler.resolveAnswer("42");
-            });
+            messageSent.countDown();
             return null;
         }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("42");
+        });
 
         String answer = handler.askQuestion("What is the meaning of life?");
 
@@ -67,13 +73,18 @@ class TelegramQuestionHandlerTest {
 
     @Test
     void handleMultipleQuestionsFormatsCorrectly() {
+        CountDownLatch messageSent = new CountDownLatch(1);
         doAnswer(invocation -> {
-            CompletableFuture.runAsync(() -> {
-                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-                handler.resolveAnswer("A");
-            });
+            messageSent.countDown();
             return null;
         }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("A");
+        });
 
         List<Question> questions = List.of(
                 new Question("Which calendar?", List.of("Work", "Personal", "Family")),
@@ -143,13 +154,18 @@ class TelegramQuestionHandlerTest {
 
     @Test
     void handleWithCustomQuestionIdsUsesThemAsKeys() {
+        CountDownLatch messageSent = new CountDownLatch(1);
         doAnswer(invocation -> {
-            CompletableFuture.runAsync(() -> {
-                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-                handler.resolveAnswer("Work");
-            });
+            messageSent.countDown();
             return null;
         }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("Work");
+        });
 
         List<Question> questions = List.of(
                 new Question("calendar-q", "Which calendar?", List.of("Work", "Personal"),
@@ -165,28 +181,71 @@ class TelegramQuestionHandlerTest {
     @Test
     void pendingQuestionStateIsManagedCorrectly() throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessage(anyString());
+
         try {
-            // Start asking in background
             CompletableFuture<String> askFuture = CompletableFuture.supplyAsync(
                     () -> handler.askQuestion("test?"), executor);
 
-            // Wait for the question to be sent
-            Thread.sleep(100);
+            // Wait for the question to be sent (message sent = future is registered)
+            assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
 
             assertThat(handler.hasPendingQuestion()).isTrue();
 
-            // Resolve it
             handler.resolveAnswer("yes");
 
-            String result = askFuture.get();
+            String result = askFuture.get(5, TimeUnit.SECONDS);
             assertThat(result).isEqualTo("yes");
 
-            // After resolution, pending should be cleared
-            // Small delay for cleanup
-            Thread.sleep(50);
+            // After get() returns, the finally block has cleared the pending question
             assertThat(handler.hasPendingQuestion()).isFalse();
         } finally {
             executor.shutdown();
         }
+    }
+
+    @Test
+    void handleRejectsSecondConcurrentQuestion() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessage(anyString());
+
+        try {
+            // Start first question in background
+            CompletableFuture<String> firstQuestion = CompletableFuture.supplyAsync(
+                    () -> handler.askQuestion("first?"), executor);
+
+            assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
+
+            // Try to send a second question while the first is pending
+            assertThatThrownBy(() -> handler.handle(List.of(new Question("second?"))))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("already pending");
+
+            // Clean up: resolve the first question
+            handler.resolveAnswer("done");
+            firstQuestion.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void handleReturnsEmptyMapOnTimeout() {
+        // Use a very short timeout to test the timeout path
+        TelegramQuestionHandler shortTimeoutHandler = new TelegramQuestionHandler(sender, 0);
+
+        Map<String, String> result = shortTimeoutHandler.handle(
+                List.of(new Question("Will this timeout?")));
+
+        assertThat(result).isEmpty();
+        verify(sender).sendMessage(anyString());
     }
 }
