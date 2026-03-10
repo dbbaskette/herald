@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -30,7 +31,7 @@ class CronServiceTest {
         chatMemory = mock(ChatMemory.class);
         briefingJob = mock(BriefingJob.class);
 
-        when(cronRepository.findAll()).thenReturn(List.of());
+        when(cronRepository.findEnabled()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
@@ -102,36 +103,25 @@ class CronServiceTest {
     @Test
     void loadJobsSchedulesEnabledJobs() {
         CronJob enabled = new CronJob(1, "enabled-job", "0 0 9 * * *", "prompt", null, true, false);
-        CronJob disabled = new CronJob(2, "disabled-job", "0 0 10 * * *", "prompt", null, false, false);
-        when(cronRepository.findAll()).thenReturn(List.of(enabled, disabled));
+        when(cronRepository.findEnabled()).thenReturn(List.of(enabled));
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
                 new HeraldConfig.Cron("America/New_York"), null);
         CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
         service.loadJobs();
 
-        // findAll called at least twice: once in setUp, once here
-        verify(cronRepository, atLeast(2)).findAll();
+        // findEnabled called at least twice: once in setUp, once here
+        verify(cronRepository, atLeast(2)).findEnabled();
     }
 
     @Test
-    void deleteBuiltInJobReturnsFalseAndKeepsSchedule() {
-        CronJob builtIn = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt", null, true, true);
-        when(cronRepository.findAll()).thenReturn(List.of(builtIn));
-        when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
+    void deleteBuiltInJobThrowsIllegalStateException() {
+        when(cronRepository.delete("morning-briefing"))
+                .thenThrow(new IllegalStateException("Built-in jobs cannot be deleted"));
 
-        HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"), null);
-        CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config, briefingJob);
-        service.loadJobs();
-
-        when(cronRepository.delete("morning-briefing")).thenReturn(false);
-
-        boolean result = service.deleteJob("morning-briefing");
-
-        assertThat(result).isFalse();
-        // Built-in job still exists in the repository
-        assertThat(service.findJob("morning-briefing")).isNotNull();
+        assertThatThrownBy(() -> cronService.deleteJob("morning-briefing"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Built-in jobs cannot be deleted");
     }
 
     @Test

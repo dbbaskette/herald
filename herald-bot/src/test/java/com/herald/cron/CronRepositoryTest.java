@@ -16,6 +16,7 @@ import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CronRepositoryTest {
 
@@ -140,11 +141,39 @@ class CronRepositoryTest {
     }
 
     @Test
-    void deleteReturnsFalseForBuiltInJob() {
+    void deleteThrowsForBuiltInJob() {
         CronJob job = repository.findByName("morning-briefing");
         assertThat(job).isNotNull();
-        assertThat(repository.delete("morning-briefing")).isFalse();
+        assertThatThrownBy(() -> repository.delete("morning-briefing"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Built-in jobs cannot be deleted");
         assertThat(repository.findByName("morning-briefing")).isNotNull();
+    }
+
+    @Test
+    void findEnabled() {
+        repository.save(new CronJob(null, "enabled-job", "0 0 9 * * *", "prompt", null, true, false));
+        repository.save(new CronJob(null, "disabled-job", "0 0 10 * * *", "prompt", null, false, false));
+
+        List<CronJob> enabled = repository.findEnabled();
+        assertThat(enabled).allMatch(CronJob::enabled);
+        assertThat(enabled).extracting(CronJob::name).contains("morning-briefing", "weekly-review", "enabled-job");
+        assertThat(enabled).extracting(CronJob::name).doesNotContain("disabled-job");
+    }
+
+    @Test
+    void findById() {
+        repository.save(new CronJob(null, "by-id-job", "0 0 9 * * *", "prompt", null, true, false));
+        CronJob byName = repository.findByName("by-id-job");
+
+        CronJob byId = repository.findById(byName.id());
+        assertThat(byId).isNotNull();
+        assertThat(byId.name()).isEqualTo("by-id-job");
+    }
+
+    @Test
+    void findByIdReturnsNullForMissing() {
+        assertThat(repository.findById(99999)).isNull();
     }
 
     @Test

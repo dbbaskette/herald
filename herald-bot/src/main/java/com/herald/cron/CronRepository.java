@@ -36,6 +36,19 @@ class CronRepository {
                 ROW_MAPPER);
     }
 
+    List<CronJob> findEnabled() {
+        return jdbcTemplate.query(
+                "SELECT id, name, schedule, prompt, last_run, enabled, built_in FROM cron_jobs WHERE enabled = 1 ORDER BY name",
+                ROW_MAPPER);
+    }
+
+    CronJob findById(int id) {
+        List<CronJob> results = jdbcTemplate.query(
+                "SELECT id, name, schedule, prompt, last_run, enabled, built_in FROM cron_jobs WHERE id = ?",
+                ROW_MAPPER, id);
+        return results.isEmpty() ? null : results.get(0);
+    }
+
     CronJob findByName(String name) {
         List<CronJob> results = jdbcTemplate.query(
                 "SELECT id, name, schedule, prompt, last_run, enabled, built_in FROM cron_jobs WHERE name = ?",
@@ -66,7 +79,11 @@ class CronRepository {
     }
 
     boolean delete(String name) {
-        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ? AND built_in = 0", name);
+        CronJob job = findByName(name);
+        if (job != null && job.builtIn()) {
+            throw new IllegalStateException("Built-in jobs cannot be deleted");
+        }
+        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ?", name);
         return rows > 0;
     }
 }

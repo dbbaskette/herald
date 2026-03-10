@@ -54,9 +54,7 @@ public class CronService {
 
     @PostConstruct
     void loadJobs() {
-        List<CronJob> enabledJobs = cronRepository.findAll().stream()
-                .filter(CronJob::enabled)
-                .toList();
+        List<CronJob> enabledJobs = cronRepository.findEnabled();
         for (CronJob job : enabledJobs) {
             scheduleJob(job);
         }
@@ -109,6 +107,10 @@ public class CronService {
             log.info("Deleted cron job '{}'", name);
         }
         return deleted;
+    }
+
+    public CronJob findJobById(int id) {
+        return cronRepository.findById(id);
     }
 
     public CronJob rescheduleJob(String name, String schedule) {
