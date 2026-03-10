@@ -11,7 +11,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class HeraldApplication {
 
     // TODO: When spring-ai-agent-utils stubs are replaced, migrate to canonical versions:
-    //  - SkillsTool
     //  - ShellTools
     //  - FileSystemTools (currently stub)
     //  - TodoWriteTool (currently stub)

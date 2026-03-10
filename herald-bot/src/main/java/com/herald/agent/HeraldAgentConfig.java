@@ -7,6 +7,7 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
+import org.springaicommunity.agent.tools.SkillsTool;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentReferences;
@@ -56,7 +57,7 @@ class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput");
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills");
     }
 
     @Bean
@@ -65,6 +66,12 @@ class HeraldAgentConfig {
                 .chatMemoryRepository(repository)
                 .maxMessages(MAX_CONVERSATION_MESSAGES)
                 .build();
+    }
+
+    @Bean
+    @Qualifier("skillsDirectory")
+    String skillsDirectory(@Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+        return skillsDirectory;
     }
 
     @Bean
@@ -80,6 +87,7 @@ class HeraldAgentConfig {
             JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
+            @Qualifier("skillsDirectory") String skillsDirectory,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
@@ -129,12 +137,16 @@ class HeraldAgentConfig {
                 .taskRepository(taskRepository)
                 .build();
 
+        ToolCallback skillsTool = SkillsTool.builder()
+                .addSkillsDirectory(skillsDirectory)
+                .build();
+
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
                         .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
-                        .defaultToolCallbacks(taskTool, taskOutputTool)
+                        .defaultToolCallbacks(taskTool, taskOutputTool, skillsTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 contextMdAdvisor,

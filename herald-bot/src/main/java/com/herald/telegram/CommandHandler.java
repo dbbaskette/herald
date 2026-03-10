@@ -6,6 +6,8 @@ import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springaicommunity.agent.tools.SkillsTool;
+import org.springaicommunity.agent.utils.Skills;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -26,17 +28,20 @@ class CommandHandler {
     private final TelegramSender sender;
     private final UsageTracker usageTracker;
     private final ModelSwitcher modelSwitcher;
+    private final String skillsDirectory;
     private final int activeToolsCount;
     private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
                    UsageTracker usageTracker, ModelSwitcher modelSwitcher,
-                   @Qualifier("activeToolNames") List<String> activeToolNames) {
+                   @Qualifier("activeToolNames") List<String> activeToolNames,
+                   @Qualifier("skillsDirectory") String skillsDirectory) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
         this.usageTracker = usageTracker;
         this.modelSwitcher = modelSwitcher;
+        this.skillsDirectory = skillsDirectory;
         this.activeToolsCount = activeToolNames.size();
     }
 
@@ -55,6 +60,7 @@ class CommandHandler {
             case "/debug" -> handleDebug();
             case "/memory" -> handleMemory(parts);
             case "/model" -> handleModel(parts);
+            case "/skills" -> handleSkills(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -78,6 +84,8 @@ class CommandHandler {
                 /memory clear — Clear all memory entries
                 /model status — Show current model and daily token usage
                 /model <provider> <model> — Switch to a different model
+                /skills list — List all loaded skills
+                /skills reload — Reload skills from disk
                 """;
         sender.sendMessage(help);
     }
@@ -179,6 +187,43 @@ class CommandHandler {
             handleModelSwitch(parts[1].toLowerCase(), parts[2]);
         } else {
             sender.sendMessage("Usage: /model status | /model <provider> <model>");
+        }
+    }
+
+    private void handleSkills(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /skills list | /skills reload");
+            return;
+        }
+
+        String subcommand = parts[1].toLowerCase();
+        switch (subcommand) {
+            case "list" -> {
+                List<SkillsTool.Skill> skills = Skills.loadDirectory(skillsDirectory);
+                if (skills.isEmpty()) {
+                    sender.sendMessage("No skills found in " + skillsDirectory);
+                    return;
+                }
+                var sb = new StringBuilder("*Loaded Skills*\n\n");
+                for (SkillsTool.Skill skill : skills) {
+                    String name = skill.name();
+                    Object desc = skill.frontMatter().get("description");
+                    sb.append("- *").append(name).append("*");
+                    if (desc != null) {
+                        sb.append(" — ").append(desc);
+                    }
+                    sb.append("\n");
+                }
+                sender.sendMessage(sb.toString());
+            }
+            case "reload" -> {
+                List<SkillsTool.Skill> skills = Skills.loadDirectory(skillsDirectory);
+                sender.sendMessage("Reloaded %d skill(s) from %s".formatted(skills.size(), skillsDirectory));
+                log.info("Skills reloaded from {}: {} skill(s)", skillsDirectory, skills.size());
+            }
+            default -> sender.sendMessage(
+                    "Unknown skills subcommand: " + subcommand
+                            + "\nUsage: /skills list | /skills reload");
         }
     }
 
