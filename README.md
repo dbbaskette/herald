@@ -114,44 +114,36 @@ This builds the `herald-bot` JAR at `herald-bot/target/herald-bot-0.1.0-SNAPSHOT
 
 ### Step 3: Configure Environment
 
-Herald needs a few environment variables. Add these to your shell profile (`~/.zshrc` or `~/.bashrc`):
-
 ```bash
-# Required
-export ANTHROPIC_API_KEY="sk-ant-..."
-export HERALD_TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
-export HERALD_TELEGRAM_ALLOWED_CHAT_ID="your-chat-id"
-
-# Optional — enable additional AI providers
-export OPENAI_API_KEY="sk-..."
-
-# Optional — Google Workspace integration
-export GCAL_MCP_URL="http://localhost:..."
-export GMAIL_MCP_URL="http://localhost:..."
+cp .env.example .env
 ```
 
-Reload your shell:
+Open `.env` and fill in the three required values:
 
 ```bash
-source ~/.zshrc
+ANTHROPIC_API_KEY=sk-ant-...
+HERALD_TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ```
 
-Alternatively, copy and edit the YAML config file:
-
-```bash
-mkdir -p ~/.herald
-cp herald.yaml.example ~/.herald/herald.yaml
-# Edit ~/.herald/herald.yaml with your credentials
-```
+The `.env.example` file documents all optional variables (additional AI providers, Google Workspace, agent behavior, etc.). The `.env` file is gitignored so your secrets stay local.
 
 ### Step 4: Run Herald
 
-**Development mode** (recommended for first run):
+**Using the run script** (recommended — auto-loads `.env`):
 
 ```bash
+./run.sh          # starts herald-bot
+./run.sh ui       # starts herald-ui console
+./run.sh all      # starts both
+./run.sh build    # builds all modules
+```
+
+**Or manually:**
+
+```bash
+source .env
 make dev
-# or equivalently:
-./mvnw -pl herald-bot spring-boot:run
 ```
 
 Herald will start polling Telegram for messages. Open your bot in Telegram and send a message — you should get a response from Claude.

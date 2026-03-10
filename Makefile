@@ -26,8 +26,9 @@ build-all:
 	./mvnw package -DskipTests
 
 check-env:
-	@if [ -z "$$TELEGRAM_BOT_TOKEN" ]; then echo "WARNING: TELEGRAM_BOT_TOKEN is not set"; fi
 	@if [ -z "$$ANTHROPIC_API_KEY" ]; then echo "WARNING: ANTHROPIC_API_KEY is not set"; fi
+	@if [ -z "$$HERALD_TELEGRAM_BOT_TOKEN" ]; then echo "WARNING: HERALD_TELEGRAM_BOT_TOKEN is not set"; fi
+	@if [ -z "$$HERALD_TELEGRAM_ALLOWED_CHAT_ID" ]; then echo "WARNING: HERALD_TELEGRAM_ALLOWED_CHAT_ID is not set"; fi
 
 install: build check-env
 	@mkdir -p $(HERALD_HOME)
