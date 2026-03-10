@@ -3,7 +3,9 @@ package com.herald.tools;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.annotation.Tool;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -71,14 +73,23 @@ class WebToolsTest {
     }
 
     @Test
-    void fetchTruncatesLongContent() {
-        String longContent = "x".repeat(60_000);
+    void fetchRejectsNonHtmlTextContent() {
         WebTools tools = toolsWithFetcher(url ->
-                new WebTools.HttpResult(200, longContent, "text/plain"));
+                new WebTools.HttpResult(200, "plain text", "text/plain"));
+
+        String result = tools.web_fetch("https://example.com/file.txt");
+        assertThat(result).contains("\"error\"");
+        assertThat(result).contains("Only text/html is supported");
+    }
+
+    @Test
+    void fetchTruncatesLongContent() {
+        String longContent = "<html><body>" + "x".repeat(60_000) + "</body></html>";
+        WebTools tools = toolsWithFetcher(url ->
+                new WebTools.HttpResult(200, longContent, "text/html"));
 
         String result = tools.web_fetch("https://example.com");
         assertThat(result).contains("[Content truncated at 50000 characters]");
-        assertThat(result.length()).isLessThan(60_000);
     }
 
     @Test
@@ -93,22 +104,13 @@ class WebToolsTest {
     }
 
     @Test
-    void fetchReturnsPlainTextDirectly() {
+    void fetchAllowsEmptyContentType() {
         WebTools tools = toolsWithFetcher(url ->
-                new WebTools.HttpResult(200, "Plain text content", "text/plain"));
+                new WebTools.HttpResult(200, "<html><body>Content</body></html>", ""));
 
-        String result = tools.web_fetch("https://example.com/file.txt");
-        assertThat(result).isEqualTo("Plain text content");
-    }
-
-    @Test
-    void fetchReturnsJsonDirectly() {
-        String json = "{\"key\": \"value\"}";
-        WebTools tools = toolsWithFetcher(url ->
-                new WebTools.HttpResult(200, json, "application/json"));
-
-        String result = tools.web_fetch("https://example.com/api");
-        assertThat(result).isEqualTo(json);
+        String result = tools.web_fetch("https://example.com");
+        // Empty content type should be treated as HTML-like since body starts with <
+        assertThat(result).contains("Content");
     }
 
     @Test
@@ -119,6 +121,134 @@ class WebToolsTest {
         String result = tools.web_fetch("https://example.com");
         assertThat(result).contains("\"error\"");
         assertThat(result).contains("Empty response");
+    }
+
+    // --- SSRF protection tests ---
+
+    @Test
+    void fetchBlocksLocalhostUrls() {
+        WebTools tools = toolsWithFetcher(url ->
+                new WebTools.HttpResult(200, "secret", "text/html"));
+
+        String result = tools.web_fetch("http://localhost:8080/actuator/env");
+        assertThat(result).contains("\"error\"");
+        assertThat(result).contains("internal/private network");
+    }
+
+    @Test
+    void fetchBlocksLoopbackIp() {
+        WebTools tools = toolsWithFetcher(url ->
+                new WebTools.HttpResult(200, "secret", "text/html"));
+
+        String result = tools.web_fetch("http://127.0.0.1:8080/actuator/env");
+        assertThat(result).contains("\"error\"");
+        assertThat(result).contains("internal/private network");
+    }
+
+    @Test
+    void isAllowedHostBlocksLoopback() {
+        assertThat(WebTools.isAllowedHost("localhost")).isFalse();
+        assertThat(WebTools.isAllowedHost("127.0.0.1")).isFalse();
+    }
+
+    @Test
+    void isAllowedHostBlocksSiteLocal() {
+        assertThat(WebTools.isAllowedHost("192.168.1.1")).isFalse();
+        assertThat(WebTools.isAllowedHost("10.0.0.1")).isFalse();
+        assertThat(WebTools.isAllowedHost("172.16.0.1")).isFalse();
+    }
+
+    @Test
+    void isAllowedHostBlocksLinkLocal() {
+        assertThat(WebTools.isAllowedHost("169.254.169.254")).isFalse();
+    }
+
+    @Test
+    void isAllowedHostAllowsPublicAddresses() {
+        // example.com resolves to a public IP
+        assertThat(WebTools.isAllowedHost("93.184.216.34")).isTrue();
+    }
+
+    @Test
+    void isAllowedHostBlocksUnresolvableHosts() {
+        // Completely invalid hostname should be blocked
+        assertThat(WebTools.isAllowedHost("")).isFalse();
+    }
+
+    // --- Retry logic tests ---
+
+    @Test
+    void fetchRetriesOnIOException() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        WebTools tools = toolsWithFetcher(url -> {
+            if (attempts.incrementAndGet() < 3) {
+                throw new IOException("Connection reset");
+            }
+            return new WebTools.HttpResult(200, "<html><body>Success</body></html>", "text/html");
+        });
+
+        String result = tools.web_fetch("https://example.com");
+        assertThat(result).contains("Success");
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void fetchRetriesOn5xxErrors() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        WebTools tools = toolsWithFetcher(url -> {
+            if (attempts.incrementAndGet() < 3) {
+                return new WebTools.HttpResult(503, "Service Unavailable", "text/html");
+            }
+            return new WebTools.HttpResult(200, "<html><body>Recovered</body></html>", "text/html");
+        });
+
+        String result = tools.web_fetch("https://example.com");
+        assertThat(result).contains("Recovered");
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void fetchReturnsErrorAfterAllRetriesExhausted() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        WebTools tools = toolsWithFetcher(url -> {
+            attempts.incrementAndGet();
+            throw new IOException("Connection refused");
+        });
+
+        String result = tools.web_fetch("https://example.com");
+        assertThat(result).contains("\"error\"");
+        assertThat(result).contains("retries");
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void searchRetriesOnIOException() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        WebTools tools = toolsWithSearcher((q, k) -> {
+            if (attempts.incrementAndGet() < 3) {
+                throw new IOException("Timeout");
+            }
+            return new WebTools.HttpResult(200,
+                    "{\"web\":{\"results\":[{\"title\":\"Result\",\"url\":\"https://example.com\",\"description\":\"Desc\"}]}}",
+                    "application/json");
+        });
+
+        String result = tools.web_search("test");
+        assertThat(result).contains("**Result**");
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void fetchDoesNotRetryNonIOExceptions() {
+        AtomicInteger attempts = new AtomicInteger(0);
+        WebTools tools = toolsWithFetcher(url -> {
+            attempts.incrementAndGet();
+            throw new IllegalArgumentException("Bad URL");
+        });
+
+        String result = tools.web_fetch("https://example.com");
+        assertThat(result).contains("\"error\"");
+        assertThat(attempts.get()).isEqualTo(1);
     }
 
     // --- web_search tests ---
@@ -159,6 +289,21 @@ class WebToolsTest {
         assertThat(result).contains("https://spring.io/ai");
         assertThat(result).contains("Official docs for Spring AI");
         assertThat(result).contains("**Spring AI GitHub**");
+    }
+
+    @Test
+    void searchHandlesUnicodeInResults() {
+        String braveResponse = """
+                {"web": {"results": [
+                    {"title": "What\\u2019s New in Spring", "url": "https://spring.io", "description": "Spring\\u2019s latest"}
+                ]}}""";
+
+        WebTools tools = toolsWithSearcher((q, k) ->
+                new WebTools.HttpResult(200, braveResponse, "application/json"));
+
+        String result = tools.web_search("Spring");
+        assertThat(result).contains("What\u2019s New in Spring");
+        assertThat(result).contains("Spring\u2019s latest");
     }
 
     @Test
@@ -234,6 +379,23 @@ class WebToolsTest {
     void formatSearchResultsReturnsNoResultsForEmptyResults() {
         String result = WebTools.formatSearchResults("{\"web\": {\"results\": []}}");
         assertThat(result).isEqualTo("No search results found.");
+    }
+
+    @Test
+    void formatSearchResultsHandlesInvalidJson() {
+        String result = WebTools.formatSearchResults("not json at all");
+        assertThat(result).isEqualTo("No search results found.");
+    }
+
+    @Test
+    void formatSearchResultsStripsHtmlFromDescription() {
+        String json = """
+                {"web": {"results": [
+                    {"title": "Test", "url": "https://test.com", "description": "Has <b>bold</b> text"}
+                ]}}""";
+        String result = WebTools.formatSearchResults(json);
+        assertThat(result).contains("Has bold text");
+        assertThat(result).doesNotContain("<b>");
     }
 
     // --- Annotation tests ---

@@ -1,5 +1,7 @@
 package com.herald.tools;
 
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -7,6 +9,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,10 +25,13 @@ public class WebTools {
 
     private static final int TIMEOUT_SECONDS = 10;
     private static final int MAX_CONTENT_LENGTH = 50_000;
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 1000;
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s{3,}");
     private static final Pattern SCRIPT_STYLE_PATTERN =
             Pattern.compile("<(script|style|noscript)[^>]*>[\\s\\S]*?</\\1>", Pattern.CASE_INSENSITIVE);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @FunctionalInterface
     interface HttpFetcher {
@@ -63,45 +70,85 @@ public class WebTools {
             return "{\"error\": \"URL must start with http:// or https://\"}";
         }
 
+        // SSRF protection: block private/internal IP ranges
         try {
-            HttpResult result = httpFetcher.fetch(url);
-
-            if (result.statusCode() < 200 || result.statusCode() >= 400) {
-                return "{\"error\": \"HTTP " + result.statusCode() + " fetching " + escapeJson(url) + "\"}";
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                return "{\"error\": \"Invalid URL: no host\"}";
             }
-
-            String contentType = result.contentType() != null ? result.contentType() : "";
-            if (!contentType.isEmpty() && !contentType.contains("text/") && !contentType.contains("application/json")
-                    && !contentType.contains("application/xml")) {
-                return "{\"error\": \"Unsupported content type: " + escapeJson(contentType) + "\"}";
+            if (!isAllowedHost(host)) {
+                return "{\"error\": \"Access to internal/private network addresses is not allowed\"}";
             }
-
-            String body = result.body();
-            if (body == null || body.isBlank()) {
-                return "{\"error\": \"Empty response from " + escapeJson(url) + "\"}";
-            }
-
-            // Strip HTML if content appears to be HTML
-            if (contentType.contains("text/html") || body.trim().startsWith("<")) {
-                body = stripHtml(body);
-            }
-
-            // Truncate long content
-            boolean truncated = false;
-            if (body.length() > MAX_CONTENT_LENGTH) {
-                body = body.substring(0, MAX_CONTENT_LENGTH);
-                truncated = true;
-            }
-
-            if (truncated) {
-                return body + "\n\n[Content truncated at " + MAX_CONTENT_LENGTH + " characters]";
-            }
-            return body;
-
         } catch (Exception e) {
-            log.warn("Failed to fetch URL: {}", url, e);
-            return "{\"error\": \"Failed to fetch URL: " + escapeJson(e.getMessage()) + "\"}";
+            return "{\"error\": \"Invalid URL: " + escapeJson(e.getMessage()) + "\"}";
         }
+
+        // Retry logic for transient failures
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                HttpResult result = httpFetcher.fetch(url);
+
+                // Retry on 5xx server errors
+                if (result.statusCode() >= 500 && attempt < MAX_RETRIES) {
+                    log.info("Received HTTP {} from {}, retrying (attempt {}/{})",
+                            result.statusCode(), url, attempt, MAX_RETRIES);
+                    Thread.sleep(RETRY_DELAY_MS * attempt);
+                    continue;
+                }
+
+                if (result.statusCode() < 200 || result.statusCode() >= 400) {
+                    return "{\"error\": \"HTTP " + result.statusCode() + " fetching " + escapeJson(url) + "\"}";
+                }
+
+                String contentType = result.contentType() != null ? result.contentType() : "";
+                if (!contentType.isEmpty() && !contentType.contains("text/html")) {
+                    return "{\"error\": \"Unsupported content type: " + escapeJson(contentType)
+                            + ". Only text/html is supported.\"}";
+                }
+
+                String body = result.body();
+                if (body == null || body.isBlank()) {
+                    return "{\"error\": \"Empty response from " + escapeJson(url) + "\"}";
+                }
+
+                // Strip HTML
+                body = stripHtml(body);
+
+                // Truncate long content
+                boolean truncated = false;
+                if (body.length() > MAX_CONTENT_LENGTH) {
+                    body = body.substring(0, MAX_CONTENT_LENGTH);
+                    truncated = true;
+                }
+
+                if (truncated) {
+                    return body + "\n\n[Content truncated at " + MAX_CONTENT_LENGTH + " characters]";
+                }
+                return body;
+
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    log.info("IOException fetching {}, retrying (attempt {}/{}): {}",
+                            url, attempt, MAX_RETRIES, e.getMessage());
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return "{\"error\": \"Interrupted during retry\"}";
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch URL: {}", url, e);
+                return "{\"error\": \"Failed to fetch URL: " + escapeJson(e.getMessage()) + "\"}";
+            }
+        }
+
+        log.warn("Failed to fetch URL after {} retries: {}", MAX_RETRIES, url, lastException);
+        return "{\"error\": \"Failed to fetch URL after " + MAX_RETRIES + " retries: "
+                + escapeJson(lastException != null ? lastException.getMessage() : "unknown error") + "\"}";
     }
 
     @Tool(description = "Search the web and return top results with titles, URLs, and snippets. "
@@ -117,23 +164,75 @@ public class WebTools {
                     + "with a Brave Search API key.\"}";
         }
 
+        // Retry logic for transient failures
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                HttpResult result = searchFetcher.search(query, searchApiKey);
+
+                // Retry on 5xx server errors
+                if (result.statusCode() >= 500 && attempt < MAX_RETRIES) {
+                    log.info("Search API returned HTTP {}, retrying (attempt {}/{})",
+                            result.statusCode(), attempt, MAX_RETRIES);
+                    Thread.sleep(RETRY_DELAY_MS * attempt);
+                    continue;
+                }
+
+                if (result.statusCode() < 200 || result.statusCode() >= 400) {
+                    return "{\"error\": \"Search API returned HTTP " + result.statusCode() + "\"}";
+                }
+
+                String body = result.body();
+                if (body == null || body.isBlank()) {
+                    return "{\"error\": \"Empty response from search API\"}";
+                }
+
+                return formatSearchResults(body);
+
+            } catch (IOException e) {
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    log.info("IOException during search, retrying (attempt {}/{}): {}",
+                            attempt, MAX_RETRIES, e.getMessage());
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return "{\"error\": \"Interrupted during retry\"}";
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Web search failed for query: {}", query, e);
+                return "{\"error\": \"Search failed: " + escapeJson(e.getMessage()) + "\"}";
+            }
+        }
+
+        log.warn("Web search failed after {} retries for query: {}", MAX_RETRIES, query, lastException);
+        return "{\"error\": \"Search failed after " + MAX_RETRIES + " retries: "
+                + escapeJson(lastException != null ? lastException.getMessage() : "unknown error") + "\"}";
+    }
+
+    /**
+     * Validates that a hostname does not resolve to a private/internal IP address.
+     * Blocks loopback, link-local, site-local, and multicast addresses to prevent SSRF.
+     */
+    static boolean isAllowedHost(String host) {
         try {
-            HttpResult result = searchFetcher.search(query, searchApiKey);
-
-            if (result.statusCode() < 200 || result.statusCode() >= 400) {
-                return "{\"error\": \"Search API returned HTTP " + result.statusCode() + "\"}";
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isLoopbackAddress() || addr.isSiteLocalAddress()
+                    || addr.isLinkLocalAddress() || addr.isMulticastAddress()
+                    || addr.isAnyLocalAddress()) {
+                return false;
             }
-
-            String body = result.body();
-            if (body == null || body.isBlank()) {
-                return "{\"error\": \"Empty response from search API\"}";
+            // Block AWS/cloud metadata endpoint (169.254.169.254)
+            byte[] bytes = addr.getAddress();
+            if (bytes.length == 4 && (bytes[0] & 0xFF) == 169 && (bytes[1] & 0xFF) == 254) {
+                return false; // Link-local range, covered by isLinkLocalAddress but explicit for clarity
             }
-
-            return formatSearchResults(body);
-
+            return true;
         } catch (Exception e) {
-            log.warn("Web search failed for query: {}", query, e);
-            return "{\"error\": \"Search failed: " + escapeJson(e.getMessage()) + "\"}";
+            log.warn("Failed to resolve host for SSRF check: {}", host, e);
+            return false;
         }
     }
 
@@ -155,47 +254,35 @@ public class WebTools {
     }
 
     /**
-     * Parses Brave Search API JSON response and formats as markdown.
-     * Uses simple string parsing to avoid adding a JSON library dependency.
+     * Parses Brave Search API JSON response and formats as markdown using Jackson.
      */
     static String formatSearchResults(String jsonResponse) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## Search Results\n\n");
-
-        int resultCount = 0;
-        int searchIdx = 0;
-
-        // Find the "results" array in the web section
-        int webIdx = jsonResponse.indexOf("\"web\"");
-        if (webIdx == -1) {
-            return "No search results found.";
-        }
-
-        int resultsIdx = jsonResponse.indexOf("\"results\"", webIdx);
-        if (resultsIdx == -1) {
-            return "No search results found.";
-        }
-
-        searchIdx = resultsIdx;
-
-        // Parse each result entry by finding title, url, and description fields
-        while (resultCount < 10) {
-            int titleIdx = jsonResponse.indexOf("\"title\"", searchIdx);
-            if (titleIdx == -1) break;
-
-            String title = extractJsonStringValue(jsonResponse, titleIdx);
-            int urlIdx = jsonResponse.indexOf("\"url\"", titleIdx);
-            String url = urlIdx != -1 ? extractJsonStringValue(jsonResponse, urlIdx) : "";
-            int descIdx = jsonResponse.indexOf("\"description\"", titleIdx);
-            int nextTitleIdx = jsonResponse.indexOf("\"title\"", titleIdx + 10);
-            String description = "";
-            if (descIdx != -1 && (nextTitleIdx == -1 || descIdx < nextTitleIdx)) {
-                description = extractJsonStringValue(jsonResponse, descIdx);
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(jsonResponse);
+            JsonNode webNode = root.path("web");
+            if (webNode.isMissingNode()) {
+                return "No search results found.";
+            }
+            JsonNode results = webNode.path("results");
+            if (results.isMissingNode() || !results.isArray() || results.isEmpty()) {
+                return "No search results found.";
             }
 
-            if (!title.isEmpty()) {
-                resultCount++;
-                sb.append(resultCount).append(". **").append(title).append("**\n");
+            StringBuilder sb = new StringBuilder();
+            sb.append("## Search Results\n\n");
+            int count = 0;
+
+            for (JsonNode result : results) {
+                if (count >= 10) break;
+
+                String title = result.path("title").asText("");
+                String url = result.path("url").asText("");
+                String description = result.path("description").asText("");
+
+                if (title.isEmpty()) continue;
+
+                count++;
+                sb.append(count).append(". **").append(title).append("**\n");
                 if (!url.isEmpty()) {
                     sb.append("   ").append(url).append("\n");
                 }
@@ -207,45 +294,15 @@ public class WebTools {
                 sb.append("\n");
             }
 
-            searchIdx = titleIdx + 10;
-        }
+            if (count == 0) {
+                return "No search results found.";
+            }
+            return sb.toString().strip();
 
-        if (resultCount == 0) {
+        } catch (Exception e) {
+            log.warn("Failed to parse search results", e);
             return "No search results found.";
         }
-
-        return sb.toString().strip();
-    }
-
-    /**
-     * Extracts the string value from a JSON key-value pair starting at the given position.
-     * Expects format: "key": "value" or "key":"value"
-     */
-    static String extractJsonStringValue(String json, int keyStart) {
-        int colonIdx = json.indexOf(':', keyStart);
-        if (colonIdx == -1) return "";
-
-        int openQuote = json.indexOf('"', colonIdx + 1);
-        if (openQuote == -1) return "";
-
-        StringBuilder value = new StringBuilder();
-        for (int i = openQuote + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\\' && i + 1 < json.length()) {
-                char next = json.charAt(i + 1);
-                if (next == '"') { value.append('"'); i++; }
-                else if (next == '\\') { value.append('\\'); i++; }
-                else if (next == 'n') { value.append('\n'); i++; }
-                else if (next == 't') { value.append('\t'); i++; }
-                else if (next == 'r') { value.append('\r'); i++; }
-                else { value.append(c); }
-            } else if (c == '"') {
-                break;
-            } else {
-                value.append(c);
-            }
-        }
-        return value.toString();
     }
 
     private static HttpResult executeHttpFetch(String url) throws Exception {
