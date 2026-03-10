@@ -56,7 +56,7 @@ class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput");
+        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills");
     }
 
     @Bean
@@ -65,6 +65,12 @@ class HeraldAgentConfig {
                 .chatMemoryRepository(repository)
                 .maxMessages(MAX_CONVERSATION_MESSAGES)
                 .build();
+    }
+
+    @Bean
+    ReloadableSkillsTool reloadableSkillsTool(
+            @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+        return new ReloadableSkillsTool(skillsDirectory);
     }
 
     @Bean
@@ -80,6 +86,7 @@ class HeraldAgentConfig {
             JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
+            ReloadableSkillsTool reloadableSkillsTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
@@ -134,7 +141,7 @@ class HeraldAgentConfig {
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
                         .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
-                        .defaultToolCallbacks(taskTool, taskOutputTool)
+                        .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
                         .defaultAdvisors(
                                 new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
                                 contextMdAdvisor,

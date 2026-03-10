@@ -1,6 +1,7 @@
 package com.herald.telegram;
 
 import com.herald.agent.ModelSwitcher;
+import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,7 +10,10 @@ import org.springframework.ai.chat.memory.ChatMemory;
 
 import org.springframework.ai.chat.messages.Message;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -24,7 +28,11 @@ class CommandHandlerTest {
     private TelegramSender sender;
     private UsageTracker usageTracker;
     private ModelSwitcher modelSwitcher;
+    private ReloadableSkillsTool reloadableSkillsTool;
     private CommandHandler handler;
+
+    @org.junit.jupiter.api.io.TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -37,8 +45,10 @@ class CommandHandlerTest {
         when(modelSwitcher.getActiveModel()).thenReturn("claude-sonnet-4-5");
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
+        reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
         handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher,
-                List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput"));
+                List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills"),
+                reloadableSkillsTool);
     }
 
     // --- handle() routing ---
@@ -70,7 +80,9 @@ class CommandHandlerTest {
                 msg.contains("/help") && msg.contains("/status")
                         && msg.contains("/reset") && msg.contains("/memory")
                         && msg.contains("/model status")
-                        && msg.contains("/model <provider> <model>")));
+                        && msg.contains("/model <provider> <model>")
+                        && msg.contains("/skills list")
+                        && msg.contains("/skills reload")));
     }
 
     @Test
@@ -87,7 +99,7 @@ class CommandHandlerTest {
         handler.handle("/status");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("anthropic/claude-sonnet-4-5") && msg.contains("3")
-                        && msg.contains("Uptime") && msg.contains("Active tools: 7")));
+                        && msg.contains("Uptime") && msg.contains("Active tools: 8")));
     }
 
     // --- /reset ---
@@ -295,6 +307,69 @@ class CommandHandlerTest {
         handler.handle("/foo");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("Unknown command") && msg.contains("/help")));
+    }
+
+    // --- /skills list ---
+
+    @Test
+    void skillsListShowsLoadedSkills() throws IOException {
+        Path skillDir = tempDir.resolve("weather");
+        Files.createDirectories(skillDir);
+        Files.writeString(skillDir.resolve("SKILL.md"),
+                """
+                ---
+                name: weather
+                description: Look up current weather conditions
+                ---
+                You are a weather skill.
+                """);
+
+        // Reload to pick up the newly created skill files
+        reloadableSkillsTool.reload();
+
+        handler.handle("/skills list");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("weather") && msg.contains("Look up current weather conditions")));
+    }
+
+    @Test
+    void skillsListShowsEmptyWhenNoSkills() {
+        handler.handle("/skills list");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("No skills currently loaded")));
+    }
+
+    // --- /skills reload ---
+
+    @Test
+    void skillsReloadReportsCount() throws IOException {
+        Path skillDir = tempDir.resolve("gmail");
+        Files.createDirectories(skillDir);
+        Files.writeString(skillDir.resolve("SKILL.md"),
+                """
+                ---
+                name: gmail
+                description: Manage Gmail
+                ---
+                You are a gmail skill.
+                """);
+
+        handler.handle("/skills reload");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Reloaded 1 skill(s)")));
+    }
+
+    // --- /skills (no subcommand) ---
+
+    @Test
+    void skillsWithNoSubcommandShowsUsage() {
+        handler.handle("/skills");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void skillsUnknownSubcommandShowsUsage() {
+        handler.handle("/skills foo");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown skills subcommand")));
     }
 
     // --- formatUptime ---
