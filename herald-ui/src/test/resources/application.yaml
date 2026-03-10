@@ -6,3 +6,4 @@ spring:
 herald:
   ui:
     db-path: ${java.io.tmpdir}/herald-test-${random.uuid}.db
+    skills-path: ${java.io.tmpdir}/herald-test-skills-${random.uuid}

@@ -21,7 +21,7 @@ class DataSourceConfigTest {
     void dataSourceCreatesDbFileWithWalMode() throws Exception {
         String dbPath = tempDir.resolve("test.db").toString();
         DataSourceConfig config = new DataSourceConfig();
-        HeraldUiConfig uiConfig = new HeraldUiConfig(dbPath);
+        HeraldUiConfig uiConfig = new HeraldUiConfig(dbPath, "/tmp/skills");
 
         DataSource dataSource = config.dataSource(uiConfig);
 
@@ -51,7 +51,7 @@ class DataSourceConfigTest {
     void dataSourceCreatesParentDirectory() {
         String dbPath = tempDir.resolve("subdir/nested/test.db").toString();
         DataSourceConfig config = new DataSourceConfig();
-        HeraldUiConfig uiConfig = new HeraldUiConfig(dbPath);
+        HeraldUiConfig uiConfig = new HeraldUiConfig(dbPath, "/tmp/skills");
 
         config.dataSource(uiConfig);
 
