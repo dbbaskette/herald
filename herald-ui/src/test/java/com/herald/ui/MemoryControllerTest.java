@@ -79,7 +79,7 @@ class MemoryControllerTest {
 
         // Delete
         mockMvc.perform(delete("/api/memory/lifecycle.key"))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
         // Delete again should 404
         mockMvc.perform(delete("/api/memory/lifecycle.key"))

@@ -1,0 +1,8 @@
+spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:test-schema.sql
+herald:
+  ui:
+    db-path: ${java.io.tmpdir}/herald-test-${random.uuid}.db
