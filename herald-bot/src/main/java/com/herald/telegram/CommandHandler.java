@@ -3,6 +3,8 @@ package com.herald.telegram;
 import com.herald.agent.AgentService;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
+import com.herald.cron.CronJob;
+import com.herald.cron.CronService;
 import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Component;
 import java.lang.management.ManagementFactory;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -25,7 +28,10 @@ class CommandHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
+    private static final DateTimeFormatter CRON_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     private final MemoryTools memoryTools;
+    private final CronService cronService;
     private final ChatMemory chatMemory;
     private final TelegramSender sender;
     private final UsageTracker usageTracker;
@@ -35,12 +41,13 @@ class CommandHandler {
     private final int maxContextTokens;
     private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
-    CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
-                   UsageTracker usageTracker, ModelSwitcher modelSwitcher,
+    CommandHandler(MemoryTools memoryTools, CronService cronService, ChatMemory chatMemory,
+                   TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                    @Qualifier("activeToolNames") List<String> activeToolNames,
                    ReloadableSkillsTool reloadableSkillsTool,
                    @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
         this.memoryTools = memoryTools;
+        this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
         this.usageTracker = usageTracker;
@@ -66,6 +73,7 @@ class CommandHandler {
             case "/memory" -> handleMemory(parts);
             case "/model" -> handleModel(parts);
             case "/skills" -> handleSkills(parts);
+            case "/cron" -> handleCron(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -91,6 +99,9 @@ class CommandHandler {
                 /model <provider> <model> — Switch to a different model
                 /skills list — List all loaded skills
                 /skills reload — Reload skills from disk
+                /cron list — List all scheduled cron jobs
+                /cron enable <name> — Enable a cron job
+                /cron disable <name> — Disable a cron job
                 """;
         sender.sendMessage(help);
     }
@@ -247,6 +258,53 @@ class CommandHandler {
             default -> sender.sendMessage(
                     "Unknown skills subcommand: " + subcommand
                             + "\nUsage: /skills list | /skills reload");
+        }
+    }
+
+    private void handleCron(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /cron list | /cron enable <name> | /cron disable <name>");
+            return;
+        }
+
+        String subcommand = parts[1].toLowerCase();
+        switch (subcommand) {
+            case "list" -> {
+                List<CronJob> jobs = cronService.listJobs();
+                if (jobs.isEmpty()) {
+                    sender.sendMessage("No cron jobs configured.");
+                    return;
+                }
+                var sb = new StringBuilder("*Cron Jobs*\n\n");
+                for (CronJob job : jobs) {
+                    sb.append("- *").append(job.name()).append("* | `")
+                            .append(job.schedule()).append("` | ")
+                            .append(job.enabled() ? "enabled" : "disabled")
+                            .append(" | last run: ")
+                            .append(job.lastRun() != null ? job.lastRun().format(CRON_FMT) : "never")
+                            .append("\n");
+                }
+                sender.sendMessage(sb.toString());
+            }
+            case "enable" -> {
+                if (parts.length < 3) {
+                    sender.sendMessage("Usage: /cron enable <name>");
+                    return;
+                }
+                cronService.enableJob(parts[2]);
+                sender.sendMessage("Enabled cron job '%s'.".formatted(parts[2]));
+            }
+            case "disable" -> {
+                if (parts.length < 3) {
+                    sender.sendMessage("Usage: /cron disable <name>");
+                    return;
+                }
+                cronService.disableJob(parts[2]);
+                sender.sendMessage("Disabled cron job '%s'.".formatted(parts[2]));
+            }
+            default -> sender.sendMessage(
+                    "Unknown cron subcommand: " + subcommand
+                            + "\nUsage: /cron list | /cron enable <name> | /cron disable <name>");
         }
     }
 
