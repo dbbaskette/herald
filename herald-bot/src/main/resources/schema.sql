@@ -40,3 +40,10 @@ CREATE TABLE IF NOT EXISTS model_usage (
     tokens_out   INTEGER,
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS model_overrides (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider   TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

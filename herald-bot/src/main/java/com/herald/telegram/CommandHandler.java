@@ -1,11 +1,11 @@
 package com.herald.telegram;
 
+import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
@@ -23,17 +23,16 @@ class CommandHandler {
     private final ChatMemory chatMemory;
     private final TelegramSender sender;
     private final UsageTracker usageTracker;
-    private final String modelName;
+    private final ModelSwitcher modelSwitcher;
     private final int activeToolsCount;
 
     CommandHandler(MemoryTools memoryTools, ChatMemory chatMemory, TelegramSender sender,
-                   UsageTracker usageTracker,
-                   @Value("${spring.ai.anthropic.chat.options.model:unknown}") String modelName) {
+                   UsageTracker usageTracker, ModelSwitcher modelSwitcher) {
         this.memoryTools = memoryTools;
         this.chatMemory = chatMemory;
         this.sender = sender;
         this.usageTracker = usageTracker;
-        this.modelName = modelName;
+        this.modelSwitcher = modelSwitcher;
         // Default tools configured in HeraldAgentConfig: memory, shell, fs, todo, ask
         this.activeToolsCount = 5;
     }
@@ -75,6 +74,7 @@ class CommandHandler {
                 /memory set <key> <value> — Store a memory entry
                 /memory clear — Clear all memory entries
                 /model status — Show current model and daily token usage
+                /model <provider> <model> — Switch to a different model
                 """;
         sender.sendMessage(help);
     }
@@ -84,6 +84,7 @@ class CommandHandler {
         String uptime = formatUptime(uptimeMillis);
         int memoryCount = memoryTools.count();
 
+        String modelName = modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel();
         String status = """
                 *System Status*
 
@@ -104,13 +105,16 @@ class CommandHandler {
     private void handleDebug() {
         int memoryCount = memoryTools.count();
 
+        String modelName = modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel();
         String debug = """
                 *Debug Info*
 
                 Memory entries: %d
                 Active tools: %d
                 Model: %s
-                """.formatted(memoryCount, activeToolsCount, modelName);
+                Available providers: %s
+                """.formatted(memoryCount, activeToolsCount, modelName,
+                String.join(", ", modelSwitcher.getAvailableProviders()));
         sender.sendMessage(debug);
     }
 
@@ -149,16 +153,29 @@ class CommandHandler {
 
     private void handleModel(String[] parts) {
         if (parts.length < 2) {
-            sender.sendMessage("Usage: /model status");
+            sender.sendMessage("Usage: /model status | /model <provider> <model>");
             return;
         }
 
         String subcommand = parts[1].toLowerCase();
         if ("status".equals(subcommand)) {
             handleModelStatus();
+        } else if (parts.length >= 3) {
+            // /model <provider> <model>
+            handleModelSwitch(parts[1].toLowerCase(), parts[2]);
         } else {
-            sender.sendMessage("Unknown model subcommand: " + subcommand
-                    + "\nUsage: /model status");
+            sender.sendMessage("Usage: /model status | /model <provider> <model>");
+        }
+    }
+
+    private void handleModelSwitch(String provider, String model) {
+        try {
+            modelSwitcher.switchModel(provider, model);
+            sender.sendMessage("Switched to *" + provider + "/" + model
+                    + "*. Next message will use the new model.");
+            log.info("Model switched to {}/{} via /model command", provider, model);
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage("Error: " + e.getMessage());
         }
     }
 
@@ -169,7 +186,10 @@ class CommandHandler {
 
         var sb = new StringBuilder();
         sb.append("*Model Status*\n\n");
-        sb.append("Current model: ").append(modelName).append("\n");
+        sb.append("Current model: ").append(modelSwitcher.getActiveProvider())
+                .append("/").append(modelSwitcher.getActiveModel()).append("\n");
+        sb.append("Available providers: ").append(
+                String.join(", ", modelSwitcher.getAvailableProviders())).append("\n");
         sb.append("Tokens today: ").append(formatTokens(daily.tokensIn())).append(" in / ")
                 .append(formatTokens(daily.tokensOut())).append(" out\n");
         sb.append("Estimated cost today: $").append(cost.toPlainString()).append("\n");

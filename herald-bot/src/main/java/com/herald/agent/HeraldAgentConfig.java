@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,8 +38,11 @@ import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 @Configuration
 class HeraldAgentConfig {
@@ -57,8 +61,7 @@ class HeraldAgentConfig {
     }
 
     @Bean
-    ChatClient mainClient(
-            ChatClient.Builder builder,
+    ModelSwitcher modelSwitcher(
             ChatModel chatModel,
             HeraldConfig config,
             ChatMemory chatMemory,
@@ -67,8 +70,10 @@ class HeraldAgentConfig {
             FileSystemTools fsTools,
             TodoWriteTool todoTool,
             AskUserQuestionTool askTool,
+            JdbcTemplate jdbcTemplate,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
+            @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
             @Value("${herald.agent.model.opus:claude-opus-4-5}") String opusModel,
@@ -112,19 +117,35 @@ class HeraldAgentConfig {
                 .taskRepository(taskRepository)
                 .build();
 
-        return builder
-                .defaultSystem(systemPrompt)
-                .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
-                .defaultToolCallbacks(taskTool, taskOutputTool)
-                .defaultAdvisors(
-                        new MemoryBlockAdvisor(memoryTools),
-                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                        ToolCallAdvisor.builder()
-                                .conversationHistoryEnabled(false)
-                                .build()
-                )
-                .build();
+        // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
+        Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
+                ChatClient.builder(cm)
+                        .defaultSystem(systemPrompt)
+                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool)
+                        .defaultToolCallbacks(taskTool, taskOutputTool)
+                        .defaultAdvisors(
+                                new MemoryBlockAdvisor(memoryTools),
+                                MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                                ToolCallAdvisor.builder()
+                                        .conversationHistoryEnabled(false)
+                                        .build()
+                        );
+
+        // Build the initial client from the default Anthropic ChatModel
+        ChatClient initialClient = clientBuilderFactory.apply(chatModel).build();
+
+        // Register available provider ChatModels
+        Map<String, ChatModel> availableModels = new LinkedHashMap<>();
+        availableModels.put("anthropic", chatModel);
+        openaiChatModel.ifPresent(model -> availableModels.put("openai", model));
+        ollamaChatModel.ifPresent(model -> availableModels.put("ollama", model));
+
+        var switcher = new ModelSwitcher(availableModels, jdbcTemplate, clientBuilderFactory,
+                initialClient, "anthropic", defaultModel);
+        switcher.loadPersistedOverride();
+        return switcher;
     }
+
 
     private ChatClient.Builder chatClientBuilderForModel(ChatModel chatModel, String modelId) {
         return ChatClient.builder(chatModel)

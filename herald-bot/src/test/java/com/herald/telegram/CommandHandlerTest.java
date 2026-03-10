@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
 import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +9,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -18,6 +20,7 @@ class CommandHandlerTest {
     private ChatMemory chatMemory;
     private TelegramSender sender;
     private UsageTracker usageTracker;
+    private ModelSwitcher modelSwitcher;
     private CommandHandler handler;
 
     @BeforeEach
@@ -26,7 +29,11 @@ class CommandHandlerTest {
         chatMemory = mock(ChatMemory.class);
         sender = mock(TelegramSender.class);
         usageTracker = mock(UsageTracker.class);
-        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, "claude-sonnet-4-5");
+        modelSwitcher = mock(ModelSwitcher.class);
+        when(modelSwitcher.getActiveProvider()).thenReturn("anthropic");
+        when(modelSwitcher.getActiveModel()).thenReturn("claude-sonnet-4-5");
+        when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
+        handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher);
     }
 
     // --- handle() routing ---
@@ -57,7 +64,8 @@ class CommandHandlerTest {
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("/help") && msg.contains("/status")
                         && msg.contains("/reset") && msg.contains("/memory")
-                        && msg.contains("/model status")));
+                        && msg.contains("/model status")
+                        && msg.contains("/model <provider> <model>")));
     }
 
     @Test
@@ -73,7 +81,7 @@ class CommandHandlerTest {
         when(memoryTools.count()).thenReturn(3);
         handler.handle("/status");
         verify(sender).sendMessage(argThat(msg ->
-                msg.contains("claude-sonnet-4-5") && msg.contains("3")
+                msg.contains("anthropic/claude-sonnet-4-5") && msg.contains("3")
                         && msg.contains("Uptime")));
     }
 
@@ -171,7 +179,7 @@ class CommandHandlerTest {
         handler.handle("/model status");
 
         verify(sender).sendMessage(argThat(msg ->
-                msg.contains("claude-sonnet-4-5")
+                msg.contains("anthropic/claude-sonnet-4-5")
                         && msg.contains("15.0K in")
                         && msg.contains("3.0K out")
                         && msg.contains("$0.0750")
@@ -201,7 +209,37 @@ class CommandHandlerTest {
     @Test
     void modelUnknownSubcommandShowsUsage() {
         handler.handle("/model foo");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown model subcommand")));
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    // --- /model <provider> <model> (switching) ---
+
+    @Test
+    void modelSwitchCallsModelSwitcher() {
+        handler.handle("/model ollama qwen2.5-coder");
+
+        verify(modelSwitcher).switchModel("ollama", "qwen2.5-coder");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Switched") && msg.contains("ollama/qwen2.5-coder")));
+    }
+
+    @Test
+    void modelSwitchToAnthropicModel() {
+        handler.handle("/model anthropic claude-haiku-4-5");
+
+        verify(modelSwitcher).switchModel("anthropic", "claude-haiku-4-5");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Switched")));
+    }
+
+    @Test
+    void modelSwitchWithInvalidProviderShowsError() {
+        doThrow(new IllegalArgumentException("Provider 'azure' is not configured. Available providers: [anthropic, openai, ollama]"))
+                .when(modelSwitcher).switchModel("azure", "gpt-4");
+
+        handler.handle("/model azure gpt-4");
+
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Error") && msg.contains("azure") && msg.contains("not configured")));
     }
 
     // --- unknown command ---
