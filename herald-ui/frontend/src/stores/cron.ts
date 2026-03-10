@@ -16,6 +16,7 @@ export const useCronStore = defineStore('cron', () => {
     loading.value = true
     try {
       const res = await fetch('/api/cron-jobs')
+      if (!res.ok) throw new Error(res.statusText)
       jobs.value = await res.json()
     } catch {
       jobs.value = []

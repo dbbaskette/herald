@@ -2,11 +2,11 @@
 import { RouterLink } from 'vue-router'
 
 const navItems = [
-  { to: '/', label: 'System Status', icon: '&#9632;' },
-  { to: '/skills', label: 'Skills Editor', icon: '&#9733;' },
-  { to: '/memory', label: 'Memory Viewer', icon: '&#9683;' },
-  { to: '/cron', label: 'Cron Builder', icon: '&#9200;' },
-  { to: '/history', label: 'History', icon: '&#9776;' },
+  { to: '/', label: 'System Status', icon: '■', exact: true },
+  { to: '/skills', label: 'Skills Editor', icon: '★', exact: false },
+  { to: '/memory', label: 'Memory Viewer', icon: '◓', exact: false },
+  { to: '/cron', label: 'Cron Builder', icon: '⏰', exact: false },
+  { to: '/history', label: 'History', icon: '☰', exact: false },
 ]
 </script>
 
@@ -21,9 +21,10 @@ const navItems = [
         :key="item.to"
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors"
-        active-class="bg-gray-800 text-white"
+        :active-class="item.exact ? '' : 'bg-gray-800 text-white'"
+        :exact-active-class="item.exact ? 'bg-gray-800 text-white' : ''"
       >
-        <span v-html="item.icon" class="w-5 text-center" />
+        <span class="w-5 text-center">{{ item.icon }}</span>
         {{ item.label }}
       </RouterLink>
     </nav>

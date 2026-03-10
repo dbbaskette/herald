@@ -15,6 +15,7 @@ export const useSkillsStore = defineStore('skills', () => {
     loading.value = true
     try {
       const res = await fetch('/api/skills')
+      if (!res.ok) throw new Error(res.statusText)
       skills.value = await res.json()
     } catch {
       skills.value = []
