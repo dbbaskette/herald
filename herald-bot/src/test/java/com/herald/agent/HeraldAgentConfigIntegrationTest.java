@@ -4,6 +4,7 @@ import com.herald.config.HeraldConfig;
 import com.herald.memory.MemoryTools;
 import com.herald.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
+import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TodoWriteTool;
 import org.junit.jupiter.api.Test;
@@ -64,7 +65,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
-                jdbcTemplate,
+                mock(GwsTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -105,7 +106,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
-                jdbcTemplate,
+                mock(GwsTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -137,7 +138,7 @@ class HeraldAgentConfigIntegrationTest {
                 mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(AskUserQuestionTool.class),
-                jdbcTemplate,
+                mock(GwsTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
