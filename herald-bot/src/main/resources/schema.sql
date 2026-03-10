@@ -19,7 +19,37 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     schedule  TEXT NOT NULL,
     prompt    TEXT NOT NULL,
     last_run  DATETIME,
-    enabled   INTEGER DEFAULT 1
+    enabled   INTEGER DEFAULT 1,
+    built_in  INTEGER DEFAULT 0
+);
+
+INSERT OR IGNORE INTO cron_jobs (name, schedule, prompt, enabled, built_in) VALUES (
+    'morning-briefing',
+    '0 7 * * 1-5',
+    'You are running as a scheduled morning briefing. Compile a concise morning digest for the user:
+
+1. **Weather** — Fetch the current weather and today''s forecast from wttr.in for the user''s configured location.
+2. **Calendar** — If calendar tools are available, list today''s events and meetings with times.
+3. **Top priorities** — Surface the top 3 priorities or open items from memory.
+4. **Flagged emails** — If email tools are available, check for any flagged or important unread emails and summarize them.
+5. **Things you''d want to know today** — Add an adaptive section with anything else relevant: upcoming deadlines, reminders, or notable context from recent conversations.
+
+Keep the tone friendly and concise. Use bullet points and bold headers for readability.',
+    1, 1
+);
+
+INSERT OR IGNORE INTO cron_jobs (name, schedule, prompt, enabled, built_in) VALUES (
+    'weekly-review',
+    '0 18 * * 5',
+    'You are running as a scheduled weekly review. Compile a concise end-of-week summary for the user:
+
+1. **Week recap** — Summarize the key conversations, tasks, and activity from this week.
+2. **Open items** — Surface any unresolved tasks, pending questions, or open items from memory.
+3. **Next week preview** — If calendar tools are available, preview next week''s scheduled events and commitments.
+4. **Suggestions** — Offer any recommendations for follow-ups or preparation for the coming week.
+
+Keep the tone reflective and actionable. Use bullet points and bold headers for readability.',
+    1, 1
 );
 
 CREATE TABLE IF NOT EXISTS commands (

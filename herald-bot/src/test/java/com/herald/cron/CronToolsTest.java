@@ -23,7 +23,7 @@ class CronToolsTest {
     @Test
     void cronCreateCallsServiceAndReturnsConfirmation() {
         when(cronService.createJob("daily", "0 0 9 * * *", "Good morning"))
-                .thenReturn(new CronJob(1, "daily", "0 0 9 * * *", "Good morning", null, true));
+                .thenReturn(new CronJob(1, "daily", "0 0 9 * * *", "Good morning", null, true, false));
 
         String result = cronTools.cron_create("daily", "0 0 9 * * *", "Good morning");
 
@@ -34,7 +34,7 @@ class CronToolsTest {
     @Test
     void cronUpdateCallsServiceAndReturnsConfirmation() {
         when(cronService.updateJob("daily", "0 0 10 * * *", "Updated prompt"))
-                .thenReturn(new CronJob(1, "daily", "0 0 10 * * *", "Updated prompt", null, true));
+                .thenReturn(new CronJob(1, "daily", "0 0 10 * * *", "Updated prompt", null, true, false));
 
         String result = cronTools.cron_update("daily", "0 0 10 * * *", "Updated prompt");
 
@@ -55,6 +55,7 @@ class CronToolsTest {
     @Test
     void cronDeleteWhenNotFound() {
         when(cronService.deleteJob("missing")).thenReturn(false);
+        when(cronService.listJobs()).thenReturn(List.of());
 
         String result = cronTools.cron_delete("missing");
 
@@ -62,16 +63,27 @@ class CronToolsTest {
     }
 
     @Test
+    void cronDeleteBuiltInJobReturnsProtectionMessage() {
+        when(cronService.deleteJob("morning-briefing")).thenReturn(false);
+        when(cronService.listJobs()).thenReturn(List.of(
+                new CronJob(1, "morning-briefing", "0 7 * * 1-5", "prompt", null, true, true)));
+
+        String result = cronTools.cron_delete("morning-briefing");
+
+        assertThat(result).contains("Cannot delete built-in").contains("morning-briefing");
+    }
+
+    @Test
     void cronListShowsFormattedJobs() {
         when(cronService.listJobs()).thenReturn(List.of(
                 new CronJob(1, "morning", "0 0 9 * * *", "Brief me",
-                        LocalDateTime.of(2026, 3, 9, 9, 0), true),
+                        LocalDateTime.of(2026, 3, 9, 9, 0), true, true),
                 new CronJob(2, "weekly", "0 0 17 * * FRI", "Weekly review",
-                        null, false)));
+                        null, false, false)));
 
         String result = cronTools.cron_list();
 
-        assertThat(result).contains("morning").contains("enabled").contains("2026-03-09 09:00");
+        assertThat(result).contains("morning").contains("enabled").contains("2026-03-09 09:00").contains("built-in");
         assertThat(result).contains("weekly").contains("disabled").contains("never");
     }
 

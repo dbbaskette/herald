@@ -62,7 +62,7 @@ public class CronService {
     }
 
     public CronJob createJob(String name, String schedule, String prompt) {
-        CronJob job = new CronJob(null, name, schedule, prompt, null, true);
+        CronJob job = new CronJob(null, name, schedule, prompt, null, true, false);
         cronRepository.save(job);
         CronJob saved = cronRepository.findByName(name);
         scheduleJob(saved);
@@ -72,7 +72,7 @@ public class CronService {
 
     public CronJob updateJob(String name, String schedule, String prompt) {
         cancelJob(name);
-        CronJob job = new CronJob(null, name, schedule, prompt, null, true);
+        CronJob job = new CronJob(null, name, schedule, prompt, null, true, false);
         cronRepository.save(job);
         CronJob updated = cronRepository.findByName(name);
         scheduleJob(updated);
