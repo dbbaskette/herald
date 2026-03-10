@@ -1,14 +1,21 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-export interface SkillDetail {
+export interface SkillSummary {
   name: string
-  content: string
+  description: string
+  source: string
+  readOnly: boolean
 }
 
 export const useSkillsStore = defineStore('skills', () => {
-  const skillNames = ref<string[]>([])
+  const skills = ref<SkillSummary[]>([])
+  const skillNames = computed(() => skills.value.map(s => s.name))
   const selectedName = ref<string | null>(null)
+  const selectedReadOnly = computed(() => {
+    const s = skills.value.find(s => s.name === selectedName.value)
+    return s?.readOnly ?? false
+  })
   const editorContent = ref('')
   const savedContent = ref('')
   const loading = ref(false)
@@ -22,10 +29,10 @@ export const useSkillsStore = defineStore('skills', () => {
     try {
       const res = await fetch('/api/skills')
       if (!res.ok) throw new Error(res.statusText)
-      skillNames.value = await res.json()
+      skills.value = await res.json()
     } catch (e: any) {
       error.value = e.message
-      skillNames.value = []
+      skills.value = []
     } finally {
       loading.value = false
     }
@@ -37,10 +44,10 @@ export const useSkillsStore = defineStore('skills', () => {
     try {
       const res = await fetch(`/api/skills/${encodeURIComponent(name)}`)
       if (!res.ok) throw new Error(res.statusText)
-      const detail: SkillDetail = await res.json()
-      selectedName.value = detail.name
-      editorContent.value = detail.content
-      savedContent.value = detail.content
+      const content = await res.text()
+      selectedName.value = name
+      editorContent.value = content
+      savedContent.value = content
     } catch (e: any) {
       error.value = e.message
     } finally {
@@ -55,8 +62,8 @@ export const useSkillsStore = defineStore('skills', () => {
     try {
       const res = await fetch(`/api/skills/${encodeURIComponent(selectedName.value)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: selectedName.value, content: editorContent.value }),
+        headers: { 'Content-Type': 'text/plain' },
+        body: editorContent.value,
       })
       if (!res.ok) throw new Error(res.statusText)
       savedContent.value = editorContent.value
@@ -113,7 +120,7 @@ export const useSkillsStore = defineStore('skills', () => {
   }
 
   return {
-    skillNames, selectedName, editorContent, savedContent,
+    skills, skillNames, selectedName, selectedReadOnly, editorContent, savedContent,
     loading, saving, isDirty, error,
     fetchSkills, selectSkill, saveSkill, createSkill, deleteSkill, discardChanges,
   }

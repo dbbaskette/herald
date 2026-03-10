@@ -275,15 +275,17 @@ function formatTime(ts: string | null): string {
         </div>
         <div v-else class="tree-list">
           <button
-            v-for="name in store.skillNames"
-            :key="name"
+            v-for="skill in store.skills"
+            :key="skill.name"
             class="tree-item"
-            :class="{ active: store.selectedName === name }"
-            @click="store.selectSkill(name)"
+            :class="{ active: store.selectedName === skill.name }"
+            :title="skill.description || skill.name"
+            @click="store.selectSkill(skill.name)"
           >
             <svg class="file-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M3 1h7l3 3v9a2 2 0 01-2 2H5a2 2 0 01-2-2V3a2 2 0 012-2z" opacity="0.15"/><path d="M3 1h7l3 3v9a2 2 0 01-2 2H5a2 2 0 01-2-2V3a2 2 0 012-2z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
-            <span class="tree-name">{{ name }}</span>
+            <span class="tree-name">{{ skill.name }}</span>
             <span class="tree-ext">.md</span>
+            <span v-if="skill.readOnly" class="tree-badge">bundled</span>
           </button>
           <div v-if="store.skillNames.length === 0" class="tree-empty">
             No skills yet
@@ -572,7 +574,7 @@ function formatTime(ts: string | null): string {
    ═══════════════════════════════════ */
 
 .file-tree {
-  width: 210px;
+  width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -689,14 +691,30 @@ function formatTime(ts: string | null): string {
 
 .tree-name {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
 }
 
 .tree-ext {
   opacity: 0.4;
   font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.tree-badge {
+  font-size: 0.55rem;
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(226, 181, 99, 0.12);
+  color: #c9a050;
+  flex-shrink: 0;
+}
+
+.tree-item.active .tree-badge {
+  background: rgba(226, 181, 99, 0.2);
+  color: #e2b563;
 }
 
 .tree-empty {
