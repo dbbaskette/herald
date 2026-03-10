@@ -58,7 +58,43 @@ For AppImage installs, the symlink points to the `.AppImage` file directly.
 
 ---
 
-## 4. Test Basic Commands
+## 4. Create the Herald Vault
+
+Herald expects a vault named **Herald-Memory** for storing notes, daily summaries, and context:
+
+1. Open Obsidian
+2. Click **Create new vault**
+3. Name it `Herald-Memory`
+4. Choose a location (default is fine)
+
+Or via CLI:
+
+```bash
+obsidian vault:create name="Herald-Memory"
+```
+
+Verify it appears:
+
+```bash
+obsidian vault
+```
+
+Herald will automatically create the following folder structure inside the vault on first use:
+
+```
+Herald-Memory/
+├── Chat-Sessions/    # Archived conversations
+├── Daily/            # Daily journals and briefings
+├── Research/         # Web research and deep dives
+├── Projects/         # Project-specific notes
+├── People/           # Contact and people notes
+├── Reference/        # How-tos and config snippets
+└── Templates/        # Note templates (auto-created)
+```
+
+---
+
+## 5. Test Basic Commands
 
 With Obsidian running, try:
 
@@ -78,9 +114,9 @@ obsidian tasks todo
 
 ---
 
-## 5. Herald Integration
+## 6. Herald Integration
 
-Once the `obsidian` CLI is on your PATH and Obsidian is running, Herald's Obsidian skill activates automatically. No additional Herald configuration is needed.
+Once the `obsidian` CLI is on your PATH, Obsidian is running, and the **Herald-Memory** vault exists, Herald's Obsidian skill activates automatically. No additional Herald configuration is needed.
 
 Herald uses the CLI for:
 

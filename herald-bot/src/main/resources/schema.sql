@@ -71,6 +71,14 @@ CREATE TABLE IF NOT EXISTS model_usage (
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Spring AI JDBC chat memory (must match spring-ai's expected schema)
+CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
+    conversation_id TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    type            TEXT NOT NULL,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS model_overrides (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     provider   TEXT NOT NULL,

@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 
+declare const __APP_VERSION__: string
+const appVersion = __APP_VERSION__
+
 const navItems = [
   { to: '/', label: 'System Status', icon: '■', exact: true },
+  { to: '/chat', label: 'Chat', icon: '💬', exact: false },
   { to: '/skills', label: 'Skills Editor', icon: '★', exact: false },
   { to: '/memory', label: 'Memory Viewer', icon: '◓', exact: false },
   { to: '/cron', label: 'Cron Builder', icon: '⏰', exact: false },
@@ -29,5 +33,8 @@ const navItems = [
         {{ item.label }}
       </RouterLink>
     </nav>
+    <div class="px-5 py-3 border-t border-gray-700">
+      <span class="text-xs text-gray-500 font-mono">v{{ appVersion }}</span>
+    </div>
   </aside>
 </template>

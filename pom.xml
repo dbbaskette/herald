@@ -13,7 +13,7 @@
 
     <groupId>com.herald</groupId>
     <artifactId>herald-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Herald</name>
     <description>Personal AI agent powered by Spring AI</description>

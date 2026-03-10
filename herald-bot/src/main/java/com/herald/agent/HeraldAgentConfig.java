@@ -117,7 +117,7 @@ public class HeraldAgentConfig {
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
-        String systemPrompt = resolvePrompt(promptTemplate, config);
+        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
 
         // Set up CONTEXT.md advisor — reads standing brief from disk each turn
         Path contextFilePath = resolveTildePath(config.contextFile());
@@ -172,6 +172,7 @@ public class HeraldAgentConfig {
                                 new MemoryBlockAdvisor(memoryTools),
                                 compactionAdvisor,
                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                                new ToolPairSanitizingAdvisor(),
                                 ToolCallAdvisor.builder()
                                         .conversationHistoryEnabled(false)
                                         .build()
@@ -211,9 +212,10 @@ public class HeraldAgentConfig {
      * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
      * here and handled per-turn by {@link DateTimePromptAdvisor}.
      */
-    String resolvePrompt(String template, HeraldConfig config) {
+    String resolvePrompt(String template, HeraldConfig config, String modelId) {
         return template
                 .replace("{persona}", config.persona())
+                .replace("{model_id}", modelId)
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 

@@ -1,15 +1,15 @@
 ---
 name: obsidian
 description: >
-  Manages Obsidian vault via the official Obsidian CLI (v1.12+) — search notes,
-  read/create/update notes, manage daily notes, list tasks and tags, view backlinks,
-  and run commands. Use when asked about notes, knowledge base, vault, daily journal,
+  Manages the Herald-Memory Obsidian vault via the official Obsidian CLI (v1.12+).
+  Stores chat sessions, research, daily journals, and structured knowledge.
+  Use when asked about notes, knowledge base, vault, daily journal, chat history,
   or linked references.
 ---
 
 # Obsidian Knowledge Base Skill
 
-Manage an Obsidian vault using the official `obsidian` CLI (requires Obsidian 1.12+ with CLI enabled).
+Manage the **Herald-Memory** Obsidian vault using the official `obsidian` CLI (requires Obsidian 1.12+ with CLI enabled).
 The CLI communicates with the running Obsidian desktop app via IPC.
 
 **IMPORTANT: The Obsidian desktop app must be running with CLI enabled (Settings → General → Command line interface → Toggle ON).**
@@ -31,6 +31,140 @@ On macOS, the CLI is at `/Applications/Obsidian.app/Contents/MacOS/obsidian`. Th
 ```bash
 export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
 ```
+
+## Herald-Memory Vault
+
+Herald uses a dedicated vault called **Herald-Memory** with a structured folder layout. All Herald-generated content goes here — never into the user's personal vaults unless explicitly asked.
+
+### Folder Structure
+
+```
+Herald-Memory/
+├── Chat-Sessions/          # Archived conversations
+│   ├── 2026-03-10-weather-raleigh.md
+│   ├── 2026-03-10-obsidian-setup.md
+│   └── ...
+├── Daily/                  # Daily journals and briefings
+│   ├── 2026-03-10.md
+│   └── ...
+├── Research/               # Web research, deep dives, reports
+│   ├── spring-ai-chat-memory.md
+│   └── ...
+├── Projects/               # Project-specific notes and decisions
+│   ├── Herald/
+│   │   ├── architecture.md
+│   │   └── decisions.md
+│   └── ...
+├── People/                 # People and contacts referenced in conversations
+│   └── ...
+├── Reference/              # How-tos, cheat sheets, config snippets
+│   └── ...
+└── Templates/              # Note templates
+    ├── Chat Session.md
+    ├── Daily Briefing.md
+    └── Research.md
+```
+
+### Folder Conventions
+
+| Folder | Purpose | When to write |
+|--------|---------|---------------|
+| `Chat-Sessions/` | Conversation archives | After meaningful conversations (not trivial Q&A) |
+| `Daily/` | Daily journals, briefing summaries | Morning briefings, end-of-day recaps |
+| `Research/` | Deep research output | After web research, multi-source analysis |
+| `Projects/` | Project notes, architecture decisions | When discussing project-specific topics |
+| `People/` | Contact/person notes | When learning about people the user works with |
+| `Reference/` | Reusable reference material | Setup guides, CLI cheat sheets, config notes |
+
+### Bootstrap
+
+If the vault exists but the folder structure hasn't been created yet, create the folders on first use:
+
+```bash
+obsidian create path="Chat-Sessions/.gitkeep" content="" overwrite
+obsidian create path="Daily/.gitkeep" content="" overwrite
+obsidian create path="Research/.gitkeep" content="" overwrite
+obsidian create path="Projects/.gitkeep" content="" overwrite
+obsidian create path="People/.gitkeep" content="" overwrite
+obsidian create path="Reference/.gitkeep" content="" overwrite
+obsidian create path="Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
+obsidian create path="Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
+obsidian create path="Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
+```
+
+## Saving Chat Sessions
+
+After a meaningful conversation (not trivial greetings or single-question lookups), archive it to the vault. This is how Herald builds long-term memory beyond the key-value store.
+
+### When to save
+
+- Conversations that involved research, decisions, or multi-step problem solving
+- Conversations where the user shared preferences, context, or project details worth remembering
+- Conversations that produced action items or follow-ups
+- Morning briefings and weekly reviews
+
+### How to save
+
+1. Generate a descriptive filename: `YYYY-MM-DD-<short-topic>.md`
+2. Write a structured summary (not a raw transcript):
+
+```bash
+obsidian create path="Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
+```
+
+### What to include in the summary
+
+- **Topic** — one-line description
+- **Summary** — 2-3 sentences of what happened
+- **Key Points** — bullet points of important facts, decisions, or discoveries
+- **Action Items** — tasks that came out of the conversation (with completion status)
+- **Tags** — `chat-session` plus any relevant topic tags
+
+### What NOT to include
+
+- Raw message transcripts (too verbose, low signal)
+- Trivial exchanges ("what time is it", "hello")
+- Sensitive credentials or API keys
+
+## Saving Research
+
+When Herald performs web research or deep analysis, save the findings:
+
+```bash
+obsidian create path="Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
+```
+
+## Saving Daily Briefings
+
+Morning briefings and weekly reviews go to `Daily/`:
+
+```bash
+obsidian create path="Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
+```
+
+## Referencing Past Context
+
+Before answering questions, search the vault for relevant prior context:
+
+```bash
+# Search chat sessions for prior discussions
+obsidian search query="Spring AI" path="Chat-Sessions"
+
+# Search research notes
+obsidian search query="model switching" path="Research"
+
+# Search project notes
+obsidian search query="architecture" path="Projects/Herald"
+
+# Read a specific note for full context
+obsidian read path="Chat-Sessions/2026-03-10-herald-model-config.md"
+```
+
+Use this to:
+- Recall previous conversations about a topic before answering
+- Find prior research before starting new research
+- Check if a question was already answered in a past session
+- Surface related context the user might not remember
 
 ## CLI Syntax
 
@@ -66,20 +200,12 @@ For search with line context (grep-style `path:line: text` output):
 obsidian search:context query="meeting notes"
 ```
 
-**Use for:** "Find my notes about Spring AI", "Search for notes mentioning Herald"
-
 ### Read a Note
 
 ```bash
 obsidian read file="Recipe"
 obsidian read path="Projects/Herald/architecture.md"
 ```
-
-- `file=<name>` — file name (wikilink resolution)
-- `path=<path>` — exact vault-relative path
-- Defaults to active file if neither specified.
-
-**Use for:** "Show me the Herald architecture note", "Read my meeting notes from Friday"
 
 ### Create a Note
 
@@ -97,28 +223,12 @@ obsidian create name="Quick Note" content="Hello" open
 - `overwrite` — overwrite if file exists
 - `open` — open file after creating
 
-**Use for:** "Create a note called 'Herald Architecture Decisions'", "Make a new meeting note"
-
-### Append to a Note
+### Append / Prepend
 
 ```bash
 obsidian append file="Daily" content="- Met with X about Y"
-obsidian append content="## New Section\n\nContent here"
-```
-
-- `file=<name>` / `path=<path>` — target file (defaults to active)
-- `content=<text>` — (required) content to append
-- `inline` — append without leading newline
-
-**Use for:** "Add this to my daily note", "Append these action items to the meeting note"
-
-### Prepend to a Note
-
-```bash
 obsidian prepend file="Daily" content="# Priority Tasks"
 ```
-
-- Same parameters as `append`, inserts after frontmatter.
 
 ### Daily Note
 
@@ -130,14 +240,6 @@ obsidian daily:prepend content="## Top Priority"
 obsidian daily:path
 ```
 
-- `daily` — open today's daily note
-- `daily:read` — read daily note contents
-- `daily:append` — append content to daily note
-- `daily:prepend` — prepend content to daily note
-- `daily:path` — get the daily note file path
-
-**Use for:** "What's in my daily note?", "Add a task to today's note"
-
 ### Tasks
 
 ```bash
@@ -148,14 +250,6 @@ obsidian tasks file="Project Plan" todo
 obsidian tasks todo verbose
 ```
 
-- `todo` — show incomplete tasks only
-- `done` — show completed tasks only
-- `daily` — tasks from daily note only
-- `file=<name>` / `path=<path>` — filter by file
-- `total` — return count only
-- `verbose` — group by file with line numbers
-- `format=json|tsv|csv` — output format
-
 Toggle or update a task:
 
 ```bash
@@ -163,8 +257,6 @@ obsidian task ref="Recipe.md:8" toggle
 obsidian task daily line=3 done
 obsidian task file="Project" line=12 todo
 ```
-
-**Use for:** "What tasks are open?", "Show incomplete todos from my daily note", "Mark task on line 5 as done"
 
 ### Tags
 
@@ -175,14 +267,6 @@ obsidian tags sort=count
 obsidian tag name="meeting"
 ```
 
-- `counts` — include tag occurrence counts
-- `sort=count` — sort by frequency
-- `total` — return tag count only
-- `active` — tags for active file only
-- `file=<name>` — tags for specific file
-
-**Use for:** "What tags do I use?", "Show notes tagged #meeting"
-
 ### Properties (Frontmatter)
 
 ```bash
@@ -192,38 +276,15 @@ obsidian property:set file="Recipe" name="status" value="complete"
 obsidian property:remove file="Recipe" name="draft"
 ```
 
-- `property:read` — read a property value
-- `property:set` — set/update a property
-- `property:remove` — remove a property
-- `name=<name>` — (required) property name
-- `value=<value>` — (required for set) property value
-- `type=text|list|number|checkbox|date|datetime` — property type
-
-**Use for:** "Tag this note with completed", "Set the status to in-progress"
-
 ### Backlinks
 
 ```bash
 obsidian backlinks file="Herald"
-obsidian backlinks counts
-obsidian backlinks total
-```
-
-- `file=<name>` / `path=<path>` — target file
-- `counts` — include link counts
-- `total` — return backlink count only
-- `format=json|tsv|csv` — output format
-
-Related link commands:
-
-```bash
 obsidian links file="Herald"
 obsidian unresolved
 obsidian orphans
 obsidian deadends
 ```
-
-**Use for:** "What notes link to Herald?", "Show orphan notes", "Find broken links"
 
 ### Outline
 
@@ -232,21 +293,12 @@ obsidian outline file="Recipe"
 obsidian outline format=md
 ```
 
-- Shows heading structure of a file.
-- `format=tree|md|json` — output format
-
 ### Run a Command
 
 ```bash
 obsidian command id="daily-notes"
 obsidian commands filter="daily"
 ```
-
-- `id=<command-id>` — (required) Obsidian command palette ID to execute
-- `commands` — list all available command IDs
-- `filter=<prefix>` — filter command list by prefix
-
-**Use for:** "Open the graph view", "Run the Dataview refresh"
 
 ### File Management
 
@@ -267,8 +319,6 @@ obsidian template:read name="Meeting Notes"
 obsidian template:read name="Meeting Notes" resolve
 ```
 
-- `resolve` — process `{{date}}`, `{{time}}`, `{{title}}` variables
-
 ### Vault Info
 
 ```bash
@@ -280,8 +330,6 @@ obsidian vaults
 
 ```bash
 obsidian wordcount file="Essay"
-obsidian wordcount words
-obsidian wordcount characters
 ```
 
 ## Response Formatting
@@ -304,10 +352,13 @@ Format responses as clean Telegram-friendly messages (Markdown):
 | Connection refused / timeout | "Can't connect to Obsidian. Make sure the app is running." |
 | File not found | "Note '<name>' was not found. Check the name or try searching." |
 | File already exists (on create) | "A note named '<name>' already exists. Use append to add content, or pass `overwrite` to replace it." |
+| Vault not found | "The Herald-Memory vault was not found. Create it in Obsidian: File → Create new vault → name it 'Herald-Memory'. See docs/obsidian-setup.md." |
 
 ## Integration Notes
 
-- **Morning briefing:** Pull `daily:read` content and `tasks daily todo` for the daily summary.
-- **Auto-memory sync:** Key facts from Herald memory can be written to an Obsidian note via `create`/`append`.
-- **Research:** Search Obsidian with `search query=...` for existing knowledge before using web research.
+- **Morning briefing:** Pull `daily:read` and `tasks daily todo`, then save the briefing to `Daily/`.
+- **Chat session archival:** After meaningful conversations, summarize and save to `Chat-Sessions/`.
+- **Research persistence:** Save web research findings to `Research/` for future reference.
+- **Memory sync:** Key facts from Herald's key-value memory can be cross-referenced with vault notes.
+- **Prior context lookup:** Search `Chat-Sessions/` and `Research/` before answering questions to recall prior discussions.
 - **Clipboard:** Add `--copy` to any command to copy output to clipboard instead of stdout.

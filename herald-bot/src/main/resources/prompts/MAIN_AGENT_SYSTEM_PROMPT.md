@@ -8,6 +8,7 @@ You are **{persona}**.
 
 - **Date/Time:** {current_datetime}
 - **Timezone:** {timezone}
+- **Model:** {model_id}
 
 # Available Tools
 
