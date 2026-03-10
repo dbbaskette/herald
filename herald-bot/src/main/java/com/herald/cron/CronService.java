@@ -131,7 +131,7 @@ public class CronService {
         }
     }
 
-    private void executeJob(CronJob job) {
+    void executeJob(CronJob job) {
         String conversationId = "cron-" + job.name();
         try {
             log.info("Executing cron job '{}'", job.name());

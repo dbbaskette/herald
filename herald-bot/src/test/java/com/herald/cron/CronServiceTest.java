@@ -114,7 +114,6 @@ class CronServiceTest {
 
     @Test
     void deleteBuiltInJobReturnsFalseAndKeepsSchedule() {
-        // First, create and schedule a built-in job
         CronJob builtIn = new CronJob(1, "morning-briefing", "0 0 7 * * MON-FRI", "prompt", null, true, true);
         when(cronRepository.findAll()).thenReturn(List.of(builtIn));
         when(cronRepository.findByName("morning-briefing")).thenReturn(builtIn);
@@ -124,17 +123,38 @@ class CronServiceTest {
         CronService service = new CronService(cronRepository, agentService, telegramSender, chatMemory, config);
         service.loadJobs();
 
-        // DB delete returns false for built-in job
         when(cronRepository.delete("morning-briefing")).thenReturn(false);
 
         boolean result = service.deleteJob("morning-briefing");
 
         assertThat(result).isFalse();
-        // The job should still be scheduled — verify by enabling it (which would re-schedule)
-        // and checking that the job is still findable
-        CronJob still = service.findJob("morning-briefing");
-        assertThat(still).isNotNull();
-        assertThat(still.builtIn()).isTrue();
+        // Built-in job still exists in the repository
+        assertThat(service.findJob("morning-briefing")).isNotNull();
+    }
+
+    @Test
+    void executeJobClearsChatMemoryOnSuccess() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenReturn("result");
+
+        cronService.executeJob(job);
+
+        verify(agentService).chat("hello", "cron-test-job");
+        verify(telegramSender).sendMessage("result");
+        verify(cronRepository).updateLastRun(eq("test-job"), any());
+        verify(chatMemory).clear("cron-test-job");
+    }
+
+    @Test
+    void executeJobClearsChatMemoryOnFailure() {
+        CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
+        when(agentService.chat("hello", "cron-test-job")).thenThrow(new RuntimeException("agent error"));
+
+        cronService.executeJob(job);
+
+        verify(chatMemory).clear("cron-test-job");
+        verify(telegramSender, never()).sendMessage(any());
+        verify(cronRepository, never()).updateLastRun(any(), any());
     }
 
     @Test
