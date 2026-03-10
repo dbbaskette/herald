@@ -177,6 +177,20 @@ class CronRepositoryTest {
     }
 
     @Test
+    void updateModifiesExistingJob() {
+        repository.save(new CronJob(null, "update-test", "0 0 9 * * *", "old prompt", null, true, false));
+        CronJob saved = repository.findByName("update-test");
+
+        CronJob updated = new CronJob(saved.id(), "update-test", "0 0 18 * * *", "new prompt", null, false, false);
+        repository.update(updated);
+
+        CronJob found = repository.findByName("update-test");
+        assertThat(found.schedule()).isEqualTo("0 0 18 * * *");
+        assertThat(found.prompt()).isEqualTo("new prompt");
+        assertThat(found.enabled()).isFalse();
+    }
+
+    @Test
     void findAllIncludesBuiltInFlag() {
         List<CronJob> jobs = repository.findAll();
         assertThat(jobs).anyMatch(j -> j.name().equals("morning-briefing") && j.builtIn());

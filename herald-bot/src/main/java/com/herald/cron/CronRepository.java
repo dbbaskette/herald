@@ -78,6 +78,13 @@ class CronRepository {
         jdbcTemplate.update("UPDATE cron_jobs SET enabled = ? WHERE name = ?", enabled ? 1 : 0, name);
     }
 
+    void update(CronJob job) {
+        Assert.notNull(job.id(), "Job id must not be null for update");
+        jdbcTemplate.update(
+                "UPDATE cron_jobs SET name = ?, schedule = ?, prompt = ?, enabled = ? WHERE id = ?",
+                job.name(), job.schedule(), job.prompt(), job.enabled() ? 1 : 0, job.id());
+    }
+
     boolean delete(String name) {
         CronJob job = findByName(name);
         if (job != null && job.builtIn()) {
