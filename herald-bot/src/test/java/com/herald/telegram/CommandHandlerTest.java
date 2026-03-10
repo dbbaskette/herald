@@ -48,7 +48,7 @@ class CommandHandlerTest {
         reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
         handler = new CommandHandler(memoryTools, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills"),
-                reloadableSkillsTool);
+                reloadableSkillsTool, 200_000);
     }
 
     // --- handle() routing ---
@@ -117,11 +117,15 @@ class CommandHandlerTest {
     @Test
     void debugShowsContextSizeMemoryCountAndTools() {
         when(memoryTools.count()).thenReturn(7);
+        Message mockMsg = mock(Message.class);
+        when(mockMsg.getText()).thenReturn("Hello world test message");
         when(chatMemory.get("default"))
-                .thenReturn(List.of(mock(Message.class), mock(Message.class), mock(Message.class)));
+                .thenReturn(List.of(mockMsg, mockMsg, mockMsg));
         handler.handle("/debug");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("Context messages: 3")
+                        && msg.contains("Context size:")
+                        && msg.contains("tokens")
                         && msg.contains("7") && msg.contains("Active tools")));
     }
 

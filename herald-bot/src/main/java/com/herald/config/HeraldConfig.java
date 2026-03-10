@@ -11,7 +11,8 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record Telegram(String botToken, String allowedChatId) {
     }
 
-    public record Agent(String persona, String systemPromptExtra, String contextFile) {
+    public record Agent(String persona, String systemPromptExtra, String contextFile,
+                        Integer maxContextTokens) {
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
@@ -44,6 +45,13 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.contextFile();
         }
         return "~/.herald/CONTEXT.md";
+    }
+
+    public int maxContextTokens() {
+        if (agent != null && agent.maxContextTokens() != null && agent.maxContextTokens() > 0) {
+            return agent.maxContextTokens();
+        }
+        return 200_000; // Claude default context window
     }
 
     public String dbPath() {
