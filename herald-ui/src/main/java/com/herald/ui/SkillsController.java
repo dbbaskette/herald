@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 import java.util.stream.Stream;
 
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.herald.ui.config.HeraldUiConfig;
+import com.herald.ui.sse.StatusSseService;
 
 import org.yaml.snakeyaml.Yaml;
 
@@ -34,12 +36,14 @@ class SkillsController {
 
     private final Path skillsDir;
     private final Path bundledSkillsDir;
+    private final StatusSseService statusSseService;
 
-    SkillsController(HeraldUiConfig config) {
+    SkillsController(HeraldUiConfig config, StatusSseService statusSseService) {
         this.skillsDir = resolvePath(config.skillsPath());
         String bundledPath = config.bundledSkillsPath();
         this.bundledSkillsDir = (bundledPath != null && !bundledPath.isBlank())
                 ? resolvePath(bundledPath) : null;
+        this.statusSseService = statusSseService;
     }
 
     @GetMapping
@@ -81,6 +85,7 @@ class SkillsController {
             return ResponseEntity.notFound().build();
         }
         Files.writeString(skillDir.resolve("SKILL.md"), content);
+        statusSseService.publishSkillReload(Instant.now().toString());
         return ResponseEntity.ok().build();
     }
 
@@ -106,6 +111,7 @@ class SkillsController {
                 Add your skill instructions here.
                 """.formatted(payload.name(), capitalize(payload.name()));
         Files.writeString(skillDir.resolve("SKILL.md"), template);
+        statusSseService.publishSkillReload(Instant.now().toString());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
@@ -122,6 +128,7 @@ class SkillsController {
             return ResponseEntity.notFound().build();
         }
         deleteRecursively(skillDir);
+        statusSseService.publishSkillReload(Instant.now().toString());
         return ResponseEntity.noContent().build();
     }
 
