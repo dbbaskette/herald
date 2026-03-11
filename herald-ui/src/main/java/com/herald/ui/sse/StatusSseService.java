@@ -83,8 +83,9 @@ public class StatusSseService {
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name("status").data(status));
-            } catch (IOException e) {
-                emitter.completeWithError(e);
+            } catch (Exception e) {
+                // Client disconnected (broken pipe, illegal state, etc.) — remove silently
+                emitters.remove(emitter);
             }
         }
     }
