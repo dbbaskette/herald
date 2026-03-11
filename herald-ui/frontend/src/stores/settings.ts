@@ -9,6 +9,7 @@ export interface SettingDef {
   description: string
   placeholder: string
   group: string
+  secret?: boolean
 }
 
 export const settingDefs: SettingDef[] = [
@@ -60,6 +61,7 @@ export const settingDefs: SettingDef[] = [
     description: 'From the same OAuth 2.0 Client ID',
     placeholder: 'GOCSPX-...',
     group: 'Google Workspace',
+    secret: true,
   },
 ]
 

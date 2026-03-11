@@ -18,23 +18,27 @@ async function fetchGwsStatus() {
   finally { gwsLoading.value = false }
 }
 
+let loginPollTimer: ReturnType<typeof setInterval> | null = null
+
 async function gwsLogin() {
   gwsActionMessage.value = ''
   try {
     const res = await fetch('/api/gws/login', { method: 'POST' })
     const data = await res.json()
     gwsActionMessage.value = data.message || ''
-    // Poll for auth completion
-    if (data.status === 'launched') {
+    // Poll for auth completion — only if freshly launched
+    if (data.status === 'launched' || data.status === 'already_running') {
+      if (loginPollTimer) clearInterval(loginPollTimer)
       let attempts = 0
-      const poll = setInterval(async () => {
+      loginPollTimer = setInterval(async () => {
         attempts++
         await fetchGwsStatus()
         if (gwsStatus.value?.authenticated || attempts > 60) {
-          clearInterval(poll)
+          if (loginPollTimer) { clearInterval(loginPollTimer); loginPollTimer = null }
           if (gwsStatus.value?.authenticated) gwsActionMessage.value = 'Google account connected!'
+          else if (attempts > 60) gwsActionMessage.value = 'Timed out waiting for authorization.'
         }
-      }, 2000)
+      }, 3000)
     }
   } catch { gwsActionMessage.value = 'Failed to launch login' }
 }
@@ -123,8 +127,9 @@ function hasChanges(): boolean {
               <input
                 :id="'setting-' + def.key"
                 v-model="form[def.key]"
-                type="text"
+                :type="def.secret ? 'password' : 'text'"
                 :placeholder="def.placeholder"
+                :autocomplete="def.secret ? 'off' : undefined"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>

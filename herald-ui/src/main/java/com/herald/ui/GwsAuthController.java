@@ -25,6 +25,7 @@ class GwsAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(GwsAuthController.class);
     private final JdbcTemplate jdbcTemplate;
+    private volatile Process loginProcess;
 
     GwsAuthController(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -51,9 +52,12 @@ class GwsAuthController {
         // Check auth status
         try {
             String output = runGws(List.of("gws", "auth", "status"), buildGwsEnv());
-            result.put("authenticated", output.contains("\"token_cache_exists\": true")
-                    || output.contains("\"token_cache_exists\":true"));
-            result.put("raw", output);
+            // auth_method is "none" when not authenticated, "oauth2" when connected
+            boolean authenticated = !output.contains("\"auth_method\": \"none\"")
+                    && !output.contains("\"auth_method\":\"none\"")
+                    && (output.contains("\"auth_method\": \"oauth2\"")
+                        || output.contains("\"auth_method\":\"oauth2\""));
+            result.put("authenticated", authenticated);
         } catch (Exception e) {
             result.put("authenticated", false);
             result.put("error", e.getMessage());
@@ -80,15 +84,19 @@ class GwsAuthController {
             return ResponseEntity.ok(result);
         }
 
+        // Prevent multiple concurrent login processes
+        if (loginProcess != null && loginProcess.isAlive()) {
+            result.put("status", "already_running");
+            result.put("message", "Login already in progress — complete the authorization in your browser.");
+            return ResponseEntity.ok(result);
+        }
+
         try {
-            // Launch gws auth login in a separate process — it opens the browser
             ProcessBuilder pb = new ProcessBuilder("gws", "auth", "login", "-s", "gmail,calendar,drive");
             pb.environment().putAll(buildGwsEnv());
-            pb.inheritIO(); // Let it open the browser directly
-            Process process = pb.start();
+            pb.inheritIO();
+            loginProcess = pb.start();
 
-            // Don't wait for completion — the user interacts with the browser
-            // The frontend will poll /status to detect when auth completes
             result.put("status", "launched");
             result.put("message", "Browser opened for Google sign-in. Complete the authorization, then check status.");
         } catch (Exception e) {
