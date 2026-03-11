@@ -34,6 +34,23 @@ if [ -d "$BUNDLED_SKILLS_DIR" ]; then
     done
 fi
 
+# ── Check Google Workspace CLI auth ──────────────────────────────────
+if command -v gws &>/dev/null; then
+    gws_auth=$(gws auth status 2>/dev/null | grep -o '"auth_method": "[^"]*"' | cut -d'"' -f4)
+    if [ "$gws_auth" = "none" ] || [ -z "$gws_auth" ]; then
+        echo "  ⚠  Google Workspace CLI (gws) installed but not authenticated."
+        echo "     Gmail/Calendar/Drive skills will be unavailable."
+        echo "     Run: source .env && gws auth login -s gmail,calendar,drive"
+        echo "     See: docs/gws-setup.md"
+        echo ""
+    fi
+else
+    echo "  ⚠  Google Workspace CLI (gws) not found — Google skills unavailable."
+    echo "     Install: brew install googleworkspace-cli"
+    echo "     See: docs/gws-setup.md"
+    echo ""
+fi
+
 # ── Helpers ──────────────────────────────────────────────────────────
 kill_on_port() {
     local port=$1

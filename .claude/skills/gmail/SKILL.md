@@ -8,41 +8,40 @@ description: >
 
 # Gmail Skill
 
-Manage Gmail using the `gws` CLI tool. All commands use `--format json` for parseable output.
+Manage Gmail using the `gws` CLI tool (Google Workspace CLI). All commands use `--format json` for parseable output.
 
 **SAFETY: The agent NEVER sends emails directly — only creates drafts. Always confirm draft content with the user before creating.**
 
 ## Prerequisites
 
-The `gws` CLI must be installed and authenticated. Test with:
+The `gws` CLI must be installed and authenticated with Gmail scopes. Test with:
 
 ```bash
-gws gmail threads list --query "is:unread" --max-results 1 --format json
+gws gmail users threads list --params '{"userId": "me", "maxResults": 1}' --format json
 ```
 
-If this fails with an auth error, tell the user: "Google Workspace CLI (`gws`) is not configured. Run `gws auth login` to authenticate."
+If this fails with an auth error, tell the user: "Google Workspace CLI (`gws`) is not authenticated for Gmail. Run `source .env && gws auth login -s gmail` — see docs/gws-setup.md."
 
 ## Commands
 
 ### List Unread Emails
 
 ```bash
-gws gmail threads list --query "is:unread" --format json
+gws gmail users threads list --params '{"userId": "me", "q": "is:unread", "maxResults": 10}' --format json
 ```
 
 - Returns unread threads from the inbox.
-- To limit results: add `--max-results <N>` (default: 10 most recent).
-- For unread from a specific sender: `--query "is:unread from:<email>"`.
+- For unread from a specific sender: `"q": "is:unread from:alice@example.com"`
 
 **Use for:** "Any important unread emails?", "Check my inbox", "Do I have new messages?"
 
 ### Search Messages
 
 ```bash
-gws gmail threads list --query "<SEARCH_QUERY>" --format json
+gws gmail users threads list --params '{"userId": "me", "q": "<SEARCH_QUERY>", "maxResults": 10}' --format json
 ```
 
-- Uses Gmail search syntax for the `--query` parameter.
+- Uses Gmail search syntax in the `q` parameter.
 - Common query operators:
   - `from:<sender>` — messages from a specific person
   - `to:<recipient>` — messages sent to someone
@@ -53,28 +52,24 @@ gws gmail threads list --query "<SEARCH_QUERY>" --format json
   - `is:starred` / `is:important` — flagged messages
 - Combine operators: `from:alice subject:project after:2026/01/01`
 
-**Use for:** "Find emails from Alice about the project", "Show me messages from last week with attachments", "Search for emails about the budget"
+**Use for:** "Find emails from Alice about the project", "Show me messages from last week with attachments"
 
 ### Read Thread
 
-Retrieve the full conversation thread:
-
 ```bash
-gws gmail threads get --thread-id <THREAD_ID> --format json
+gws gmail users threads get --params '{"userId": "me", "id": "<THREAD_ID>"}' --format json
 ```
 
 - Use a thread ID obtained from a list or search command.
 - Returns all messages in the conversation thread.
 - Summarize the thread: participants, topic, key points, and any action items.
 
-**Use for:** "Summarize the thread about the Q2 planning", "What was discussed in that email chain?", "Read the conversation with Bob"
+**Use for:** "Summarize the thread about the Q2 planning", "Read the conversation with Bob"
 
 ### Read Message
 
-Retrieve a single message:
-
 ```bash
-gws gmail messages get --message-id <MESSAGE_ID> --format json
+gws gmail users messages get --params '{"userId": "me", "id": "<MESSAGE_ID>"}' --format json
 ```
 
 - Use a message ID obtained from a list or search command.
@@ -85,27 +80,27 @@ gws gmail messages get --message-id <MESSAGE_ID> --format json
 ### Create Draft
 
 ```bash
-gws gmail drafts create --to "<RECIPIENT_EMAIL>" --subject "<SUBJECT>" --body "<BODY>" --format json
+gws gmail users drafts create --params '{"userId": "me"}' --json '{"message": {"raw": "<BASE64_RFC2822>"}}' --format json
+```
+
+To construct the `raw` field, build an RFC 2822 message and base64url-encode it:
+
+```bash
+echo -e "To: recipient@example.com\nSubject: Re: Topic\nContent-Type: text/plain; charset=utf-8\n\nBody text here" | base64 | tr '+/' '-_' | tr -d '='
 ```
 
 - **NEVER send emails directly — always create drafts.**
 - Before creating the draft, use AskUserQuestion to confirm the content:
   - Show the recipient, subject, and body to the user.
   - Only proceed after explicit confirmation.
-- For replies, include the original subject (prepend "Re: " if not already present).
-- For CC recipients, add `--cc "<EMAIL>"` if supported.
-- Compose the body in a professional tone unless the user specifies otherwise.
 
-**Use for:** "Draft a reply to the last email from Alice", "Write an email to Bob about the meeting", "Compose a follow-up to that thread"
+**Use for:** "Draft a reply to the last email from Alice", "Write an email to Bob about the meeting"
 
 ### List Labels
 
 ```bash
-gws gmail labels list --format json
+gws gmail users labels list --params '{"userId": "me"}' --format json
 ```
-
-- Returns all Gmail labels (both system and user-created).
-- Useful for filtering and organizing searches.
 
 **Use for:** "What labels do I have?", "Show my Gmail categories"
 
@@ -113,7 +108,7 @@ gws gmail labels list --format json
 
 ### Thread List Response
 
-The JSON output from thread list contains a `threads` array. Each thread has:
+The JSON output contains a `threads` array. Each thread has:
 - `id` — thread ID (needed for reading the full thread)
 - `snippet` — preview text of the latest message
 - `historyId` — for change tracking
@@ -125,53 +120,34 @@ A thread detail contains a `messages` array. Each message has:
 - `threadId` — parent thread ID
 - `labelIds` — applied labels (INBOX, UNREAD, SENT, etc.)
 - `snippet` — preview text
-- `payload.headers` — array of header objects with `name` and `value`:
-  - `From`, `To`, `Cc`, `Subject`, `Date`
-- `payload.body` or `payload.parts` — message body content
+- `payload.headers` — array of header objects with `name` and `value`: `From`, `To`, `Cc`, `Subject`, `Date`
+- `payload.body` or `payload.parts` — message body content (may be base64-encoded)
 - `internalDate` — timestamp in milliseconds
 
-### Draft Response
+### Decoding Message Body
 
-A created draft returns:
-- `id` — draft ID
-- `message.id` — message ID of the draft
-- `message.threadId` — thread ID if it's a reply
+Message bodies in `payload.body.data` or `payload.parts[].body.data` are base64url-encoded. Decode with:
+
+```bash
+echo "<base64url_data>" | tr '_-' '/+' | base64 -d
+```
 
 ## Response Formatting
 
 Format responses as clean Telegram-friendly messages (Markdown):
 
-- **Unread list:** `• **From:** <sender> — <subject>` followed by a one-line snippet. One per thread, sorted by most recent first.
-- **Thread summary:** Start with participants and date range, then bullet-point the key messages and any action items. Highlight action items with bold.
+- **Unread list:** `• **From:** <sender> — <subject>` followed by a one-line snippet.
+- **Thread summary:** Participants, date range, key messages, and action items.
 - **Search results:** `• **<subject>** from <sender> (<date>)` — one per thread with snippet.
 - **Draft created:** "Draft created: **<subject>** to <recipient>. Open Gmail to review and send."
-- **Empty results:** "No emails found matching that search." or "Your inbox is all caught up — no unread messages."
-- **Labels list:** Bullet list of label names, grouped by system vs. user labels.
+- **Empty results:** "No emails found matching that search." or "Inbox is clear — no unread messages."
 
 ## Error Handling
 
 | Error | Response |
 |-------|----------|
-| `gws: command not found` | "The `gws` CLI is not installed. Install it with `brew install gws` or see the gws documentation." |
-| Authentication failure / token expired | "Google auth has expired. Run `gws auth login` to re-authenticate." |
+| `gws: command not found` | "The `gws` CLI is not installed. Run `brew install googleworkspace-cli` — see docs/gws-setup.md." |
+| `403 insufficient scopes` | "Gmail access not authorized. Run `source .env && gws auth login -s gmail`." |
+| `401 authentication` | "Google auth has expired. Run `gws auth login -s gmail` to re-authenticate." |
 | No results found | "No emails found matching that search." |
 | Rate limit exceeded | "Gmail rate limit reached. Wait a moment and try again." |
-| Invalid thread/message ID | "That thread or message could not be found. It may have been deleted." |
-| Network error | "Couldn't reach Gmail. Check your internet connection." |
-
-## Example Interactions
-
-**"Any important unread emails?"**
-→ List unread threads. Summarize each with sender, subject, and snippet. Highlight any that appear urgent or action-required.
-
-**"Find emails from Alice about the project"**
-→ Search with `--query "from:alice subject:project"`. Show matching threads with dates and snippets.
-
-**"Draft a reply to the last email from Alice"**
-→ Search for recent emails from Alice. Read the most recent thread. Compose a contextually appropriate reply. Show the draft to the user for confirmation via AskUserQuestion. Only create the draft after approval.
-
-**"Summarize the thread about the Q2 planning"**
-→ Search for threads matching "Q2 planning". Read the full thread. Provide a summary with participants, key decisions, and action items.
-
-**"What labels do I have?"**
-→ List all labels. Group into system labels (Inbox, Sent, Drafts, etc.) and user-created labels.

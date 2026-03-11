@@ -1,19 +1,16 @@
 # Google Workspace CLI (`gws`) Setup Guide
 
-Herald uses the Google Workspace CLI (`gws`) to interact with Gmail and Google Calendar.
-This is an **optional** dependency — Herald runs without it, but Google-related skills will be unavailable.
-
-> **Note:** `gws` is pre-v1.0. Pin the exact version to avoid breaking changes.
+Herald uses the [Google Workspace CLI](https://github.com/nicholasgasior/gws) (`gws`) to interact with Gmail, Google Calendar, and Google Drive via skills. This is **optional** — Herald runs without it, but Google-related skills will be unavailable.
 
 ---
 
 ## 1. Install gws
 
 ```bash
-npm install -g @googleworkspace/cli@0.5.0
+brew install googleworkspace-cli
 ```
 
-Verify the installation:
+Verify:
 
 ```bash
 gws --version
@@ -23,65 +20,109 @@ gws --version
 
 ## 2. Create OAuth 2.0 Credentials
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (or select an existing one).
-3. Navigate to **APIs & Services → Library** and enable:
-   - **Gmail API**
-   - **Google Calendar API**
-   - **Google Drive API**
-4. Navigate to **APIs & Services → Credentials**.
-5. Click **Create Credentials → OAuth client ID**.
-6. Select **Desktop app** as the application type.
-7. Download the credentials JSON file.
-8. Place the file where `gws` expects it (typically `~/.gws/credentials.json`), or pass it during login.
+You need a Google Cloud project with OAuth credentials. Herald's project is called **Herald**.
+
+1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Select the **Herald** project (or create one)
+3. Ensure these APIs are enabled under **APIs & Services → Library**:
+   - Gmail API
+   - Google Calendar API
+   - Google Drive API
+4. Click **Create Credentials → OAuth client ID**
+5. Application type: **Desktop app**
+6. Name it (e.g., "Herald CLI")
+7. Copy the **Client ID** and **Client Secret**
 
 ---
 
-## 3. Authenticate
+## 3. Configure Credentials
 
-Run the OAuth flow:
+Add the OAuth client credentials to your `.env` file:
 
 ```bash
-gws auth login
+GOOGLE_WORKSPACE_CLI_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_WORKSPACE_CLI_CLIENT_SECRET=your-client-secret
 ```
 
-Follow the browser prompts to grant access. Once complete, `gws` stores tokens locally for future use.
+The `gws` CLI reads these environment variables automatically — no need to download a `client_secret.json` file.
 
----
-
-## 4. Verify
-
-Confirm everything works by running these commands:
+Alternatively, you can place a `client_secret.json` at `~/.config/gws/client_secret.json`:
 
 ```bash
-# List Gmail threads
-gws gmail threads list --format json
-
-# List Calendar events
-gws calendar events list --format json
+# Download from Google Cloud Console → Credentials → your OAuth client → Download JSON
+cp ~/Downloads/client_secret_*.json ~/.config/gws/client_secret.json
 ```
 
-Both should return JSON output without errors.
-
 ---
 
-## 5. Herald Integration
+## 4. Authenticate (One-Time)
 
-Once `gws` is installed and authenticated, restart Herald. On startup, Herald checks for `gws` in your PATH:
-
-- **Found:** Logs `Google Workspace CLI (gws) detected: <version>` and enables Google skills.
-- **Not found:** Logs a warning with a pointer to this setup guide. Google skills return an error message until `gws` is configured.
-
-No additional Herald configuration is needed — the `GwsTools` component discovers `gws` automatically.
-
----
-
-## Version Pinning
-
-Because `gws` is pre-v1.0, always pin the version you install:
+Source your `.env` first, then run the OAuth login flow:
 
 ```bash
-npm install -g @googleworkspace/cli@0.5.0
+source .env
+gws auth login -s gmail,calendar,drive
 ```
 
-If you upgrade, test the verification commands above before restarting Herald.
+This opens a browser for Google account authorization. Grant access to Gmail, Calendar, and Drive. The refresh token is stored locally at `~/.config/gws/credentials.enc` and persists across sessions.
+
+Check status:
+
+```bash
+gws auth status
+```
+
+You should see `"auth_method": "oauth2"` and `"token_cache_exists": true`.
+
+---
+
+## 5. Verify
+
+```bash
+# Gmail — list recent threads
+gws gmail users threads list --params '{"userId": "me", "maxResults": 3}' --format json
+
+# Calendar — list today's events
+gws calendar events list --params '{"calendarId": "primary", "timeMin": "'$(date -u +%Y-%m-%dT00:00:00Z)'", "maxResults": 5}' --format json
+
+# Drive — list recent files
+gws drive files list --params '{"pageSize": 3}' --format json
+```
+
+All should return JSON without auth errors.
+
+---
+
+## 6. Herald Integration
+
+Once `gws` is authenticated, restart Herald (`./run.sh restart bot`). On startup:
+
+- **Configured:** Logs `Google Workspace CLI (gws) detected: <version>` and enables Gmail/Calendar/Drive skills
+- **Not configured:** Logs a warning; Google skills return a setup error message
+
+Herald checks `gws auth status` on startup and warns in the logs if auth is missing.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `gws: command not found` | `brew install googleworkspace-cli` |
+| `No OAuth client configured` | Add `GOOGLE_WORKSPACE_CLI_CLIENT_ID` and `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` to `.env`, then `source .env` |
+| `Token expired / 401` | Re-run `gws auth login -s gmail,calendar,drive` |
+| `restricted_client` error | Your OAuth consent screen is in "Testing" mode — add your Google account as a test user in Cloud Console → OAuth consent screen |
+| Wrong account | `gws auth logout` then `gws auth login` again |
+
+---
+
+## Scopes
+
+The `-s gmail,calendar,drive` flag requests scopes for all three services. If you only want a subset:
+
+```bash
+gws auth login -s gmail,calendar   # Gmail + Calendar only
+gws auth login -s gmail            # Gmail only
+```
+
+Herald's skills will gracefully error if the required scope isn't authorized.

@@ -41,14 +41,20 @@ public class GwsTools {
         this.processRunner = processRunner;
     }
 
-    @Tool(description = "List Gmail threads. Returns JSON array of recent email threads with subject, sender, and snippet. Output is always JSON (--format json).")
+    @Tool(description = "List Gmail threads. Returns JSON array of recent email threads with subject, sender, and snippet. Output is always JSON.")
     public String gmail_threads_list() {
-        return runGwsCommand(List.of("gws", "gmail", "threads", "list", "--format", "json"));
+        return runGwsCommand(List.of("gws", "gmail", "users", "threads", "list",
+                "--params", "{\"userId\": \"me\", \"maxResults\": 10}", "--format", "json"));
     }
 
-    @Tool(description = "List Google Calendar events. Returns JSON array of upcoming calendar events with title, time, and attendees. Output is always JSON (--format json).")
+    @Tool(description = "List Google Calendar events for today. Returns JSON array of today's calendar events with title, time, and attendees. Output is always JSON.")
     public String calendar_events_list() {
-        return runGwsCommand(List.of("gws", "calendar", "events", "list", "--format", "json"));
+        String today = java.time.LocalDate.now().toString();
+        String params = String.format(
+                "{\"calendarId\": \"primary\", \"timeMin\": \"%sT00:00:00Z\", \"timeMax\": \"%sT23:59:59Z\", \"singleEvents\": true, \"orderBy\": \"startTime\"}",
+                today, today);
+        return runGwsCommand(List.of("gws", "calendar", "events", "list",
+                "--params", params, "--format", "json"));
     }
 
     private String runGwsCommand(List<String> command) {
