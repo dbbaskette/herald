@@ -13,8 +13,13 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.core.Ordered;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Advisor that monitors conversation history token usage and compacts old messages
@@ -134,9 +139,8 @@ class ContextCompactionAdvisor implements CallAdvisor {
         List<Message> toSummarize = history.subList(0, splitIndex);
         String summary = buildSummary(toSummarize);
 
-        // Store as memory entry so context is never silently lost
-        String key = "context_summary_" + System.currentTimeMillis();
-        memoryTools.memory_set(key, summary);
+        // Archive compacted context to Obsidian so it's never silently lost
+        archiveToObsidian(summary);
 
         // Replace history with remaining messages
         List<Message> remaining = new ArrayList<>(history.subList(splitIndex, history.size()));
@@ -168,6 +172,55 @@ class ContextCompactionAdvisor implements CallAdvisor {
             }
         }
         return sb.toString().stripTrailing();
+    }
+
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/obsidian";
+    private static final String OBSIDIAN_VAULT = "Herald-Memory";
+
+    /**
+     * Archive a compaction summary to the Obsidian vault as a Chat-Sessions note.
+     * Falls back to hot memory if Obsidian is unavailable.
+     */
+    private void archiveToObsidian(String summary) {
+        String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String path = "Chat-Sessions/" + date + "-context-compaction-" + System.currentTimeMillis() + ".md";
+        String content = "---\\ntags: [context-compaction]\\ndate: " + date
+                + "\\n---\\n\\n# Context Compaction\\n\\n" + sanitizeForCli(summary);
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    OBSIDIAN_CLI, "create",
+                    "vault=" + OBSIDIAN_VAULT,
+                    "path=" + path,
+                    "content=" + content,
+                    "overwrite");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new RuntimeException("Obsidian CLI timed out");
+            }
+            if (process.exitValue() != 0) {
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String error = r.lines().reduce("", (a, b) -> a + " " + b).trim();
+                    throw new RuntimeException("Obsidian CLI error: " + error);
+                }
+            }
+            log.info("Archived compaction summary to Obsidian: {}", path);
+        } catch (Exception e) {
+            log.warn("Failed to archive to Obsidian ({}), falling back to hot memory: {}", e.getMessage(), path);
+            String key = "context_summary_" + System.currentTimeMillis();
+            memoryTools.memory_set(key, summary);
+        }
+    }
+
+    /**
+     * Escape characters that would break the CLI content= parameter.
+     */
+    private static String sanitizeForCli(String input) {
+        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
 
     private String resolveConversationId(ChatClientRequest request) {

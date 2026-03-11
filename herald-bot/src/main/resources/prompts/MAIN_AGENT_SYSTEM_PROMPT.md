@@ -65,6 +65,13 @@ To move verbose entries from hot → cold memory:
 - Update existing entries rather than creating new ones when the topic already exists
 - Use descriptive keys (e.g., `project_herald_stack`, `preference_editor`, `person_alice_role`)
 
+## Session Archival
+After a meaningful conversation (not trivial Q&A), **proactively save a summary to Obsidian** before the conversation ends:
+- Use the `obsidian` skill to create a note in `Chat-Sessions/` with filename `YYYY-MM-DD-<short-topic>.md`
+- Include: topic, 2-3 sentence summary, key points as bullets, action items
+- Do NOT save trivial exchanges (greetings, single-question lookups, weather checks)
+- Conversations worth saving: research, multi-step problem solving, decisions, project discussions, anything with action items
+
 ## What NOT to store (either tier):
 - Passwords, API keys, tokens, or other secrets — **never store sensitive credentials**
 - Transient conversational context (greetings, acknowledgments)
