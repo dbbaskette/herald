@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.Ordered;
@@ -18,15 +19,19 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Advisor that sanitizes conversation history to remove orphaned tool message pairs.
+ * Advisor that sanitizes conversation history before it reaches the Anthropic API.
  *
- * <p>When {@code MessageWindowChatMemory} trims old messages, it can split a
- * tool_use/tool_result pair — leaving a {@link ToolResponseMessage} without its
- * matching {@link AssistantMessage} tool call. The Anthropic API strictly requires
- * these to be paired, returning HTTP 400 if they are not.</p>
+ * <p>Handles two classes of problems:</p>
+ * <ol>
+ *   <li><b>Empty content messages</b> — JDBC chat memory stores TOOL and tool-only
+ *       ASSISTANT messages with empty content strings. The Anthropic API rejects these
+ *       with "user messages must have non-empty content".</li>
+ *   <li><b>Orphaned tool pairs</b> — When {@code MessageWindowChatMemory} trims old
+ *       messages, it can split a tool_use/tool_result pair, leaving orphaned references
+ *       that the API rejects with "unexpected tool_use_id".</li>
+ * </ol>
  *
- * <p>This advisor runs after {@code MessageChatMemoryAdvisor} loads history into the
- * prompt and strips any orphaned tool messages before the request reaches the model.</p>
+ * <p>Runs after {@code MessageChatMemoryAdvisor} loads history into the prompt.</p>
  */
 class ToolPairSanitizingAdvisor implements CallAdvisor {
 
@@ -48,16 +53,26 @@ class ToolPairSanitizingAdvisor implements CallAdvisor {
         return chain.nextCall(request);
     }
 
-    /**
-     * Remove orphaned tool messages from the history. A ToolResponseMessage is orphaned
-     * if its tool call IDs don't have matching AssistantMessage tool calls earlier in
-     * the history. An AssistantMessage with only tool calls (no text) is orphaned if
-     * none of its tool call IDs appear in any subsequent ToolResponseMessage.
-     */
     static List<Message> sanitizeToolPairs(List<Message> messages) {
-        // First pass: collect all tool_use IDs from AssistantMessages
-        Set<String> toolUseIds = new HashSet<>();
+        // Step 1: Drop messages with empty/null content (JDBC serialization artifacts)
+        // TOOL and tool-only ASSISTANT messages are stored with empty content strings
+        // by Spring AI's JDBC repository, and the Anthropic API rejects them.
+        List<Message> nonEmpty = new ArrayList<>(messages.size());
         for (Message msg : messages) {
+            if (msg instanceof ToolResponseMessage) {
+                // ToolResponseMessages stored via JDBC lose their response data —
+                // they come back with empty content. Drop them entirely.
+                if (hasContent(msg)) {
+                    nonEmpty.add(msg);
+                }
+            } else if (hasContent(msg) || hasToolCalls(msg)) {
+                nonEmpty.add(msg);
+            }
+        }
+
+        // Step 2: Collect tool_use IDs from AssistantMessages
+        Set<String> toolUseIds = new HashSet<>();
+        for (Message msg : nonEmpty) {
             if (msg instanceof AssistantMessage assistant && assistant.getToolCalls() != null) {
                 for (AssistantMessage.ToolCall tc : assistant.getToolCalls()) {
                     toolUseIds.add(tc.id());
@@ -65,9 +80,9 @@ class ToolPairSanitizingAdvisor implements CallAdvisor {
             }
         }
 
-        // Second pass: collect all tool_result IDs from ToolResponseMessages
+        // Step 3: Collect tool_result IDs from ToolResponseMessages
         Set<String> toolResultIds = new HashSet<>();
-        for (Message msg : messages) {
+        for (Message msg : nonEmpty) {
             if (msg instanceof ToolResponseMessage toolResponse) {
                 for (ToolResponseMessage.ToolResponse resp : toolResponse.getResponses()) {
                     toolResultIds.add(resp.id());
@@ -75,11 +90,10 @@ class ToolPairSanitizingAdvisor implements CallAdvisor {
             }
         }
 
-        // Third pass: filter out orphaned messages
-        List<Message> result = new ArrayList<>(messages.size());
-        for (Message msg : messages) {
+        // Step 4: Filter orphaned tool pairs
+        List<Message> result = new ArrayList<>(nonEmpty.size());
+        for (Message msg : nonEmpty) {
             if (msg instanceof ToolResponseMessage toolResponse) {
-                // Keep only if ALL its tool responses have matching tool_use IDs
                 boolean allMatched = toolResponse.getResponses().stream()
                         .allMatch(resp -> toolUseIds.contains(resp.id()));
                 if (allMatched) {
@@ -88,7 +102,7 @@ class ToolPairSanitizingAdvisor implements CallAdvisor {
             } else if (msg instanceof AssistantMessage assistant
                     && assistant.getToolCalls() != null
                     && !assistant.getToolCalls().isEmpty()
-                    && (assistant.getText() == null || assistant.getText().isBlank())) {
+                    && !hasContent(msg)) {
                 // Tool-only assistant message: keep only if its tool calls have matching results
                 boolean anyMatched = assistant.getToolCalls().stream()
                         .anyMatch(tc -> toolResultIds.contains(tc.id()));
@@ -101,6 +115,17 @@ class ToolPairSanitizingAdvisor implements CallAdvisor {
         }
 
         return result;
+    }
+
+    private static boolean hasContent(Message msg) {
+        String text = msg.getText();
+        return text != null && !text.isBlank();
+    }
+
+    private static boolean hasToolCalls(Message msg) {
+        return msg instanceof AssistantMessage assistant
+                && assistant.getToolCalls() != null
+                && !assistant.getToolCalls().isEmpty();
     }
 
     @Override
