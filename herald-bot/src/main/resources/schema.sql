@@ -85,3 +85,15 @@ CREATE TABLE IF NOT EXISTS model_overrides (
     model      TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO settings (key, value) VALUES ('obsidian.vault-path', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('weather.location', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('agent.persona', 'Herald');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('cron.timezone', 'America/New_York');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('agent.max-context-tokens', '200000');
