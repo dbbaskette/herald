@@ -99,10 +99,13 @@ class GwsAuthController {
             pb.redirectErrorStream(true);
             loginProcess = pb.start();
 
-            // Read stdout to capture the auth URL — gws prints it instead of opening a browser
+            // Read stdout to capture the auth URL — gws prints it instead of opening a browser.
+            // IMPORTANT: Do NOT close the reader/stream — gws needs it open to receive
+            // the OAuth callback and write credentials. The process cleans up on exit.
             String authUrl = null;
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(loginProcess.getInputStream(), StandardCharsets.UTF_8))) {
+            try {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(loginProcess.getInputStream(), StandardCharsets.UTF_8));
                 long deadline = System.currentTimeMillis() + 5000;
                 while (System.currentTimeMillis() < deadline) {
                     if (reader.ready()) {
