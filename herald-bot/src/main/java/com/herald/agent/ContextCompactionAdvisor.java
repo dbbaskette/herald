@@ -43,19 +43,32 @@ class ContextCompactionAdvisor implements CallAdvisor {
         this.maxContextTokens = maxContextTokens;
     }
 
+    // Shared with OneShotMemoryAdvisor — only run memory-related logic on the first
+    // invocation, not on ToolCallAdvisor re-entries.
+    private static final ThreadLocal<Boolean> COMPACTION_DONE = ThreadLocal.withInitial(() -> false);
+
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        String conversationId = resolveConversationId(request);
-        List<Message> history = chatMemory.get(conversationId);
-
-        int estimatedTokens = estimateTokens(history);
-        int ceiling = (int) (maxContextTokens * CEILING_RATIO);
-
-        if (estimatedTokens > ceiling) {
-            compactHistory(conversationId, history, ceiling);
+        if (COMPACTION_DONE.get()) {
+            return chain.nextCall(request);
         }
+        COMPACTION_DONE.set(true);
 
-        return chain.nextCall(request);
+        try {
+            String conversationId = resolveConversationId(request);
+            List<Message> history = chatMemory.get(conversationId);
+
+            int estimatedTokens = estimateTokens(history);
+            int ceiling = (int) (maxContextTokens * CEILING_RATIO);
+
+            if (estimatedTokens > ceiling) {
+                compactHistory(conversationId, history, ceiling);
+            }
+
+            return chain.nextCall(request);
+        } finally {
+            COMPACTION_DONE.remove();
+        }
     }
 
     @Override

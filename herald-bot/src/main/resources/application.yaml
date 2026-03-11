@@ -55,6 +55,7 @@ herald:
     system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
     context-file: ${HERALD_AGENT_CONTEXT_FILE:~/.herald/CONTEXT.md}
     max-context-tokens: ${HERALD_AGENT_MAX_CONTEXT_TOKENS:200000}
+    skills-directory: ${HERALD_SKILLS_DIRECTORY:~/.herald/skills}
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
   web:

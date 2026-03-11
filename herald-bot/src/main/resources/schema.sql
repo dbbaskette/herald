@@ -71,13 +71,16 @@ CREATE TABLE IF NOT EXISTS model_usage (
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Spring AI JDBC chat memory (must match spring-ai's expected schema)
+-- Chat memory — stores messages as JSON blobs via JsonChatMemoryRepository
 CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
     conversation_id TEXT NOT NULL,
     content         TEXT NOT NULL,
     type            TEXT NOT NULL,
     timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_chat_memory_conversation_id
+    ON SPRING_AI_CHAT_MEMORY (conversation_id, timestamp);
 
 CREATE TABLE IF NOT EXISTS model_overrides (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

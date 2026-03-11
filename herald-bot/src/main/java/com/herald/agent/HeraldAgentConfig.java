@@ -18,11 +18,12 @@ import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
 import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+// MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
+// re-loading/re-saving memory on each ToolCallAdvisor iteration
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -76,7 +77,7 @@ public class HeraldAgentConfig {
     }
 
     @Bean
-    public ChatMemory chatMemory(JdbcChatMemoryRepository repository) {
+    public ChatMemory chatMemory(ChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(MAX_CONVERSATION_MESSAGES)
@@ -171,11 +172,8 @@ public class HeraldAgentConfig {
                                 contextMdAdvisor,
                                 new MemoryBlockAdvisor(memoryTools),
                                 compactionAdvisor,
-                                MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                                new ToolPairSanitizingAdvisor(),
-                                ToolCallAdvisor.builder()
-                                        .conversationHistoryEnabled(false)
-                                        .build()
+                                new OneShotMemoryAdvisor(chatMemory),
+                                ToolCallAdvisor.builder().build()
                         );
 
         // Build the initial client from the default Anthropic ChatModel

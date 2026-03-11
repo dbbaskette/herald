@@ -27,6 +27,9 @@ public class ReloadableSkillsTool implements ToolCallback {
     private volatile List<SkillsTool.Skill> currentSkills;
 
     public ReloadableSkillsTool(String skillsDirectory) {
+        if (skillsDirectory.startsWith("~")) {
+            skillsDirectory = System.getProperty("user.home") + skillsDirectory.substring(1);
+        }
         this.skillsDirectory = skillsDirectory;
         reload();
     }

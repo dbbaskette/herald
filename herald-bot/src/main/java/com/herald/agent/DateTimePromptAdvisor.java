@@ -29,19 +29,29 @@ class DateTimePromptAdvisor implements CallAdvisor {
         this.formatter = formatter;
     }
 
+    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        ZonedDateTime now = ZonedDateTime.now(timezone);
-        request = request.mutate()
-                .prompt(request.prompt().augmentSystemMessage(
-                        existing -> {
-                            String text = existing.getText()
-                                    .replace("{current_datetime}", now.format(formatter))
-                                    .replace("{timezone}", timezone.getId());
-                            return new SystemMessage(text);
-                        }))
-                .build();
-        return chain.nextCall(request);
+        if (INJECTED.get()) {
+            return chain.nextCall(request);
+        }
+        INJECTED.set(true);
+        try {
+            ZonedDateTime now = ZonedDateTime.now(timezone);
+            request = request.mutate()
+                    .prompt(request.prompt().augmentSystemMessage(
+                            existing -> {
+                                String text = existing.getText()
+                                        .replace("{current_datetime}", now.format(formatter))
+                                        .replace("{timezone}", timezone.getId());
+                                return new SystemMessage(text);
+                            }))
+                    .build();
+            return chain.nextCall(request);
+        } finally {
+            INJECTED.remove();
+        }
     }
 
     @Override

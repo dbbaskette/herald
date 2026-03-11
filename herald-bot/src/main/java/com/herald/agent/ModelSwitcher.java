@@ -107,6 +107,18 @@ public class ModelSwitcher {
         return availableModels.keySet();
     }
 
+    /**
+     * Replace the ChatModel for a provider (e.g. after an OAuth token refresh).
+     * If this provider is currently active, the ChatClient is rebuilt automatically.
+     */
+    public void updateProviderModel(String provider, ChatModel newModel) {
+        availableModels.put(provider, newModel);
+        if (provider.equals(activeProvider)) {
+            log.info("Refreshing active ChatClient for provider '{}'", provider);
+            switchModel(provider, activeModel);
+        }
+    }
+
     private void persistOverride(String provider, String model) {
         try {
             jdbcTemplate.update("DELETE FROM model_overrides");

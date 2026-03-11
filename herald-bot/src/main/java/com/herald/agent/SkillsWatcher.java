@@ -45,6 +45,9 @@ public class SkillsWatcher {
     public SkillsWatcher(ReloadableSkillsTool reloadableSkillsTool,
                          @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
         this.reloadableSkillsTool = reloadableSkillsTool;
+        if (skillsDirectory.startsWith("~")) {
+            skillsDirectory = System.getProperty("user.home") + skillsDirectory.substring(1);
+        }
         this.skillsDirectory = skillsDirectory;
     }
 

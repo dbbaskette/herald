@@ -21,17 +21,27 @@ class MemoryBlockAdvisor implements CallAdvisor {
         this.memoryTools = memoryTools;
     }
 
+    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        String memoryBlock = memoryTools.formatForSystemPrompt();
-        if (!memoryBlock.isEmpty()) {
-            String delimited = "\n\n<memory>\n" + memoryBlock + "</memory>";
-            request = request.mutate()
-                    .prompt(request.prompt().augmentSystemMessage(
-                            existing -> new SystemMessage(existing.getText() + delimited)))
-                    .build();
+        if (INJECTED.get()) {
+            return chain.nextCall(request);
         }
-        return chain.nextCall(request);
+        INJECTED.set(true);
+        try {
+            String memoryBlock = memoryTools.formatForSystemPrompt();
+            if (!memoryBlock.isEmpty()) {
+                String delimited = "\n\n<memory>\n" + memoryBlock + "</memory>";
+                request = request.mutate()
+                        .prompt(request.prompt().augmentSystemMessage(
+                                existing -> new SystemMessage(existing.getText() + delimited)))
+                        .build();
+            }
+            return chain.nextCall(request);
+        } finally {
+            INJECTED.remove();
+        }
     }
 
     @Override

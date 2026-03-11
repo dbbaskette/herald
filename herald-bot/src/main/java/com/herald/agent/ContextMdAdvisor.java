@@ -32,17 +32,27 @@ class ContextMdAdvisor implements CallAdvisor {
         this.contextFilePath = contextFilePath;
     }
 
+    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        String content = readContextFile();
-        if (!content.isEmpty()) {
-            String delimited = "\n\n<context>\n" + content + "\n</context>";
-            request = request.mutate()
-                    .prompt(request.prompt().augmentSystemMessage(
-                            existing -> new SystemMessage(existing.getText() + delimited)))
-                    .build();
+        if (INJECTED.get()) {
+            return chain.nextCall(request);
         }
-        return chain.nextCall(request);
+        INJECTED.set(true);
+        try {
+            String content = readContextFile();
+            if (!content.isEmpty()) {
+                String delimited = "\n\n<context>\n" + content + "\n</context>";
+                request = request.mutate()
+                        .prompt(request.prompt().augmentSystemMessage(
+                                existing -> new SystemMessage(existing.getText() + delimited)))
+                        .build();
+            }
+            return chain.nextCall(request);
+        } finally {
+            INJECTED.remove();
+        }
     }
 
     @Override

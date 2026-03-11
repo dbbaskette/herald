@@ -12,7 +12,7 @@ import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -56,11 +56,9 @@ public class DataSourceConfig {
     }
 
     @Bean
-    public JdbcChatMemoryRepository chatMemoryRepository(JdbcTemplate jdbcTemplate, DataSource dataSource) {
-        return JdbcChatMemoryRepository.builder()
-                .jdbcTemplate(jdbcTemplate)
-                .dataSource(dataSource)
-                .build();
+    @org.springframework.context.annotation.Primary
+    public ChatMemoryRepository chatMemoryRepository(JdbcTemplate jdbcTemplate) {
+        return new JsonChatMemoryRepository(jdbcTemplate);
     }
 
     String resolveDbPath(String path) {
