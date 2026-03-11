@@ -84,17 +84,21 @@ class GwsAuthController {
             return ResponseEntity.ok(result);
         }
 
-        // Prevent multiple concurrent login processes
-        if (loginProcess != null && loginProcess.isAlive()) {
-            result.put("status", "already_running");
-            result.put("message", "Login already in progress — complete the authorization in your browser.");
-            return ResponseEntity.ok(result);
+        // Kill stale login process if it's still hanging around
+        if (loginProcess != null) {
+            if (loginProcess.isAlive()) {
+                loginProcess.destroyForcibly();
+                log.info("Killed stale gws auth login process");
+            }
+            loginProcess = null;
         }
 
         try {
             ProcessBuilder pb = new ProcessBuilder("gws", "auth", "login", "-s", "gmail,calendar,drive");
             pb.environment().putAll(buildGwsEnv());
-            pb.inheritIO();
+            pb.redirectErrorStream(true);
+            // Don't use inheritIO — let the process manage its own I/O
+            // gws opens the browser via system call, doesn't need our stdout
             loginProcess = pb.start();
 
             result.put("status", "launched");
