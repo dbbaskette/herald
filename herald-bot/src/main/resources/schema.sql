@@ -100,3 +100,5 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('weather.location', '');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('agent.persona', 'Herald');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('cron.timezone', 'America/New_York');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('agent.max-context-tokens', '200000');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('google.client-id', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('google.client-secret', '');
