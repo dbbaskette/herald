@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useMemoryStore } from '@/stores/memory'
+import { useObsidianStore } from '@/stores/obsidian'
 
 const store = useMemoryStore()
+const obsidian = useObsidianStore()
 
 const newKey = ref('')
 const newValue = ref('')
@@ -12,9 +14,18 @@ const deletingKey = ref<string | null>(null)
 const importInput = ref<HTMLInputElement | null>(null)
 const importStatus = ref<{ imported: number; errors: string[] } | null>(null)
 
+const obsidianQuery = ref('')
+const obsidianFolder = ref('')
+
 onMounted(() => {
   store.fetchEntries()
+  obsidian.fetchFolders()
 })
+
+async function searchObsidian() {
+  if (!obsidianQuery.value.trim()) return
+  await obsidian.search(obsidianQuery.value, obsidianFolder.value || undefined)
+}
 
 function startEdit(key: string, value: string) {
   editingKey.value = key
@@ -250,6 +261,95 @@ function formatTime(ts: string | null): string {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    <!-- Obsidian Knowledge Base -->
+    <div class="mt-10">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Obsidian Knowledge Base</h2>
+
+      <!-- Search bar -->
+      <div class="flex gap-2 mb-4">
+        <input
+          v-model="obsidianQuery"
+          type="text"
+          placeholder="Search Obsidian vault…"
+          class="flex-1 max-w-sm px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          @keydown.enter="searchObsidian()"
+        />
+        <select
+          v-model="obsidianFolder"
+          class="px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option value="">All folders</option>
+          <option v-for="f in obsidian.folders" :key="f" :value="f">{{ f }}</option>
+        </select>
+        <button
+          class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+          :disabled="!obsidianQuery.trim() || obsidian.loading"
+          @click="searchObsidian()"
+        >
+          Search
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div v-if="obsidian.error" class="mb-4 p-3 rounded-md text-sm bg-red-50 text-red-700">
+        {{ obsidian.error }}
+      </div>
+
+      <!-- Loading -->
+      <div v-if="obsidian.loading" class="text-gray-500">Searching…</div>
+
+      <!-- Note viewer -->
+      <div v-else-if="obsidian.selectedNote" class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <span class="text-sm font-medium text-gray-700">{{ obsidian.selectedNote.path }}</span>
+          <button
+            class="text-sm text-blue-600 hover:text-blue-800"
+            @click="obsidian.clearNote()"
+          >
+            Back to results
+          </button>
+        </div>
+        <pre class="px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap font-mono overflow-x-auto max-h-96 overflow-y-auto">{{ obsidian.selectedNote.content }}</pre>
+      </div>
+
+      <!-- Search results -->
+      <div v-else-if="obsidian.results.length > 0" class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-gray-200">
+                <th class="px-4 pb-2 pt-3 font-medium">Note</th>
+                <th class="px-4 pb-2 pt-3 font-medium">Folder</th>
+                <th class="px-4 pb-2 pt-3 font-medium">Matching context</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="result in obsidian.results"
+                :key="result.path"
+                class="border-b border-gray-50 cursor-pointer hover:bg-blue-50"
+                @click="obsidian.readNote(result.path)"
+              >
+                <td class="px-4 py-2 text-blue-600 font-medium">{{ result.name }}</td>
+                <td class="px-4 py-2 text-gray-500">{{ result.folder || '—' }}</td>
+                <td class="px-4 py-2 text-gray-600">
+                  <span v-if="result.snippets.length">{{ result.snippets.slice(0, 3).join(' … ') }}</span>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Empty state (only after a search) -->
+      <div
+        v-else-if="!obsidian.loading && obsidianQuery && obsidian.results.length === 0 && !obsidian.error"
+        class="text-gray-400 text-sm"
+      >
+        No notes found matching "{{ obsidianQuery }}"
       </div>
     </div>
   </div>

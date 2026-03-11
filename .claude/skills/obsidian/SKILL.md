@@ -36,6 +36,8 @@ export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
 
 Herald uses a dedicated vault called **Herald-Memory** with a structured folder layout. All Herald-generated content goes here — never into the user's personal vaults unless explicitly asked.
 
+**IMPORTANT:** Always include `vault="Herald-Memory"` on every CLI command to avoid targeting the wrong vault (the CLI defaults to whichever vault is currently open in the Obsidian app).
+
 ### Folder Structure
 
 ```
@@ -81,15 +83,15 @@ Herald-Memory/
 If the vault exists but the folder structure hasn't been created yet, create the folders on first use:
 
 ```bash
-obsidian create path="Chat-Sessions/.gitkeep" content="" overwrite
-obsidian create path="Daily/.gitkeep" content="" overwrite
-obsidian create path="Research/.gitkeep" content="" overwrite
-obsidian create path="Projects/.gitkeep" content="" overwrite
-obsidian create path="People/.gitkeep" content="" overwrite
-obsidian create path="Reference/.gitkeep" content="" overwrite
-obsidian create path="Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
-obsidian create path="Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
-obsidian create path="Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
+obsidian create vault="Herald-Memory" path="Chat-Sessions/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="Daily/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="Research/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="Projects/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="People/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="Reference/.gitkeep" content="" overwrite
+obsidian create vault="Herald-Memory" path="Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
+obsidian create vault="Herald-Memory" path="Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
+obsidian create vault="Herald-Memory" path="Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
 ```
 
 ## Saving Chat Sessions
