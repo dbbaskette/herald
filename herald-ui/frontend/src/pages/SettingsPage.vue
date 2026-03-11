@@ -8,6 +8,7 @@ const form = ref<Record<string, string>>({})
 const gwsStatus = ref<{ installed: boolean; clientConfigured: boolean; authenticated: boolean; message?: string } | null>(null)
 const gwsLoading = ref(false)
 const gwsActionMessage = ref('')
+const gwsAuthUrl = ref('')
 
 async function fetchGwsStatus() {
   gwsLoading.value = true
@@ -22,11 +23,17 @@ let loginPollTimer: ReturnType<typeof setInterval> | null = null
 
 async function gwsLogin() {
   gwsActionMessage.value = ''
+  gwsAuthUrl.value = ''
   try {
     const res = await fetch('/api/gws/login', { method: 'POST' })
     const data = await res.json()
     gwsActionMessage.value = data.message || ''
-    // Poll for auth completion — only if freshly launched
+    // Open the auth URL in a new tab if provided
+    if (data.authUrl) {
+      gwsAuthUrl.value = data.authUrl
+      window.open(data.authUrl, '_blank')
+    }
+    // Poll for auth completion
     if (data.status === 'launched' || data.status === 'already_running') {
       if (loginPollTimer) clearInterval(loginPollTimer)
       let attempts = 0
@@ -185,6 +192,9 @@ function hasChanges(): boolean {
 
             <!-- Action message -->
             <p v-if="gwsActionMessage" class="mt-2 text-sm text-blue-600">{{ gwsActionMessage }}</p>
+            <p v-if="gwsAuthUrl" class="mt-1 text-xs text-gray-500">
+              If the browser didn't open: <a :href="gwsAuthUrl" target="_blank" class="text-blue-600 underline break-all">{{ gwsAuthUrl }}</a>
+            </p>
 
             <!-- Install hint -->
             <p v-if="!gwsStatus.installed" class="mt-2 text-xs text-gray-500">

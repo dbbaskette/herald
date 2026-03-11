@@ -97,12 +97,36 @@ class GwsAuthController {
             ProcessBuilder pb = new ProcessBuilder("gws", "auth", "login", "-s", "gmail,calendar,drive");
             pb.environment().putAll(buildGwsEnv());
             pb.redirectErrorStream(true);
-            // Don't use inheritIO — let the process manage its own I/O
-            // gws opens the browser via system call, doesn't need our stdout
             loginProcess = pb.start();
 
-            result.put("status", "launched");
-            result.put("message", "Browser opened for Google sign-in. Complete the authorization, then check status.");
+            // Read stdout to capture the auth URL — gws prints it instead of opening a browser
+            String authUrl = null;
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(loginProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                long deadline = System.currentTimeMillis() + 5000;
+                while (System.currentTimeMillis() < deadline) {
+                    if (reader.ready()) {
+                        String line = reader.readLine();
+                        if (line != null && line.trim().startsWith("http")) {
+                            authUrl = line.trim();
+                            break;
+                        }
+                    } else {
+                        Thread.sleep(100);
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            if (authUrl != null) {
+                result.put("status", "launched");
+                result.put("authUrl", authUrl);
+                result.put("message", "Click the link to sign in with Google.");
+            } else {
+                result.put("status", "launched");
+                result.put("message", "Login started — check your browser or terminal for the auth URL.");
+            }
         } catch (Exception e) {
             log.error("Failed to launch gws auth login: {}", e.getMessage(), e);
             result.put("status", "error");
