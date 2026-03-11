@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryTools {
 
+    static final int SOFT_CAP = 15;
+
     private final MemoryRepository repository;
 
     public MemoryTools(MemoryRepository repository) {
@@ -45,6 +47,17 @@ public class MemoryTools {
                 .collect(Collectors.joining("\n"));
     }
 
+    @Tool(description = "Return memory usage statistics: entry count, total size, and whether the soft cap (~15 entries) is exceeded. Use periodically to decide if entries should be migrated to Obsidian.")
+    public String memory_stats() {
+        Map<String, String> entries = repository.listAll();
+        int count = entries.size();
+        int totalSize = entries.entrySet().stream()
+                .mapToInt(e -> e.getKey().length() + e.getValue().length())
+                .sum();
+        String status = count > SOFT_CAP ? "OVER CAP — migrate verbose or stale entries to Obsidian" : "OK";
+        return String.format("Entries: %d / ~%d soft cap | Total size: %d chars | Status: %s", count, SOFT_CAP, totalSize, status);
+    }
+
     @Tool(description = "Delete a specific fact from persistent memory.")
     public String memory_delete(
             @ToolParam(description = "The key to delete") String key) {
@@ -74,6 +87,10 @@ public class MemoryTools {
         }
         StringBuilder sb = new StringBuilder("## Known Facts\n");
         entries.forEach((k, v) -> sb.append("- **").append(sanitize(k)).append("**: ").append(sanitize(v)).append("\n"));
+        if (entries.size() > SOFT_CAP) {
+            sb.append("\n⚠️ WARNING: Hot memory has ").append(entries.size()).append(" entries (soft cap: ~").append(SOFT_CAP)
+              .append("). Migrate verbose or stale entries to Obsidian to keep this block lean.\n");
+        }
         return sb.toString();
     }
 

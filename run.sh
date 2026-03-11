@@ -18,6 +18,22 @@ else
     exit 1
 fi
 
+# ── Bootstrap bundled skills ─────────────────────────────────────────
+HERALD_HOME="${HERALD_HOME:-$HOME/.herald}"
+BUNDLED_SKILLS_DIR="$SCRIPT_DIR/.claude/skills"
+RUNTIME_SKILLS_DIR="$HERALD_HOME/skills"
+if [ -d "$BUNDLED_SKILLS_DIR" ]; then
+    for skill_dir in "$BUNDLED_SKILLS_DIR"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        target_dir="$RUNTIME_SKILLS_DIR/$skill_name"
+        if [ ! -d "$target_dir" ]; then
+            mkdir -p "$target_dir"
+            cp -r "$skill_dir"* "$target_dir"/
+            echo "  Bootstrapped skill: $skill_name"
+        fi
+    done
+fi
+
 # ── Helpers ──────────────────────────────────────────────────────────
 kill_on_port() {
     local port=$1

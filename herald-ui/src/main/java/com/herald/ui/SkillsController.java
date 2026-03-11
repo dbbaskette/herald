@@ -49,11 +49,17 @@ class SkillsController {
     @GetMapping
     List<SkillSummary> list() throws IOException {
         List<SkillSummary> skills = new ArrayList<>();
-        if (bundledSkillsDir != null && Files.isDirectory(bundledSkillsDir)) {
-            collectSkills(bundledSkillsDir, "bundled", true, skills);
-        }
+        // Collect local skills first so we can deduplicate bundled ones
+        java.util.Set<String> localNames = new java.util.HashSet<>();
         if (Files.isDirectory(skillsDir)) {
             collectSkills(skillsDir, "local", false, skills);
+            skills.forEach(s -> localNames.add(s.name()));
+        }
+        if (bundledSkillsDir != null && Files.isDirectory(bundledSkillsDir)) {
+            List<SkillSummary> bundled = new ArrayList<>();
+            collectSkills(bundledSkillsDir, "bundled", true, bundled);
+            // Only include bundled skills that don't have a local copy
+            bundled.stream().filter(s -> !localNames.contains(s.name())).forEach(skills::add);
         }
         skills.sort(Comparator.comparing(SkillSummary::name));
         return skills;
