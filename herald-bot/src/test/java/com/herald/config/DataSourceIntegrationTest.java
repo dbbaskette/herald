@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 
@@ -45,7 +45,7 @@ class DataSourceIntegrationTest {
         initializer.afterPropertiesSet();
 
         // Create JdbcChatMemoryRepository (validates it can be built with the wired beans)
-        JdbcChatMemoryRepository chatMemoryRepository = dsConfig.chatMemoryRepository(jdbcTemplate, dataSource);
+        ChatMemoryRepository chatMemoryRepository = dsConfig.chatMemoryRepository(jdbcTemplate);
 
         assertThat(dataSource).isNotNull();
         assertThat(jdbcTemplate).isNotNull();
@@ -61,7 +61,8 @@ class DataSourceIntegrationTest {
                 tables.add(rs.getString(1));
             }
             assertThat(tables).containsExactlyInAnyOrder(
-                    "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides");
+                    "messages", "memory", "cron_jobs", "commands", "model_usage",
+                    "model_overrides", "settings", "SPRING_AI_CHAT_MEMORY");
         }
     }
 }

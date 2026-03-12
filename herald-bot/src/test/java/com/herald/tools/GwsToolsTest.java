@@ -136,7 +136,7 @@ class GwsToolsTest {
                 (command, env) -> { captured[0] = command; return new GwsTools.ProcessResult(0, "[]", false); });
 
         tools.calendar_events_list();
-        assertThat(captured[0]).startsWith(List.of("gws", "calendar", "events", "list", "--params"));
+        assertThat(captured[0]).startsWith("gws", "calendar", "events", "list", "--params");
     }
 
     @Test
