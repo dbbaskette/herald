@@ -102,11 +102,10 @@ public class StatusSseService {
     }
 
     public Map<String, Object> buildStatus() {
-        Integer messageCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM messages", Integer.class);
-        Integer pendingCommandCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM commands WHERE status = 'pending'", Integer.class);
-        Integer memoryCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM memory", Integer.class);
-        Integer cronCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cron_jobs", Integer.class);
+        Integer messageCount = safeCount("SELECT COUNT(*) FROM messages");
+        Integer pendingCommandCount = safeCount("SELECT COUNT(*) FROM commands WHERE status = 'pending'");
+        Integer memoryCount = safeCount("SELECT COUNT(*) FROM memory");
+        Integer cronCount = safeCount("SELECT COUNT(*) FROM cron_jobs");
 
         boolean botRunning = checkBotHealth();
 
@@ -154,19 +153,28 @@ public class StatusSseService {
     }
 
     private int countSkills() {
-        int count = 0;
+        // Deduplicate across directories — local skills shadow bundled ones with the same name
+        java.util.Set<String> seen = new java.util.HashSet<>();
         for (Path dir : skillsDirs) {
             if (!Files.isDirectory(dir)) continue;
             try (Stream<Path> entries = Files.list(dir)) {
-                count += (int) entries
-                        .filter(Files::isDirectory)
+                entries.filter(Files::isDirectory)
                         .filter(d -> Files.exists(d.resolve("SKILL.md")))
-                        .count();
+                        .forEach(d -> seen.add(d.getFileName().toString()));
             } catch (IOException e) {
                 // skip unreadable dirs
             }
         }
-        return count;
+        return seen.size();
+    }
+
+    private Integer safeCount(String sql) {
+        try {
+            return jdbcTemplate.queryForObject(sql, Integer.class);
+        } catch (Exception e) {
+            // Table may not exist yet on a fresh install
+            return 0;
+        }
     }
 
     private boolean checkBotHealth() {

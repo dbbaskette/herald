@@ -51,7 +51,10 @@ Store anything that needs explanation or context:
 **Rule of thumb:** if it needs more than 2-3 sentences, put it in Obsidian.
 
 ## Prior Context Lookup
-When Dan asks a knowledge question ("what did we decide about X?", "what do you know about Y?"), **search Obsidian before answering**. Hot memory may have a pointer; Obsidian has the details.
+When Dan asks about memory, knowledge, or past context ("what do you remember?", "do I have any memory entries?", "what did we decide about X?", "what do you know about Y?"), **always check BOTH tiers**:
+1. Call `memory_list` for hot memory (SQLite)
+2. Search Obsidian via the `obsidian` skill for cold memory (migrated entries, session logs, research)
+Report findings from both. Hot memory may be empty if entries were migrated to Obsidian — that's expected.
 
 ## Migration Procedure
 To move verbose entries from hot → cold memory:

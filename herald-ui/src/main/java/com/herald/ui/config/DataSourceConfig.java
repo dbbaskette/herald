@@ -32,6 +32,7 @@ class DataSourceConfig {
                 .build();
 
         enableWalMode(dataSource);
+        ensureSchema(dataSource);
         return dataSource;
     }
 
@@ -51,6 +52,60 @@ class DataSourceConfig {
             } catch (IOException e) {
                 throw new IllegalStateException("Failed to create directory: " + parent, e);
             }
+        }
+    }
+
+    /**
+     * Create core tables if they don't exist yet. On a fresh install the bot
+     * (which normally creates the schema) may not have run, so the UI must be
+     * able to start independently.
+     */
+    private void ensureSchema(DataSource dataSource) {
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role        TEXT NOT NULL,
+                    content     TEXT,
+                    tool_calls  TEXT,
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                )""");
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS memory (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key        TEXT UNIQUE NOT NULL,
+                    value      TEXT NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )""");
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS cron_jobs (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name      TEXT UNIQUE NOT NULL,
+                    schedule  TEXT NOT NULL,
+                    prompt    TEXT NOT NULL,
+                    last_run  DATETIME,
+                    enabled   INTEGER DEFAULT 1,
+                    built_in  INTEGER DEFAULT 0
+                )""");
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS commands (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type         TEXT NOT NULL,
+                    payload      TEXT,
+                    status       TEXT DEFAULT 'pending',
+                    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    completed_at DATETIME
+                )""");
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    key        TEXT PRIMARY KEY,
+                    value      TEXT NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )""");
+            log.info("Database schema verified");
+        } catch (SQLException e) {
+            log.warn("Failed to ensure schema: {}", e.getMessage());
         }
     }
 

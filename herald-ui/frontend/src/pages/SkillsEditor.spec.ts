@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, VueWrapper } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import SkillsEditor from './SkillsEditor.vue'
 import { useSkillsStore } from '@/stores/skills'
@@ -106,9 +106,9 @@ describe('SkillsEditor.vue', () => {
 
     // Select a skill
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[0]
+    store.selectedName = sampleSkills[0].name
     store.editorContent = '# My Skill\nContent here'
-    store.lastSavedContent = '# My Skill\nContent here'
+    store.savedContent = '# My Skill\nContent here'
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Save')
@@ -120,9 +120,9 @@ describe('SkillsEditor.vue', () => {
   it('disables save and discard when not dirty', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[0]
+    store.selectedName = sampleSkills[0].name
     store.editorContent = 'content'
-    store.lastSavedContent = 'content'
+    store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
     const buttons = wrapper.findAll('button')
@@ -135,9 +135,9 @@ describe('SkillsEditor.vue', () => {
   it('shows read-only badge for bundled skills', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[1]
+    store.selectedName = sampleSkills[1].name
     store.editorContent = 'bundled content'
-    store.lastSavedContent = 'bundled content'
+    store.savedContent = 'bundled content'
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('bundled skill and cannot be edited')
@@ -146,9 +146,9 @@ describe('SkillsEditor.vue', () => {
   it('disables save, discard, and delete for bundled skills', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[1]
+    store.selectedName = sampleSkills[1].name
     store.editorContent = 'bundled content'
-    store.lastSavedContent = 'bundled content'
+    store.savedContent = 'bundled content'
     await wrapper.vm.$nextTick()
 
     const buttons = wrapper.findAll('button')
@@ -161,9 +161,9 @@ describe('SkillsEditor.vue', () => {
   it('opens New Skill modal when button is clicked', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[0]
+    store.selectedName = sampleSkills[0].name
     store.editorContent = 'content'
-    store.lastSavedContent = 'content'
+    store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
     const newBtn = wrapper.findAll('button').find(b => b.text() === 'New Skill')
@@ -177,9 +177,9 @@ describe('SkillsEditor.vue', () => {
   it('opens Delete confirmation when button is clicked', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[0]
+    store.selectedName = sampleSkills[0].name
     store.editorContent = 'content'
-    store.lastSavedContent = 'content'
+    store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
     const deleteBtn = wrapper.findAll('button').find(b => b.text() === 'Delete')
@@ -193,9 +193,9 @@ describe('SkillsEditor.vue', () => {
   it('shows SSE status chip', async () => {
     const wrapper = mountPage()
     const store = useSkillsStore()
-    store.selectedSkill = sampleSkills[0]
+    store.selectedName = sampleSkills[0].name
     store.editorContent = 'content'
-    store.lastSavedContent = 'content'
+    store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
     // The chip should show Loaded or a status

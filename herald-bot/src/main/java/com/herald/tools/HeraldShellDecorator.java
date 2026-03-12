@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -34,13 +36,16 @@ public class HeraldShellDecorator {
     private final ShellSecurityConfig securityConfig;
     private final ShellCommandExecutor delegate;
     private final TelegramSender telegramSender;
+    private final JdbcTemplate jdbcTemplate;
     private final ConcurrentHashMap<String, CompletableFuture<Boolean>> pendingConfirmations = new ConcurrentHashMap<>();
 
     @Autowired
     public HeraldShellDecorator(ShellSecurityConfig securityConfig,
                          Optional<ShellCommandExecutor> delegate,
-                         Optional<TelegramSender> telegramSender) {
+                         Optional<TelegramSender> telegramSender,
+                         JdbcTemplate jdbcTemplate) {
         this.securityConfig = securityConfig;
+        this.jdbcTemplate = jdbcTemplate;
         this.blocklist = securityConfig.getShellBlocklist().stream()
                 .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
                 .toList();
@@ -50,7 +55,7 @@ public class HeraldShellDecorator {
 
     // Package-private constructor for testing without Optional wrappers
     HeraldShellDecorator(ShellSecurityConfig securityConfig) {
-        this(securityConfig, Optional.empty(), Optional.empty());
+        this(securityConfig, Optional.empty(), Optional.empty(), null);
     }
 
     @Tool(description = "Execute a shell command on the host system. Destructive commands are blocked for safety. Commands requiring elevated privileges may need confirmation.")
@@ -153,10 +158,21 @@ public class HeraldShellDecorator {
         }
     }
 
+    private static final String OBSIDIAN_CLI_DIR = "/Applications/Obsidian.app/Contents/MacOS";
+
     private String executeCommandInternal(String command, int timeoutSeconds) {
         try {
             ProcessBuilder pb = new ProcessBuilder("sh", "-c", command);
             pb.redirectErrorStream(true);
+            // Ensure Obsidian CLI is in PATH for obsidian skill commands
+            String path = pb.environment().getOrDefault("PATH", "");
+            if (!path.contains(OBSIDIAN_CLI_DIR)) {
+                pb.environment().put("PATH", path + ":" + OBSIDIAN_CLI_DIR);
+            }
+            // Inject Google credentials from Settings DB for gws commands
+            if (command.trim().startsWith("gws ")) {
+                injectGwsCredentials(pb.environment());
+            }
             Process process = pb.start();
 
             String output;
@@ -183,6 +199,28 @@ public class HeraldShellDecorator {
         } catch (Exception e) {
             log.error("Shell command failed: [{}] — {}", redactForLog(command), e.getMessage());
             return "ERROR: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Inject Google OAuth credentials from Settings DB into the process environment.
+     * Settings DB values take precedence over .env values already in the environment.
+     */
+    private void injectGwsCredentials(Map<String, String> env) {
+        if (jdbcTemplate == null) return;
+        try {
+            List<String> clientIds = jdbcTemplate.queryForList(
+                    "SELECT value FROM settings WHERE key = 'google.client-id'", String.class);
+            if (!clientIds.isEmpty() && !clientIds.get(0).isBlank()) {
+                env.put("GOOGLE_WORKSPACE_CLI_CLIENT_ID", clientIds.get(0));
+            }
+            List<String> secrets = jdbcTemplate.queryForList(
+                    "SELECT value FROM settings WHERE key = 'google.client-secret'", String.class);
+            if (!secrets.isEmpty() && !secrets.get(0).isBlank()) {
+                env.put("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET", secrets.get(0));
+            }
+        } catch (Exception e) {
+            log.debug("Could not read Google credentials from settings: {}", e.getMessage());
         }
     }
 

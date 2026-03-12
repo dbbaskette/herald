@@ -3,7 +3,9 @@ package com.herald.tools;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -11,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,21 +26,23 @@ public class GwsTools {
 
     @FunctionalInterface
     interface ProcessRunner {
-        ProcessResult run(List<String> command) throws Exception;
+        ProcessResult run(List<String> command, Map<String, String> extraEnv) throws Exception;
     }
 
     record ProcessResult(int exitCode, String output, boolean timedOut) {}
 
     private final GwsAvailabilityChecker gwsAvailabilityChecker;
+    private final JdbcTemplate jdbcTemplate;
     private final ProcessRunner processRunner;
 
     @Autowired
-    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker) {
-        this(gwsAvailabilityChecker, GwsTools::executeProcess);
+    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, JdbcTemplate jdbcTemplate) {
+        this(gwsAvailabilityChecker, jdbcTemplate, GwsTools::executeProcess);
     }
 
-    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, ProcessRunner processRunner) {
+    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, JdbcTemplate jdbcTemplate, ProcessRunner processRunner) {
         this.gwsAvailabilityChecker = gwsAvailabilityChecker;
+        this.jdbcTemplate = jdbcTemplate;
         this.processRunner = processRunner;
     }
 
@@ -62,7 +67,8 @@ public class GwsTools {
             return UNAVAILABLE_ERROR;
         }
         try {
-            ProcessResult result = processRunner.run(command);
+            Map<String, String> env = buildGwsEnv();
+            ProcessResult result = processRunner.run(command, env);
             if (result.timedOut()) {
                 return "{\"error\": \"Command timed out after " + TIMEOUT_SECONDS + " seconds\"}";
             }
@@ -81,9 +87,40 @@ public class GwsTools {
         }
     }
 
-    private static ProcessResult executeProcess(List<String> command) throws Exception {
+    /**
+     * Build env vars for gws commands. Prefers credentials from the Settings DB
+     * (configured via the UI), falls back to process environment vars from .env.
+     */
+    private Map<String, String> buildGwsEnv() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String clientId = getSetting("google.client-id");
+        String clientSecret = getSetting("google.client-secret");
+        if (clientId != null && !clientId.isBlank()) {
+            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_ID", clientId);
+        }
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET", clientSecret);
+        }
+        return env;
+    }
+
+    private String getSetting(String key) {
+        try {
+            List<String> values = jdbcTemplate.queryForList(
+                    "SELECT value FROM settings WHERE key = ?", String.class, key);
+            return values.isEmpty() ? null : values.get(0);
+        } catch (Exception e) {
+            log.debug("Could not read setting '{}': {}", key, e.getMessage());
+            return null;
+        }
+    }
+
+    private static ProcessResult executeProcess(List<String> command, Map<String, String> extraEnv) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
+        if (extraEnv != null && !extraEnv.isEmpty()) {
+            pb.environment().putAll(extraEnv);
+        }
         Process process = pb.start();
         String output;
         try (BufferedReader reader = new BufferedReader(

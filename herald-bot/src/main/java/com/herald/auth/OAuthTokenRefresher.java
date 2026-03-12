@@ -47,16 +47,13 @@ public class OAuthTokenRefresher {
     }
 
     /**
-     * Check every 30 minutes if the token needs refreshing.
+     * Check every 10 minutes if the token needs refreshing.
      * Claude Code auto-refreshes tokens in the keychain, so we just re-read.
+     * Also detects if the token was rotated (e.g., by a new Claude Code session).
      */
-    @Scheduled(fixedDelay = 1_800_000) // 30 minutes
+    @Scheduled(fixedDelay = 600_000) // 10 minutes
     void checkAndRefreshToken() {
-        if (!oauthService.isExpiredOrExpiring()) {
-            return;
-        }
-
-        log.info("Claude OAuth token is expired or expiring soon, refreshing...");
+        // Always re-read the keychain to detect rotated tokens
         String newToken = oauthService.refreshFromKeychain();
 
         if (newToken == null) {

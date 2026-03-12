@@ -149,9 +149,9 @@ class ContextCompactionAdvisor implements CallAdvisor {
             chatMemory.add(conversationId, remaining);
         }
 
-        log.info("Compacted context: removed {} messages (~{} tokens), stored summary as '{}'. "
+        log.info("Compacted context: removed {} messages (~{} tokens), archived to Obsidian. "
                         + "Remaining: {} messages (~{} tokens)",
-                splitIndex, removedTokens, key,
+                splitIndex, removedTokens,
                 remaining.size(), estimateTokens(remaining));
     }
 

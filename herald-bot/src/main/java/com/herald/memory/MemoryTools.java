@@ -36,7 +36,7 @@ public class MemoryTools {
         return key + " = " + value;
     }
 
-    @Tool(description = "List all stored facts in persistent memory.")
+    @Tool(description = "List all stored facts in hot memory (SQLite). NOTE: This only shows hot memory. For a complete picture, also search the Obsidian vault using the obsidian skill — cold memory contains research, session logs, and migrated entries.")
     public String memory_list() {
         Map<String, String> entries = repository.listAll();
         if (entries.isEmpty()) {
@@ -47,7 +47,7 @@ public class MemoryTools {
                 .collect(Collectors.joining("\n"));
     }
 
-    @Tool(description = "Return memory usage statistics: entry count, total size, and whether the soft cap (~15 entries) is exceeded. Use periodically to decide if entries should be migrated to Obsidian.")
+    @Tool(description = "Return hot memory (SQLite) usage statistics: entry count, total size, and whether the soft cap (~15 entries) is exceeded. Remember: this only covers hot memory — Obsidian vault holds additional cold memory (migrated entries, session logs, research).")
     public String memory_stats() {
         Map<String, String> entries = repository.listAll();
         int count = entries.size();

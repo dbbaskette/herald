@@ -4,7 +4,6 @@ import { useSkillsStore } from '@/stores/skills'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
-import { yaml } from '@codemirror/lang-yaml'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
@@ -56,7 +55,7 @@ function createEditor() {
       highlightActiveLine(),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
-      markdown({ codeLanguages: [{ name: 'yaml', parser: yaml().language.parser }] }),
+      markdown(),
       syntaxHighlighting(darkroomHighlight),
       updateListener,
       EditorView.theme({
@@ -127,18 +126,16 @@ watch(() => store.savedContent, (val) => {
 
 watch(() => store.selectedName, (name) => {
   if (name) {
-    nextTick(() => {
-      if (editorView) {
-        syncEditorContent(store.editorContent)
-      } else {
-        createEditor()
-      }
-    })
+    if (editorView) {
+      syncEditorContent(store.editorContent)
+    } else {
+      createEditor()
+    }
   } else {
     editorView?.destroy()
     editorView = null
   }
-})
+}, { flush: 'post' })
 
 onMounted(async () => {
   await store.fetchSkills()

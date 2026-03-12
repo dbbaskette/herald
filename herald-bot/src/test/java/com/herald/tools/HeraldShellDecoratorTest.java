@@ -271,7 +271,7 @@ class HeraldShellDecoratorTest {
 
         TelegramSender mockSender = mock(TelegramSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender));
+                config, Optional.empty(), Optional.of(mockSender), null);
 
         String result = dec.shell_exec("sudo apt update");
 
@@ -296,7 +296,7 @@ class HeraldShellDecoratorTest {
 
         ShellCommandExecutor mockExecutor = command -> "executed: " + command;
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender));
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo confirmed"));
@@ -326,7 +326,7 @@ class HeraldShellDecoratorTest {
 
         ShellCommandExecutor mockExecutor = command -> "should not run";
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender));
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo nope"));
@@ -358,7 +358,7 @@ class HeraldShellDecoratorTest {
 
         ShellCommandExecutor mockExecutor = command -> "should not run";
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender));
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo curl --password=secret123 http://example.com"));
@@ -381,7 +381,7 @@ class HeraldShellDecoratorTest {
 
         TelegramSender mockSender = mock(TelegramSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender));
+                config, Optional.empty(), Optional.of(mockSender), null);
 
         String result = dec.shell_exec("sudo curl --password=secret123 http://example.com");
 
@@ -398,7 +398,7 @@ class HeraldShellDecoratorTest {
 
         TelegramSender mockSender = mock(TelegramSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender));
+                config, Optional.empty(), Optional.of(mockSender), null);
 
         dec.shell_exec("sudo curl --password=secret123 http://example.com");
 
@@ -416,7 +416,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         ShellCommandExecutor mockExecutor = command -> "delegated: " + command;
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.empty());
+                config, Optional.of(mockExecutor), Optional.empty(), null);
 
         String result = dec.shell_exec("echo hello");
         assertThat(result).isEqualTo("delegated: echo hello");
@@ -468,7 +468,7 @@ class HeraldShellDecoratorTest {
         }).when(mockSender).sendMessage(anyString());
 
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender));
+                config, Optional.empty(), Optional.of(mockSender), null);
 
         CompletableFuture.supplyAsync(() -> dec.shell_exec("sudo echo test"));
 
