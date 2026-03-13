@@ -3,8 +3,10 @@ package com.herald.telegram;
 import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
+import com.pengrad.telegrambot.model.CallbackQuery;
 import com.pengrad.telegrambot.model.Message;
 import com.pengrad.telegrambot.model.Update;
+import com.pengrad.telegrambot.request.AnswerCallbackQuery;
 import com.pengrad.telegrambot.request.GetUpdates;
 import com.pengrad.telegrambot.response.GetUpdatesResponse;
 import org.slf4j.Logger;
@@ -76,6 +78,13 @@ public class TelegramPoller {
     }
 
     private void processUpdate(Update update) {
+        // Handle inline keyboard button presses
+        CallbackQuery callbackQuery = update.callbackQuery();
+        if (callbackQuery != null) {
+            handleCallbackQuery(callbackQuery);
+            return;
+        }
+
         Message message = update.message();
         if (message == null || message.text() == null) {
             return;
@@ -114,6 +123,31 @@ public class TelegramPoller {
         } catch (Exception e) {
             log.error("Agent loop error: {}", e.getMessage(), e);
             sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");
+        }
+    }
+
+    private void handleCallbackQuery(CallbackQuery callbackQuery) {
+        // Verify the callback came from the allowed chat before acknowledging
+        if (callbackQuery.message() != null) {
+            String chatId = String.valueOf(callbackQuery.message().chat().id());
+            if (!chatId.equals(allowedChatId)) {
+                log.debug("Dropping callback from unauthorized chat: {}", chatId);
+                return;
+            }
+        }
+
+        // Acknowledge the callback to dismiss the loading spinner
+        try {
+            bot.execute(new AnswerCallbackQuery(callbackQuery.id()));
+        } catch (Exception e) {
+            log.warn("Failed to answer callback query: {}", e.getMessage());
+        }
+
+        String data = callbackQuery.data();
+        if (data != null && questionHandler.hasPendingQuestion()) {
+            if (questionHandler.resolveAnswer(data)) {
+                log.info("Callback query resolved pending question with: {}", data);
+            }
         }
     }
 }

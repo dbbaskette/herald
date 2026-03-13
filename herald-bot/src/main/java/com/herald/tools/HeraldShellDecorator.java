@@ -109,7 +109,6 @@ public class HeraldShellDecorator {
     /**
      * Called externally (e.g., by TelegramPoller) to approve or deny a pending command.
      * TODO: Wire into TelegramPoller to handle user YES/NO responses.
-     * AskUserQuestionTool integration is a follow-up.
      */
     public void confirmCommand(String confirmId, boolean approved) {
         CompletableFuture<Boolean> future = pendingConfirmations.get(confirmId);

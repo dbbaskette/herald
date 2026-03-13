@@ -3,6 +3,8 @@ package com.herald.telegram;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.model.request.ChatAction;
+import com.pengrad.telegrambot.model.request.InlineKeyboardButton;
+import com.pengrad.telegrambot.model.request.InlineKeyboardMarkup;
 import com.pengrad.telegrambot.model.request.ParseMode;
 import com.pengrad.telegrambot.request.SendChatAction;
 import com.pengrad.telegrambot.request.SendMessage;
@@ -36,6 +38,26 @@ public class TelegramSender {
         List<String> chunks = formatter.split(text);
         for (String chunk : chunks) {
             sendWithRetry(chunk);
+        }
+    }
+
+    /**
+     * Send a message with inline keyboard buttons. Each option becomes a button row.
+     * The button's callback data is the option label text.
+     */
+    public void sendMessageWithKeyboard(String text, List<String> options) {
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        for (String option : options) {
+            keyboard.addRow(new InlineKeyboardButton(option).callbackData(option));
+        }
+        SendMessage request = new SendMessage(chatId, text).replyMarkup(keyboard);
+        try {
+            SendResponse response = bot.execute(request);
+            if (!response.isOk()) {
+                log.error("Failed to send keyboard message: {}", response.description());
+            }
+        } catch (Exception e) {
+            log.error("Error sending keyboard message: {}", e.getMessage());
         }
     }
 

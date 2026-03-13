@@ -2,13 +2,16 @@ package com.herald.telegram;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -17,16 +20,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Bridges agent questions with Telegram messaging.
- * Formats questions as numbered Telegram messages, sends them via TelegramSender,
- * and blocks until the user replies or a timeout expires.
- *
- * <p>Note: This is a standalone implementation. When spring-ai-agent-utils exports
- * a QuestionHandler interface, this class should be updated to implement it and
- * align with the library's Question type to avoid a breaking change.</p>
+ * Implements the upstream {@link AskUserQuestionTool.QuestionHandler} interface,
+ * converting structured questions to Telegram messages with inline keyboard buttons
+ * for single-select options, and text-based formatting for multi-select and free-text.
  */
 @Component
 @ConditionalOnProperty("herald.telegram.bot-token")
-public class TelegramQuestionHandler {
+public class TelegramQuestionHandler implements AskUserQuestionTool.QuestionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramQuestionHandler.class);
     public static final long DEFAULT_TIMEOUT_MINUTES = 5;
@@ -85,12 +85,55 @@ public class TelegramQuestionHandler {
      * Returns the user's answer, or an empty string on timeout.
      */
     public String askQuestion(Question question) {
-        Map<String, String> results = handle(List.of(question));
+        Map<String, String> results = handleInternal(List.of(question));
         return results.values().stream().findFirst().orElse("");
     }
 
     /**
-     * Send questions to the user via Telegram and block until they reply.
+     * Implements the upstream QuestionHandler interface.
+     * Converts upstream Question objects to internal format, sends via Telegram
+     * (using inline keyboard for single-select with options, text for everything else),
+     * and returns answers keyed by question text (as expected by upstream validation).
+     */
+    @Override
+    public Map<String, String> handle(List<AskUserQuestionTool.Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return Map.of();
+        }
+
+        // Convert upstream questions to internal format, using question text as ID
+        // so that return map keys match what upstream validation expects
+        List<Question> internal = new ArrayList<>();
+        for (var q : questions) {
+            List<String> optionLabels = q.options() != null
+                    ? q.options().stream().map(AskUserQuestionTool.Question.Option::label).toList()
+                    : List.of();
+
+            Question.SelectionType selType;
+            if (optionLabels.isEmpty()) {
+                selType = Question.SelectionType.FREE_TEXT;
+            } else if (Boolean.TRUE.equals(q.multiSelect())) {
+                selType = Question.SelectionType.MULTI_SELECT;
+            } else {
+                selType = Question.SelectionType.SINGLE_SELECT;
+            }
+
+            internal.add(new Question(q.question(), q.question(), optionLabels, selType));
+        }
+
+        // Use inline keyboard for single question with single-select options
+        boolean useKeyboard = internal.size() == 1
+                && internal.getFirst().selectionType() == Question.SelectionType.SINGLE_SELECT
+                && !internal.getFirst().options().isEmpty();
+
+        if (useKeyboard) {
+            return handleWithKeyboard(internal.getFirst());
+        }
+        return handleInternal(internal);
+    }
+
+    /**
+     * Send questions to the user via Telegram (text-based) and block until they reply.
      * Returns a map of question ID to answer. On timeout, returns an empty map.
      *
      * <p>Only one question batch may be pending at a time. If a batch is already
@@ -100,11 +143,36 @@ public class TelegramQuestionHandler {
      * the user provides a single reply that is assigned to all question keys.
      * For independent answers per question, callers should send one question at a time.</p>
      */
-    public Map<String, String> handle(List<Question> questions) {
+    public Map<String, String> handleInternal(List<Question> questions) {
         if (questions == null || questions.isEmpty()) {
             return Map.of();
         }
 
+        String batchId = UUID.randomUUID().toString().substring(0, 8);
+        String formatted = formatQuestions(batchId, questions);
+        Optional<String> reply = sendAndAwaitReply(() -> sender.sendMessage(formatted));
+
+        return reply.map(r -> buildAnswerMap(questions, r)).orElse(Map.of());
+    }
+
+    /**
+     * Send a single-select question with inline keyboard buttons and block until reply.
+     */
+    private Map<String, String> handleWithKeyboard(Question question) {
+        String batchId = UUID.randomUUID().toString().substring(0, 8);
+        String messageText = "Question from Herald [" + batchId + "]:\n\n" + question.text();
+        Optional<String> reply = sendAndAwaitReply(
+                () -> sender.sendMessageWithKeyboard(messageText, question.options()));
+
+        String key = question.id() != null ? question.id() : "q1";
+        return reply.map(r -> Map.of(key, r)).orElse(Map.of());
+    }
+
+    /**
+     * Core blocking method: registers a pending question, sends via the provided action,
+     * blocks until a reply or timeout, and returns the raw reply string (or empty on timeout).
+     */
+    private Optional<String> sendAndAwaitReply(Runnable sendAction) {
         String batchId = UUID.randomUUID().toString().substring(0, 8);
         CompletableFuture<String> future = new CompletableFuture<>();
         PendingQuestion pending = new PendingQuestion(batchId, future);
@@ -114,23 +182,22 @@ public class TelegramQuestionHandler {
                     "A question is already pending. Only one question batch may be active at a time.");
         }
 
-        String formatted = formatQuestions(batchId, questions);
-        sender.sendMessage(formatted);
+        sendAction.run();
 
         try {
             String reply = future.get(timeoutMinutes, TimeUnit.MINUTES);
             log.info("Received answer for question batch {}", batchId);
-            return buildAnswerMap(questions, reply);
+            return Optional.of(reply);
         } catch (TimeoutException e) {
             log.warn("Question batch {} timed out after {} minutes", batchId, timeoutMinutes);
-            return Map.of();
+            return Optional.empty();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Question batch {} was interrupted", batchId);
-            return Map.of();
+            return Optional.empty();
         } catch (Exception e) {
             log.error("Error waiting for answer to question batch {}: {}", batchId, e.getMessage());
-            return Map.of();
+            return Optional.empty();
         } finally {
             pendingQuestion.set(null);
         }

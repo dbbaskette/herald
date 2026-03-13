@@ -3,7 +3,8 @@ package com.herald.agent;
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
-import com.herald.tools.AskUserQuestionTool;
+import com.herald.telegram.TelegramQuestionHandler;
+import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
@@ -28,6 +29,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -43,6 +45,9 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -54,6 +59,7 @@ import java.util.function.Function;
 @Configuration
 public class HeraldAgentConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(HeraldAgentConfig.class);
     private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter DATETIME_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
@@ -73,7 +79,7 @@ public class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     public List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
+        return List.of("memory", "shell", "filesystem", "todo", "askUserQuestion", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
     }
 
     @Bean
@@ -99,7 +105,7 @@ public class HeraldAgentConfig {
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             TodoWriteTool todoTool,
-            AskUserQuestionTool askTool,
+            ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
             TelegramSendTool telegramSendTool,
             GwsTools gwsTools,
             WebTools webTools,
@@ -163,6 +169,19 @@ public class HeraldAgentConfig {
 
         ToolCallback taskOutputTool = TaskOutputTool.builder()
                 .taskRepository(taskRepository)
+                .build();
+
+        // Build upstream AskUserQuestionTool with Telegram-backed handler (or no-op fallback)
+        TelegramQuestionHandler telegramHandler = questionHandlerProvider.getIfAvailable();
+        AskUserQuestionTool.QuestionHandler questionHandler = telegramHandler != null
+                ? telegramHandler
+                : questions -> {
+                    log.warn("AskUserQuestion called but Telegram is not configured — returning empty");
+                    return Map.of();
+                };
+        AskUserQuestionTool askTool = AskUserQuestionTool.builder()
+                .questionHandler(questionHandler)
+                .answersValidation(telegramHandler != null)
                 .build();
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel

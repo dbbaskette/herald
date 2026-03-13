@@ -3,6 +3,10 @@ package com.herald.telegram;
 import com.herald.telegram.TelegramQuestionHandler.Question;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springaicommunity.agent.tools.AskUserQuestionTool;
+
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.List;
 import java.util.Map;
@@ -50,14 +54,14 @@ class TelegramQuestionHandlerTest {
     }
 
     @Test
-    void handleReturnsEmptyMapForNullQuestions() {
-        Map<String, String> result = handler.handle(null);
+    void handleInternalReturnsEmptyMapForNullQuestions() {
+        Map<String, String> result = handler.handleInternal(null);
         assertThat(result).isEmpty();
     }
 
     @Test
-    void handleReturnsEmptyMapForEmptyQuestions() {
-        Map<String, String> result = handler.handle(List.of());
+    void handleInternalReturnsEmptyMapForEmptyQuestions() {
+        Map<String, String> result = handler.handleInternal(List.of());
         assertThat(result).isEmpty();
     }
 
@@ -91,7 +95,7 @@ class TelegramQuestionHandlerTest {
                 new Question("What time?")
         );
 
-        Map<String, String> result = handler.handle(questions);
+        Map<String, String> result = handler.handleInternal(questions);
 
         assertThat(result).hasSize(2);
         assertThat(result).containsKeys("q1", "q2");
@@ -172,7 +176,7 @@ class TelegramQuestionHandlerTest {
                         Question.SelectionType.SINGLE_SELECT)
         );
 
-        Map<String, String> result = handler.handle(questions);
+        Map<String, String> result = handler.handleInternal(questions);
 
         assertThat(result).containsKey("calendar-q");
         assertThat(result.get("calendar-q")).isEqualTo("Work");
@@ -225,7 +229,7 @@ class TelegramQuestionHandlerTest {
             assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
 
             // Try to send a second question while the first is pending
-            assertThatThrownBy(() -> handler.handle(List.of(new Question("second?"))))
+            assertThatThrownBy(() -> handler.handleInternal(List.of(new Question("second?"))))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("already pending");
 
@@ -242,10 +246,137 @@ class TelegramQuestionHandlerTest {
         // Use a very short timeout to test the timeout path
         TelegramQuestionHandler shortTimeoutHandler = new TelegramQuestionHandler(sender, 0);
 
-        Map<String, String> result = shortTimeoutHandler.handle(
+        Map<String, String> result = shortTimeoutHandler.handleInternal(
                 List.of(new Question("Will this timeout?")));
 
         assertThat(result).isEmpty();
         verify(sender).sendMessage(anyString());
+    }
+
+    @Test
+    void handleUpstreamQuestionsConvertsAndDelegates() {
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessageWithKeyboard(anyString(), anyList());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("React");
+        });
+
+        var upstreamQuestion = new AskUserQuestionTool.Question(
+                "Which framework do you prefer?",
+                "Framework",
+                List.of(new AskUserQuestionTool.Question.Option("React", "Popular JS framework"),
+                        new AskUserQuestionTool.Question.Option("Vue", "Progressive framework")),
+                false);
+
+        AskUserQuestionTool.QuestionHandler qh = handler;
+        Map<String, String> result = qh.handle(List.of(upstreamQuestion));
+
+        assertThat(result).containsKey("Which framework do you prefer?");
+        assertThat(result.get("Which framework do you prefer?")).isEqualTo("React");
+        verify(sender).sendMessageWithKeyboard(anyString(), eq(List.of("React", "Vue")));
+    }
+
+    @Test
+    void handleUpstreamFreeTextQuestionUsesPlainMessage() {
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("Next Tuesday");
+        });
+
+        var upstreamQuestion = new AskUserQuestionTool.Question(
+                "When should we schedule it?",
+                "Schedule",
+                List.of(),
+                false);
+
+        AskUserQuestionTool.QuestionHandler qh = handler;
+        Map<String, String> result = qh.handle(List.of(upstreamQuestion));
+
+        assertThat(result).containsKey("When should we schedule it?");
+        assertThat(result.get("When should we schedule it?")).isEqualTo("Next Tuesday");
+        verify(sender).sendMessage(anyString());
+        verify(sender, never()).sendMessageWithKeyboard(anyString(), anyList());
+    }
+
+    @Test
+    void handleUpstreamMultiSelectFallsBackToTextMessage() {
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("React, Vue");
+        });
+
+        var upstreamQuestion = new AskUserQuestionTool.Question(
+                "Select frameworks:",
+                "Frameworks",
+                List.of(new AskUserQuestionTool.Question.Option("React", "JS framework"),
+                        new AskUserQuestionTool.Question.Option("Vue", "Progressive"),
+                        new AskUserQuestionTool.Question.Option("Angular", "Full framework")),
+                true);
+
+        AskUserQuestionTool.QuestionHandler qh = handler;
+        Map<String, String> result = qh.handle(List.of(upstreamQuestion));
+
+        assertThat(result).containsKey("Select frameworks:");
+        verify(sender).sendMessage(anyString());
+        verify(sender, never()).sendMessageWithKeyboard(anyString(), anyList());
+    }
+
+    @Test
+    void handleMultipleUpstreamQuestionsUsesTextNotKeyboard() {
+        CountDownLatch messageSent = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            messageSent.countDown();
+            return null;
+        }).when(sender).sendMessage(anyString());
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                messageSent.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+            handler.resolveAnswer("React");
+        });
+
+        var q1 = new AskUserQuestionTool.Question(
+                "Which framework?",
+                "Framework",
+                List.of(new AskUserQuestionTool.Question.Option("React", "JS"),
+                        new AskUserQuestionTool.Question.Option("Vue", "Progressive")),
+                false);
+        var q2 = new AskUserQuestionTool.Question(
+                "Which database?",
+                "Database",
+                List.of(new AskUserQuestionTool.Question.Option("Postgres", "Relational"),
+                        new AskUserQuestionTool.Question.Option("Mongo", "Document")),
+                false);
+
+        AskUserQuestionTool.QuestionHandler qh = handler;
+        Map<String, String> result = qh.handle(List.of(q1, q2));
+
+        assertThat(result).hasSize(2);
+        verify(sender).sendMessage(anyString());
+        verify(sender, never()).sendMessageWithKeyboard(anyString(), anyList());
     }
 }
