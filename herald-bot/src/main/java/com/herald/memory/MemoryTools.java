@@ -1,8 +1,16 @@
 package com.herald.memory;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -10,6 +18,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryTools {
 
+    private static final Logger log = LoggerFactory.getLogger(MemoryTools.class);
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
+    private static final String OBSIDIAN_VAULT = "Herald-Memory";
     static final int SOFT_CAP = 15;
 
     private final MemoryRepository repository;
@@ -56,6 +67,130 @@ public class MemoryTools {
                 .sum();
         String status = count > SOFT_CAP ? "OVER CAP — migrate verbose or stale entries to Obsidian" : "OK";
         return String.format("Entries: %d / ~%d soft cap | Total size: %d chars | Status: %s", count, SOFT_CAP, totalSize, status);
+    }
+
+    @Tool(description = "List all notes in cold memory (Obsidian vault), grouped by folder. Shows chat sessions, migrated memory entries, research, and any other vault content.")
+    public String memory_list_cold(
+            @ToolParam(description = "Optional folder to filter by (e.g. 'Chat-Sessions', 'Migrated-Memory'). Leave empty to list all.", required = false) String folder) {
+        try {
+            // Use search with wildcard to get all notes
+            List<String> cmd = new ArrayList<>();
+            cmd.add(OBSIDIAN_CLI);
+            cmd.add("search");
+            cmd.add("vault=" + OBSIDIAN_VAULT);
+            cmd.add("query=*");
+            if (folder != null && !folder.isBlank()) {
+                cmd.add("path=" + folder);
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            List<String> notes = new ArrayList<>();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty()) {
+                        notes.add(trimmed);
+                    }
+                }
+            }
+
+            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return "Error: Obsidian CLI timed out";
+            }
+            if (process.exitValue() != 0) {
+                return "Error: Obsidian CLI returned exit code " + process.exitValue();
+            }
+
+            if (notes.isEmpty()) {
+                return "Cold memory (Obsidian vault) is empty" + (folder != null ? " in folder: " + folder : "") + ".";
+            }
+
+            // Group by folder
+            Map<String, List<String>> grouped = new LinkedHashMap<>();
+            for (String note : notes) {
+                String noteFolder = note.contains("/") ? note.substring(0, note.indexOf('/')) : "(root)";
+                String name = note.contains("/") ? note.substring(note.lastIndexOf('/') + 1) : note;
+                grouped.computeIfAbsent(noteFolder, k -> new ArrayList<>()).add(name);
+            }
+
+            StringBuilder sb = new StringBuilder("## Cold Memory (Obsidian Vault)\n\n");
+            for (var entry : grouped.entrySet()) {
+                sb.append("### ").append(entry.getKey()).append(" (").append(entry.getValue().size()).append(" notes)\n");
+                for (String name : entry.getValue()) {
+                    sb.append("- ").append(name).append("\n");
+                }
+                sb.append("\n");
+            }
+            sb.append("**Total:** ").append(notes.size()).append(" notes");
+            return sb.toString();
+        } catch (Exception e) {
+            log.error("Failed to list cold memory: {}", e.getMessage(), e);
+            return "Error listing cold memory: " + e.getMessage();
+        }
+    }
+
+    @Tool(description = "Show complete memory status across both hot memory (SQLite) and cold memory (Obsidian vault). Use this for a full picture of what Herald remembers.")
+    public String memory_status() {
+        // Hot memory stats
+        Map<String, String> entries = repository.listAll();
+        int hotCount = entries.size();
+        int hotSize = entries.entrySet().stream()
+                .mapToInt(e -> e.getKey().length() + e.getValue().length())
+                .sum();
+        String hotStatus = hotCount > SOFT_CAP ? "OVER CAP" : "OK";
+
+        // Cold memory stats via Obsidian CLI
+        int coldCount = 0;
+        Map<String, Integer> folderCounts = new LinkedHashMap<>();
+        try {
+            ProcessBuilder pb = new ProcessBuilder(OBSIDIAN_CLI, "search", "vault=" + OBSIDIAN_VAULT, "query=*");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String trimmed = line.trim();
+                    if (!trimmed.isEmpty()) {
+                        coldCount++;
+                        String folder = trimmed.contains("/") ? trimmed.substring(0, trimmed.indexOf('/')) : "(root)";
+                        folderCounts.merge(folder, 1, Integer::sum);
+                    }
+                }
+            }
+
+            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+            }
+        } catch (Exception e) {
+            log.warn("Could not query cold memory: {}", e.getMessage());
+        }
+
+        StringBuilder sb = new StringBuilder("## Memory Status\n\n");
+        sb.append("### Hot Memory (SQLite)\n");
+        sb.append(String.format("- Entries: %d / ~%d soft cap | Size: %d chars | Status: %s\n", hotCount, SOFT_CAP, hotSize, hotStatus));
+        if (!entries.isEmpty()) {
+            sb.append("- Keys: ");
+            sb.append(entries.keySet().stream().collect(Collectors.joining(", ")));
+            sb.append("\n");
+        }
+        sb.append("\n### Cold Memory (Obsidian Vault)\n");
+        sb.append(String.format("- Total notes: %d\n", coldCount));
+        for (var fc : folderCounts.entrySet()) {
+            sb.append(String.format("  - %s: %d\n", fc.getKey(), fc.getValue()));
+        }
+        if (coldCount == 0 && folderCounts.isEmpty()) {
+            sb.append("- (empty or Obsidian CLI unavailable)\n");
+        }
+
+        return sb.toString();
     }
 
     @Tool(description = "Delete a specific fact from persistent memory.")

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-const API = 'http://localhost:8080/api/settings'
+const API = '/api/settings'
 
 export interface SettingDef {
   key: string

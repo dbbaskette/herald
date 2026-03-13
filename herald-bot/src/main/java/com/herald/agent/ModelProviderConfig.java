@@ -43,4 +43,19 @@ public class ModelProviderConfig {
                 .openAiApi(api)
                 .build();
     }
+
+    @Bean("geminiChatModel")
+    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.gemini.api-key:}')")
+    public ChatModel geminiChatModel(HeraldConfig config) {
+        var geminiConfig = config.providers().gemini();
+        String baseUrl = geminiConfig.baseUrl() != null ? geminiConfig.baseUrl()
+                : "https://generativelanguage.googleapis.com/v1beta/openai";
+        OpenAiApi api = OpenAiApi.builder()
+                .apiKey(geminiConfig.apiKey())
+                .baseUrl(baseUrl)
+                .build();
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .build();
+    }
 }

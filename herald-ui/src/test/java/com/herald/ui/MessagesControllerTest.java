@@ -22,22 +22,27 @@ class MessagesControllerTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void listReturnsEmptyArrayInitially() throws Exception {
+    void listReturnsPagedResponseInitially() throws Exception {
         mockMvc.perform(get("/api/messages"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(0))));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.totalPages", greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.number", is(0)));
     }
 
     @Test
-    void listRespectsLimitParam() throws Exception {
+    void listRespectsSizeParam() throws Exception {
         // Insert test data
         for (int i = 0; i < 5; i++) {
             jdbcTemplate.update("INSERT INTO messages (role, content) VALUES (?, ?)", "user", "msg" + i);
         }
 
-        mockMvc.perform(get("/api/messages").param("limit", "3"))
+        mockMvc.perform(get("/api/messages").param("size", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(3)));
+                .andExpect(jsonPath("$.content", hasSize(3)))
+                .andExpect(jsonPath("$.totalElements", is(5)))
+                .andExpect(jsonPath("$.totalPages", is(2)));
 
         // Clean up
         jdbcTemplate.update("DELETE FROM messages");
@@ -52,6 +57,6 @@ class MessagesControllerTest {
 
         mockMvc.perform(get("/api/messages"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 }

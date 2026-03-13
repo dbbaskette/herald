@@ -114,8 +114,10 @@ public class HeraldAgentConfig {
             @Value("${herald.agent.model.opus:claude-opus-4-5}") String opusModel,
             @Value("${herald.agent.model.openai:gpt-4o}") String openaiModel,
             @Value("${herald.agent.model.ollama:llama3.2}") String ollamaModel,
+            @Value("${herald.agent.model.gemini:gemini-2.5-flash}") String geminiModel,
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
-            @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel) {
+            @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
+            @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
@@ -142,6 +144,8 @@ public class HeraldAgentConfig {
                 subagentTypeBuilder.chatClientBuilder("openai", chatClientBuilderForModel(model, openaiModel)));
         ollamaChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("ollama", chatClientBuilderForModel(model, ollamaModel)));
+        geminiChatModel.ifPresent(model ->
+                subagentTypeBuilder.chatClientBuilder("gemini", chatClientBuilderForModel(model, geminiModel)));
 
         var claudeSubagentType = subagentTypeBuilder.build();
 
@@ -184,6 +188,7 @@ public class HeraldAgentConfig {
         availableModels.put("anthropic", chatModel);
         openaiChatModel.ifPresent(model -> availableModels.put("openai", model));
         ollamaChatModel.ifPresent(model -> availableModels.put("ollama", model));
+        geminiChatModel.ifPresent(model -> availableModels.put("gemini", model));
 
         var switcher = new ModelSwitcher(availableModels, jdbcTemplate, clientBuilderFactory,
                 initialClient, "anthropic", defaultModel);

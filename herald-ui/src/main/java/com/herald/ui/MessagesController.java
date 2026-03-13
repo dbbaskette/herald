@@ -23,8 +23,24 @@ class MessagesController {
     }
 
     @GetMapping
-    List<Map<String, Object>> list(@RequestParam(defaultValue = "50") int limit) {
-        return repository.listRecent(limit);
+    Map<String, Object> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        List<Map<String, Object>> all = repository.listFiltered(search, startDate, endDate);
+        int totalElements = all.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalElements / size));
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<Map<String, Object>> content = all.subList(fromIndex, toIndex);
+        return Map.of(
+                "content", content,
+                "number", page,
+                "totalPages", totalPages,
+                "totalElements", totalElements
+        );
     }
 
     @DeleteMapping

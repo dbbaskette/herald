@@ -37,6 +37,9 @@ herald:
     ollama:
       base-url: ${OLLAMA_BASE_URL:}
       api-key: ${OLLAMA_API_KEY:ollama}
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
     # OpenAI provider — enabled when HERALD_PROVIDERS_OPENAI_API_KEY env var is set
     # openai:
     #   api-key: ${OPENAI_API_KEY}

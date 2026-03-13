@@ -174,7 +174,7 @@ class ContextCompactionAdvisor implements CallAdvisor {
         return sb.toString().stripTrailing();
     }
 
-    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/obsidian";
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
     private static final String OBSIDIAN_VAULT = "Herald-Memory";
 
     /**

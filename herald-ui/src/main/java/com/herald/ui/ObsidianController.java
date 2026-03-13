@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 class ObsidianController {
 
     private static final Logger log = LoggerFactory.getLogger(ObsidianController.class);
-    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/obsidian";
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
     private static final String VAULT = "Herald-Memory";
 
     @GetMapping("/search")

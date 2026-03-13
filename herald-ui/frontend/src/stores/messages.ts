@@ -29,6 +29,21 @@ export interface MessagesPage {
   number: number
 }
 
+function parseToolCalls(raw: unknown): ToolCall[] {
+  if (!raw) return []
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((tc: Record<string, unknown>) => ({
+      name: (tc.name ?? '') as string,
+      inputs: (tc.inputs ?? tc.arguments ?? {}) as Record<string, unknown>,
+      outputs: tc.outputs ?? tc.result ?? '',
+    }))
+  } catch {
+    return []
+  }
+}
+
 export const useMessagesStore = defineStore('messages', () => {
   const messages = ref<Message[]>([])
   const loading = ref(false)
@@ -55,11 +70,18 @@ export const useMessagesStore = defineStore('messages', () => {
 
       const res = await fetch(`/api/messages?${params}`)
       if (!res.ok) throw new Error(res.statusText)
-      const data: MessagesPage = await res.json()
-      messages.value = data.content
-      currentPage.value = data.number
-      totalPages.value = data.totalPages
-      totalElements.value = data.totalElements
+      const data = await res.json()
+      messages.value = (data.content ?? []).map((row: Record<string, unknown>) => ({
+        id: String(row.id ?? row.ID ?? ''),
+        role: (row.role ?? row.ROLE ?? 'system') as Message['role'],
+        content: (row.content ?? row.CONTENT ?? '') as string,
+        timestamp: (row.created_at ?? row.CREATED_AT ?? null) as string,
+        toolCalls: parseToolCalls(row.tool_calls ?? row.TOOL_CALLS),
+        subagentCalls: [],
+      }))
+      currentPage.value = data.number ?? 0
+      totalPages.value = data.totalPages ?? 0
+      totalElements.value = data.totalElements ?? 0
     } catch {
       messages.value = []
       totalPages.value = 0

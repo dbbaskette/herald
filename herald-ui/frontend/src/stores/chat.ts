@@ -8,8 +8,6 @@ export interface ChatMessage {
   timestamp: string
 }
 
-const BOT_URL = 'http://localhost:8081'
-
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const sending = ref(false)
@@ -34,7 +32,7 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = true
 
     try {
-      const res = await fetch(`${BOT_URL}/api/chat`, {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,7 +53,7 @@ export const useChatStore = defineStore('chat', () => {
         addMessage('assistant', data.reply || '(empty response)')
       }
     } catch (e: any) {
-      addMessage('error', `Connection failed: ${e.message}. Is herald-bot running on port 8081?`)
+      addMessage('error', `Connection failed: ${e.message}. Is herald-bot running?`)
     } finally {
       sending.value = false
     }

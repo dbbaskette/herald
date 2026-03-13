@@ -118,7 +118,14 @@ wait_for_port() {
 
 check_env() {
     local missing=0
-    for var in ANTHROPIC_API_KEY HERALD_TELEGRAM_BOT_TOKEN HERALD_TELEGRAM_ALLOWED_CHAT_ID; do
+
+    if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+        echo "ERROR: ANTHROPIC_API_KEY is not set in .env"
+        echo "       Run 'claude setup-token' and add the token to .env"
+        missing=1
+    fi
+
+    for var in HERALD_TELEGRAM_BOT_TOKEN HERALD_TELEGRAM_ALLOWED_CHAT_ID; do
         if [ -z "${!var:-}" ]; then
             echo "ERROR: $var is not set in .env"
             missing=1

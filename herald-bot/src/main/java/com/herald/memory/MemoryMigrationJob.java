@@ -33,7 +33,7 @@ public class MemoryMigrationJob {
     private static final Logger log = LoggerFactory.getLogger(MemoryMigrationJob.class);
 
     private static final int VALUE_LENGTH_THRESHOLD = 200;
-    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/obsidian";
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
     private static final String OBSIDIAN_VAULT = "Herald-Memory";
 
     private final MemoryRepository repository;

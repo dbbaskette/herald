@@ -28,7 +28,7 @@ public class ChatArchivalJob {
 
     private static final Logger log = LoggerFactory.getLogger(ChatArchivalJob.class);
 
-    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/obsidian";
+    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
     private static final String OBSIDIAN_VAULT = "Herald-Memory";
     private static final int MAX_SUMMARY_CHARS = 3000;
     private static final int KEEP_RECENT_MESSAGES = 20;
