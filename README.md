@@ -32,6 +32,35 @@ Herald can execute shell commands, manage your calendar and email, run scheduled
 - **Obsidian integration** — cold memory storage, session archival, and research notes in an Obsidian vault
 - **Management console** — Vue 3 web UI for skills editing, memory, cron, and status
 
+## Skills
+
+Skills are Markdown files with YAML front matter that teach Herald new capabilities without code changes. Drop a file into `skills/` and Herald picks it up immediately — no restart required.
+
+```
+skills/
+├── broadcom/SKILL.md        # VMware/Broadcom knowledge base
+├── github/SKILL.md          # GitHub workflow automation
+├── gmail/SKILL.md           # Email composition & search
+├── google-calendar/SKILL.md # Calendar management
+├── google-drive/SKILL.md    # Drive file operations
+├── obsidian/SKILL.md        # Obsidian vault integration
+└── weather/SKILL.md         # Weather lookups
+```
+
+Each skill file follows this format:
+
+```markdown
+---
+name: skill-name
+description: What this skill does (shown to the LLM for selection)
+---
+
+Instructions, context, and examples that guide Herald's behavior
+when this skill is activated by the agent.
+```
+
+Herald's `ReloadableSkillsTool` wraps the upstream `SkillsTool` with a `WatchService`-based filesystem watcher (`SkillsWatcher`) that triggers a 250ms debounced reload on any file change. The Herald Console also provides a web-based skills editor with live reload status via SSE.
+
 ## Architecture
 
 ```mermaid
@@ -217,6 +246,7 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_AGENT_PERSONA` | Override agent persona | No | Built-in default |
 | `HERALD_AGENT_CONTEXT_FILE` | Path to standing brief | No | `~/.herald/CONTEXT.md` |
 | `HERALD_WEATHER_LOCATION` | Location for weather tool | No | — |
+| `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_CONFIG` | Override config file path | No | `~/.herald/herald.yaml` |
 
 ## Telegram Commands
@@ -317,7 +347,7 @@ Where the blog series describes `AgentEnvironment` for injecting runtime context
 | `ContextMdAdvisor` | Standing brief from `~/.herald/CONTEXT.md`, re-read on every turn |
 | `MemoryBlockAdvisor` | All persistent key/value memories from SQLite |
 | `ContextCompactionAdvisor` | Auto-compacts conversation history when approaching token limits |
-| `MessageChatMemoryAdvisor` | JDBC-backed conversation history (windowed, 100 messages) |
+| `OneShotMemoryAdvisor` | JDBC-backed conversation history (windowed, 100 messages). Custom replacement for Spring AI's `MessageChatMemoryAdvisor` — loads/saves history once per request instead of on every tool-call iteration, preventing exponential message growth. |
 
 ### Tool Registration Architecture
 
@@ -327,6 +357,26 @@ Herald separates tools into two categories matching how Spring AI handles them:
 - **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool` from spring-ai-agent-utils
 
 This mirrors the library's design: custom domain tools as annotated beans, library-provided tools as pre-built callbacks.
+
+### Shell Security Model
+
+Herald's `HeraldShellDecorator` wraps shell execution with layered protections:
+
+- **Blocklist** — configurable regex patterns block destructive commands (`rm -rf /`, `mkfs`, `dd`, etc.) outright
+- **Confirmation gate** — commands requiring `sudo`, piping to a shell, or writing to system directories trigger a Telegram confirmation prompt. The user must reply `/confirm <id> yes` within a configurable timeout before the command executes.
+- **Sensitive redaction** — API keys, Bearer tokens, and passwords are redacted in logs
+- **Timeout** — all commands are killed after a configurable timeout (default 30s)
+
+### Runtime Model Switching
+
+Herald supports switching between AI providers and models at runtime via the `/model` Telegram command or the management console. The active override is persisted in the `settings` table so it survives restarts. Supported providers:
+
+| Provider | Default Model | Config Property |
+|----------|---------------|-----------------|
+| Anthropic | claude-sonnet-4-5 | `spring.ai.anthropic.chat.options.model` |
+| OpenAI | gpt-4o | `herald.agent.model.openai` |
+| Ollama | llama3.2 | `herald.agent.model.ollama` |
+| Gemini | gemini-2.5-flash | `herald.agent.model.gemini` |
 
 ## Technology Stack
 
@@ -366,6 +416,7 @@ erDiagram
         text prompt
         datetime last_run
         int enabled
+        int built_in
     }
     commands {
         int id PK
@@ -389,6 +440,17 @@ erDiagram
         text provider
         text model
         datetime updated_at
+    }
+    settings {
+        text key PK
+        text value
+        datetime updated_at
+    }
+    SPRING_AI_CHAT_MEMORY {
+        text conversation_id
+        text content
+        text type
+        datetime timestamp
     }
 ```
 
