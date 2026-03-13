@@ -126,7 +126,7 @@ public class StatusSseService {
         memory.put("databaseFileSize", "—");
 
         Map<String, Object> model = new HashMap<>();
-        model.put("name", "claude-sonnet-4-5");
+        model.put("name", getActiveModelName());
         model.put("requestsToday", messageCount != null ? messageCount : 0);
         model.put("estimatedTokenSpend", "—");
 
@@ -150,6 +150,19 @@ public class StatusSseService {
         result.put("timestamp", Instant.now().toString());
 
         return result;
+    }
+
+    private String getActiveModelName() {
+        try {
+            var rows = jdbcTemplate.queryForList(
+                    "SELECT provider, model FROM model_overrides ORDER BY updated_at DESC LIMIT 1");
+            if (!rows.isEmpty()) {
+                return rows.get(0).get("provider") + "/" + rows.get(0).get("model");
+            }
+        } catch (Exception e) {
+            // table may not exist yet
+        }
+        return "anthropic/claude-sonnet-4-5";
     }
 
     private int countSkills() {

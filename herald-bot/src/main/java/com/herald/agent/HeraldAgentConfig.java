@@ -216,18 +216,41 @@ public class HeraldAgentConfig {
                                 ToolCallAdvisor.builder().build()
                         );
 
-        // Build the initial client from the default Anthropic ChatModel
-        ChatClient initialClient = clientBuilderFactory.apply(chatModel).build();
-
-        // Register available provider ChatModels
+        // Register available provider ChatModels and their default model names
         Map<String, ChatModel> availableModels = new LinkedHashMap<>();
         availableModels.put("anthropic", chatModel);
         openaiChatModel.ifPresent(model -> availableModels.put("openai", model));
         ollamaChatModel.ifPresent(model -> availableModels.put("ollama", model));
         geminiChatModel.ifPresent(model -> availableModels.put("gemini", model));
 
-        var switcher = new ModelSwitcher(availableModels, jdbcTemplate, clientBuilderFactory,
-                initialClient, "anthropic", defaultModel);
+        Map<String, String> providerDefaultModels = new LinkedHashMap<>();
+        providerDefaultModels.put("anthropic", defaultModel);
+        if (openaiChatModel.isPresent()) providerDefaultModels.put("openai", openaiModel);
+        if (ollamaChatModel.isPresent()) providerDefaultModels.put("ollama", ollamaModel);
+        if (geminiChatModel.isPresent()) providerDefaultModels.put("gemini", geminiModel);
+
+        // Resolve the default provider from env var (falls back to anthropic)
+        String requestedProvider = config.defaultProvider();
+        String initialProvider;
+        String initialModel;
+        if (availableModels.containsKey(requestedProvider)) {
+            initialProvider = requestedProvider;
+            initialModel = providerDefaultModels.getOrDefault(requestedProvider, defaultModel);
+        } else {
+            log.warn("Requested default provider '{}' is not available (missing API key?), falling back to anthropic",
+                    requestedProvider);
+            initialProvider = "anthropic";
+            initialModel = defaultModel;
+        }
+
+        // Build the initial client from the resolved provider
+        ChatModel initialChatModel = availableModels.get(initialProvider);
+        ChatClient initialClient = clientBuilderFactory.apply(initialChatModel)
+                .defaultOptions(chatOptionsForModel(initialChatModel, initialModel))
+                .build();
+
+        var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplate,
+                clientBuilderFactory, initialClient, initialProvider, initialModel);
         switcher.loadPersistedOverride();
         return switcher;
     }

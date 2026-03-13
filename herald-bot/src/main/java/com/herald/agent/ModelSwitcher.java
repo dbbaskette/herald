@@ -20,6 +20,7 @@ public class ModelSwitcher {
     private static final Logger log = LoggerFactory.getLogger(ModelSwitcher.class);
 
     private final Map<String, ChatModel> availableModels;
+    private final Map<String, String> providerDefaultModels;
     private final JdbcTemplate jdbcTemplate;
     private final Function<ChatModel, ChatClient.Builder> clientBuilderFactory;
 
@@ -28,12 +29,14 @@ public class ModelSwitcher {
     private volatile String activeModel;
 
     ModelSwitcher(Map<String, ChatModel> availableModels,
+                  Map<String, String> providerDefaultModels,
                   JdbcTemplate jdbcTemplate,
                   Function<ChatModel, ChatClient.Builder> clientBuilderFactory,
                   ChatClient initialClient,
                   String defaultProvider,
                   String defaultModel) {
         this.availableModels = new LinkedHashMap<>(availableModels);
+        this.providerDefaultModels = new LinkedHashMap<>(providerDefaultModels);
         this.jdbcTemplate = jdbcTemplate;
         this.clientBuilderFactory = clientBuilderFactory;
         this.activeClient = initialClient;
@@ -105,6 +108,10 @@ public class ModelSwitcher {
 
     public Set<String> getAvailableProviders() {
         return availableModels.keySet();
+    }
+
+    public Map<String, String> getAvailableProviderDefaults() {
+        return Map.copyOf(providerDefaultModels);
     }
 
     /**

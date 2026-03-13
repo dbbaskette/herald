@@ -1,9 +1,60 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useSettingsStore, settingDefs } from '@/stores/settings'
 
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
+
+// Model switcher state
+const modelStatus = ref<{ provider: string; model: string; available: Record<string, string> } | null>(null)
+const modelLoading = ref(false)
+const modelSwitching = ref(false)
+const modelMessage = ref('')
+const selectedProvider = ref('')
+const selectedModel = ref('')
+
+const availableProviders = computed(() =>
+  modelStatus.value ? Object.keys(modelStatus.value.available).filter(k => k !== 'error') : []
+)
+
+async function fetchModelStatus() {
+  modelLoading.value = true
+  try {
+    const res = await fetch('/api/model')
+    if (res.ok) {
+      modelStatus.value = await res.json()
+      selectedProvider.value = modelStatus.value!.provider
+      selectedModel.value = modelStatus.value!.model
+    }
+  } catch { /* bot offline */ }
+  finally { modelLoading.value = false }
+}
+
+function onProviderChange() {
+  if (modelStatus.value?.available[selectedProvider.value]) {
+    selectedModel.value = modelStatus.value.available[selectedProvider.value]
+  }
+}
+
+async function switchModel() {
+  modelSwitching.value = true
+  modelMessage.value = ''
+  try {
+    const res = await fetch('/api/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: selectedProvider.value, model: selectedModel.value })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      modelStatus.value = data
+      modelMessage.value = `Switched to ${data.provider}/${data.model}`
+    } else {
+      modelMessage.value = data.available?.error || 'Switch failed'
+    }
+  } catch { modelMessage.value = 'Bot unreachable' }
+  finally { modelSwitching.value = false }
+}
 
 const gwsStatus = ref<{ installed: boolean; clientConfigured: boolean; authenticated: boolean; message?: string } | null>(null)
 const gwsLoading = ref(false)
@@ -66,6 +117,7 @@ onMounted(async () => {
     form.value[def.key] = store.settings[def.key] ?? ''
   }
   fetchGwsStatus()
+  fetchModelStatus()
 })
 
 async function save() {
@@ -139,6 +191,65 @@ function hasChanges(): boolean {
                 :autocomplete="def.secret ? 'off' : undefined"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model & Provider -->
+      <div class="mb-8">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
+          Model & Provider
+        </h2>
+        <div class="bg-white rounded-lg shadow px-5 py-4">
+          <div v-if="modelLoading" class="text-sm text-gray-500">Checking model status...</div>
+          <div v-else-if="!modelStatus" class="text-sm text-gray-500">Bot is offline — model switching unavailable</div>
+          <div v-else>
+            <!-- Current model -->
+            <div class="flex items-center gap-3 mb-4">
+              <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>
+              <span class="text-sm font-medium text-gray-900">
+                Active: {{ modelStatus.provider }}/{{ modelStatus.model }}
+              </span>
+            </div>
+
+            <!-- Provider + Model selectors -->
+            <div class="flex flex-col sm:flex-row gap-3 mb-3">
+              <div class="sm:w-1/3">
+                <label for="model-provider" class="block text-xs font-medium text-gray-500 mb-1">Provider</label>
+                <select
+                  id="model-provider"
+                  v-model="selectedProvider"
+                  @change="onProviderChange"
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option v-for="p in availableProviders" :key="p" :value="p">{{ p }}</option>
+                </select>
+              </div>
+              <div class="sm:flex-1">
+                <label for="model-name" class="block text-xs font-medium text-gray-500 mb-1">Model</label>
+                <input
+                  id="model-name"
+                  v-model="selectedModel"
+                  type="text"
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <!-- Switch button -->
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                :disabled="modelSwitching || (selectedProvider === modelStatus.provider && selectedModel === modelStatus.model)"
+                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                @click="switchModel"
+              >
+                {{ modelSwitching ? 'Switching...' : 'Switch Model' }}
+              </button>
+              <span v-if="modelMessage" class="text-sm font-medium" :class="modelMessage.startsWith('Switched') ? 'text-green-600' : 'text-red-600'">
+                {{ modelMessage }}
+              </span>
             </div>
           </div>
         </div>

@@ -13,7 +13,7 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Agent(String persona, String systemPromptExtra, String contextFile,
-                        Integer maxContextTokens) {
+                        Integer maxContextTokens, String defaultProvider) {
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
@@ -53,6 +53,13 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.maxContextTokens();
         }
         return 200_000; // Claude default context window
+    }
+
+    public String defaultProvider() {
+        if (agent != null && agent.defaultProvider() != null && !agent.defaultProvider().isBlank()) {
+            return agent.defaultProvider().toLowerCase();
+        }
+        return "anthropic";
     }
 
     public record Cron(String timezone) {

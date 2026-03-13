@@ -38,13 +38,18 @@ class ModelSwitcherTest {
         availableModels.put("openai", openaiModel);
         availableModels.put("ollama", ollamaModel);
 
+        Map<String, String> providerDefaultModels = new LinkedHashMap<>();
+        providerDefaultModels.put("anthropic", "claude-sonnet-4-5");
+        providerDefaultModels.put("openai", "gpt-4o");
+        providerDefaultModels.put("ollama", "llama3.2");
+
         ChatClient switchedClient = mock(ChatClient.class);
         when(mockBuilder.defaultOptions(any())).thenReturn(mockBuilder);
         when(mockBuilder.build()).thenReturn(switchedClient);
 
         Function<ChatModel, ChatClient.Builder> factory = cm -> mockBuilder;
 
-        switcher = new ModelSwitcher(availableModels, jdbcTemplate, factory,
+        switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplate, factory,
                 initialClient, "anthropic", "claude-sonnet-4-5");
     }
 

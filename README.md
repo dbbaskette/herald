@@ -239,6 +239,7 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `OPENAI_API_KEY` | OpenAI API key | No | — |
 | `GEMINI_API_KEY` | Google Gemini API key | No | — |
 | `OLLAMA_BASE_URL` | Ollama server URL | No | — |
+| `HERALD_DEFAULT_PROVIDER` | Boot-time provider (`anthropic`, `openai`, `ollama`, `gemini`) | No | `anthropic` |
 | `HERALD_MODEL_DEFAULT` | Main agent model | No | `claude-sonnet-4-5` |
 | `HERALD_MODEL_HAIKU` | Fast/cheap subagent tier | No | `claude-haiku-4-5` |
 | `HERALD_MODEL_SONNET` | Mid-tier subagent | No | `claude-sonnet-4-5` |
