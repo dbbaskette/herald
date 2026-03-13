@@ -194,7 +194,7 @@
 
 **Blog:** `spring-ai-agent-utils` ships four built-in subagents auto-registered when `TaskTool` is configured: Explore (read-only codebase), General-Purpose (full access), Plan (architecture), Bash (command execution).
 
-**Herald:** 〜 **Partial / Custom Variant.** Herald does not use the built-in subagents directly. It defines three custom subagents in `.claude/agents/` tailored to Herald's personal assistant use case. The built-in definitions served as reference/inspiration for Herald's custom agents.
+**Herald:** ✅ **Implemented.** Herald uses the four built-in subagents (Explore, General-Purpose, Plan, Bash) auto-registered by `TaskTool`, plus one custom subagent — **research** (Opus, deep analysis with web search) — defined in `.claude/agents/research.md`. Custom agents are loaded via `ClaudeSubagentReferences.fromRootDirectory()` and merged alongside the built-ins.
 
 ---
 
@@ -317,7 +317,7 @@
 | Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 1 (execution w/ guardrails) | 1 (hot reload) | 2 (classpath, native Skills) |
 | Part 2: AskUserQuestion | 4 | 3 (core, handler, async bridge) | 1 (Telegram handler) | — | 1 (MCP Elicitation) |
 | Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | 1 (custom system prompt) | — | — |
-| Part 4: Subagents | 6 | 4 (provider, format, context, multi-model) | 1 (custom subagents) | — | 1 (parallel/background) |
+| Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | — | 1 (research subagent) | 1 (parallel/background) |
 | Part 5: A2A Protocol | 4 | — | — | — | 4 (all A2A features) |
 | Herald-Only Extensions | N/A | — | — | 7 (advisor chain, memory, cron, MCP, runtime model switch, console, shell guardrails) | — |
 
