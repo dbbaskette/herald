@@ -107,10 +107,10 @@ class HeraldAgentConfigTest {
                 agentConfig.modelSwitcher(null, configWith(null, null),
                         null, null, null, null, null, null, null, null, null, null, null,
                         new ClassPathResource("prompts/NONEXISTENT.md"),
-                        ".claude/agents", new ReloadableSkillsTool(".claude/skills"),
+                        ".claude/agents", new ReloadableSkillsTool("skills"),
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
-                        "gpt-4o", "llama3.2", Optional.empty(), Optional.empty()))
+                        "gpt-4o", "llama3.2", "gemini-2.5-flash", Optional.empty(), Optional.empty(), Optional.empty()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }

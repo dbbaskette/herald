@@ -43,7 +43,7 @@ public class SkillsWatcher {
     private final Map<WatchKey, Path> watchKeyPaths = new HashMap<>();
 
     public SkillsWatcher(ReloadableSkillsTool reloadableSkillsTool,
-                         @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+                         @Value("${herald.agent.skills-directory:skills}") String skillsDirectory) {
         this.reloadableSkillsTool = reloadableSkillsTool;
         if (skillsDirectory.startsWith("~")) {
             skillsDirectory = System.getProperty("user.home") + skillsDirectory.substring(1);

@@ -23,7 +23,7 @@ Herald can execute shell commands, manage your calendar and email, run scheduled
 
 - **Telegram-native** — chat with your AI assistant where you already message
 - **Persistent memory** — remembers your context, preferences, and history across sessions
-- **Skills system** — extensible via Markdown files in `.claude/skills/` (Claude Code compatible)
+- **Skills system** — extensible via Markdown files in `skills/` directory
 - **Subagent delegation** — routes complex research to specialist agents via TaskTool
 - **Proactive scheduling** — morning briefings, reminders, and cron-driven outreach
 - **Shell & file access** — executes commands on your Mac with security guardrails
@@ -257,9 +257,9 @@ herald/
 │   │   ├── api/                     # REST controllers
 │   │   └── sse/                     # SSE status stream
 │   └── frontend/                    # Vue 3 + Vite
+├── skills/                          # Reloadable skill definitions
 ├── .claude/
-│   ├── agents/                      # Subagent definitions (*.md)
-│   └── skills/                      # Skills (Claude Code compatible)
+│   └── agents/                      # Subagent definitions (*.md)
 ├── com.herald.plist                 # launchd service definition (bot)
 ├── com.herald-ui.plist              # launchd service definition (UI)
 └── docs/
@@ -301,9 +301,9 @@ flowchart TB
 
 | Pattern | Blog Post | Herald Implementation |
 |---------|-----------|----------------------|
-| **Agent Skills** | [Part 1: Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | `ReloadableSkillsTool` wraps the library's `SkillsTool` with hot-reload via `WatchService`. Skills live in `.claude/skills/` as Markdown files with YAML front matter. File changes trigger a 250ms debounced reload — no restart needed. |
+| **Agent Skills** | [Part 1: Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | `ReloadableSkillsTool` wraps the library's `SkillsTool` with hot-reload via `WatchService`. Skills live in `skills/` as Markdown files with YAML front matter. File changes trigger a 250ms debounced reload — no restart needed. |
 | **AskUserQuestion** | [Part 2: Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | Upstream `AskUserQuestionTool` from spring-ai-agent-utils, backed by `TelegramQuestionHandler` implementing `QuestionHandler`. Structured questions with options render as Telegram inline keyboard buttons (single-select); multi-select and free-text fall back to text-based messaging. Blocks on a `CompletableFuture` with a 5-minute timeout. |
-| **TodoWrite** | [Part 3: Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite) | `TodoWriteTool` tracks in-memory task lists and publishes `TodoProgressEvent`s via Spring's `ApplicationEventPublisher`. A `TodoProgressListener` forwards real-time progress to Telegram so the user sees each step as it completes. |
+| **TodoWrite** | [Part 3: Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite) | Upstream `TodoWriteTool` from spring-ai-agent-utils with structured task states (`pending`, `in_progress`, `completed`). A `todoEventHandler` bridges to `TodoProgressEvent` → `TodoProgressListener` → Telegram, showing real-time progress with status symbols as each step completes. |
 | **Subagent Orchestration** | [Part 4: Subagent Orchestration](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents) | `TaskTool` and `TaskOutputTool` from the library, wired with multi-model routing. Three subagents defined in `.claude/agents/*.md` — **explore** (Sonnet, read-only), **plan** (Sonnet, architecture), **research** (Opus, deep analysis) — each with tailored tool subsets and model tiers. |
 | **A2A Protocol** | [Part 5: Agent2Agent Interoperability](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | Not yet adopted — planned for cross-agent communication. |
 

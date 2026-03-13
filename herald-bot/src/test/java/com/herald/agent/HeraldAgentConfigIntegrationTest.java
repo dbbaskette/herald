@@ -8,7 +8,6 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
-import com.herald.tools.TodoWriteTool;
 import com.herald.tools.WebTools;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,6 +45,7 @@ class HeraldAgentConfigIntegrationTest {
     private static final String OPUS_MODEL = "claude-opus-4-5";
     private static final String OPENAI_MODEL = "gpt-4o";
     private static final String OLLAMA_MODEL = "llama3.2";
+    private static final String GEMINI_MODEL = "gemini-2.5-flash";
 
     @Test
     void modelSwitcherBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
@@ -67,12 +67,12 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(ObjectProvider.class), mock(TelegramSendTool.class),
+                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, Optional.empty(), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -108,12 +108,12 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(ObjectProvider.class), mock(TelegramSendTool.class),
+                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, Optional.empty(), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, Optional.empty(), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -140,13 +140,13 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockAnthropicModel, config, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
-                new FileSystemTools(), new TodoWriteTool(mock(ApplicationEventPublisher.class)), mock(ObjectProvider.class), mock(TelegramSendTool.class),
+                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL,
-                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel));
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL,
+                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();

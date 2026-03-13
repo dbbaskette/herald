@@ -20,7 +20,7 @@ fi
 
 # ── Bootstrap bundled skills ─────────────────────────────────────────
 HERALD_HOME="${HERALD_HOME:-$HOME/.herald}"
-BUNDLED_SKILLS_DIR="$SCRIPT_DIR/.claude/skills"
+BUNDLED_SKILLS_DIR="$SCRIPT_DIR/skills"
 RUNTIME_SKILLS_DIR="$HERALD_HOME/skills"
 if [ -d "$BUNDLED_SKILLS_DIR" ]; then
     for skill_dir in "$BUNDLED_SKILLS_DIR"/*/; do

@@ -9,7 +9,7 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
-import com.herald.tools.TodoWriteTool;
+import com.herald.tools.TodoProgressEvent;
 import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
@@ -32,6 +32,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -79,7 +80,7 @@ public class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     public List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todo", "askUserQuestion", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
+        return List.of("memory", "shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
     }
 
     @Bean
@@ -92,7 +93,7 @@ public class HeraldAgentConfig {
 
     @Bean
     public ReloadableSkillsTool reloadableSkillsTool(
-            @Value("${herald.agent.skills-directory:.claude/skills}") String skillsDirectory) {
+            @Value("${herald.agent.skills-directory:skills}") String skillsDirectory) {
         return new ReloadableSkillsTool(skillsDirectory);
     }
 
@@ -104,7 +105,7 @@ public class HeraldAgentConfig {
             MemoryTools memoryTools,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
-            TodoWriteTool todoTool,
+            ApplicationEventPublisher eventPublisher,
             ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
             TelegramSendTool telegramSendTool,
             GwsTools gwsTools,
@@ -182,6 +183,22 @@ public class HeraldAgentConfig {
         AskUserQuestionTool askTool = AskUserQuestionTool.builder()
                 .questionHandler(questionHandler)
                 .answersValidation(telegramHandler != null)
+                .build();
+
+        // Build upstream TodoWriteTool with event handler bridging to Telegram via TodoProgressEvent
+        org.springaicommunity.agent.tools.TodoWriteTool todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder()
+                .todoEventHandler(todos -> {
+                    StringBuilder sb = new StringBuilder();
+                    for (var item : todos.todos()) {
+                        String symbol = switch (item.status()) {
+                            case pending -> "\u2B1A";
+                            case in_progress -> "\u25B6";
+                            case completed -> "\u2713";
+                        };
+                        sb.append(symbol).append(" ").append(item.content()).append("\n");
+                    }
+                    eventPublisher.publishEvent(new TodoProgressEvent(todos, sb.toString()));
+                })
                 .build();
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel

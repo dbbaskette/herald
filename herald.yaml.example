@@ -33,7 +33,7 @@ subagents:
     opus: claude-opus-4-5
 
 skills:
-  dir: .claude/skills
+  dir: skills
   watch: true
 
 memory:
