@@ -27,8 +27,9 @@ Herald can execute shell commands, manage your calendar and email, run scheduled
 - **Subagent delegation** — routes complex research to specialist agents via TaskTool
 - **Proactive scheduling** — morning briefings, reminders, and cron-driven outreach
 - **Shell & file access** — executes commands on your Mac with security guardrails
-- **MCP integration** — Google Calendar and Gmail via MCP servers
-- **Multi-provider** — Anthropic, OpenAI, and Ollama models, switchable at runtime
+- **Google Workspace** — Gmail and Google Calendar via `gws` CLI
+- **Multi-provider** — Anthropic, OpenAI, Ollama, and Gemini models, switchable at runtime
+- **Obsidian integration** — cold memory storage, session archival, and research notes in an Obsidian vault
 - **Management console** — Vue 3 web UI for skills editing, memory, cron, and status
 
 ## Architecture
@@ -59,7 +60,7 @@ Both run as macOS `launchd` services and share a single SQLite database.
 sequenceDiagram
     participant T as Telegram
     participant P as TelegramPoller
-    participant A as ChatClient (Ultron)
+    participant A as ChatClient (Herald)
     participant Tools as Tools & Skills
     participant DB as SQLite
 
@@ -110,7 +111,7 @@ cd herald
 ./mvnw package -DskipTests
 ```
 
-This builds the `herald-bot` JAR at `herald-bot/target/herald-bot-0.1.0-SNAPSHOT.jar`.
+This builds both the `herald-bot` and `herald-ui` JARs.
 
 ### Step 3: Configure Environment
 
@@ -208,8 +209,10 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_TELEGRAM_ALLOWED_CHAT_ID` | Your Telegram chat ID | Yes | — |
 | `OPENAI_API_KEY` | OpenAI API key | No | — |
 | `OLLAMA_BASE_URL` | Ollama server URL | No | — |
-| `GCAL_MCP_URL` | Google Calendar MCP server URL | No | — |
-| `GMAIL_MCP_URL` | Gmail MCP server URL | No | — |
+| `GEMINI_API_KEY` | Google Gemini API key | No | — |
+| `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Gmail/Calendar | No | — |
+| `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` | OAuth client secret | No | — |
+| `HERALD_WEB_SEARCH_API_KEY` | Brave Search API key | No | — |
 | `HERALD_CRON_TIMEZONE` | Timezone for cron scheduler | No | `America/New_York` |
 | `HERALD_AGENT_PERSONA` | Override agent persona | No | Built-in default |
 | `HERALD_AGENT_CONTEXT_FILE` | Path to standing brief | No | `~/.herald/CONTEXT.md` |
@@ -257,9 +260,11 @@ herald/
 ├── .claude/
 │   ├── agents/                      # Subagent definitions (*.md)
 │   └── skills/                      # Skills (Claude Code compatible)
-├── com.herald.plist                 # launchd service definition
+├── com.herald.plist                 # launchd service definition (bot)
+├── com.herald-ui.plist              # launchd service definition (UI)
 └── docs/
-    └── gws-setup.md                 # Google Workspace CLI setup guide
+    ├── gws-setup.md                 # Google Workspace CLI setup guide
+    └── obsidian-setup.md            # Obsidian vault integration guide
 ```
 
 ## Agentic Patterns — Spring AI Agent Utils
@@ -297,7 +302,7 @@ flowchart TB
 | Pattern | Blog Post | Herald Implementation |
 |---------|-----------|----------------------|
 | **Agent Skills** | [Part 1: Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | `ReloadableSkillsTool` wraps the library's `SkillsTool` with hot-reload via `WatchService`. Skills live in `.claude/skills/` as Markdown files with YAML front matter. File changes trigger a 250ms debounced reload — no restart needed. |
-| **AskUserQuestion** | [Part 2: Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | Custom `AskUserQuestionTool` sends structured questions (free text, single/multi-select) to Telegram via `TelegramQuestionHandler`, then blocks on a `CompletableFuture` with a 5-minute timeout until the user replies. |
+| **AskUserQuestion** | [Part 2: Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | Upstream `AskUserQuestionTool` from spring-ai-agent-utils, backed by `TelegramQuestionHandler` implementing `QuestionHandler`. Structured questions with options render as Telegram inline keyboard buttons (single-select); multi-select and free-text fall back to text-based messaging. Blocks on a `CompletableFuture` with a 5-minute timeout. |
 | **TodoWrite** | [Part 3: Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite) | `TodoWriteTool` tracks in-memory task lists and publishes `TodoProgressEvent`s via Spring's `ApplicationEventPublisher`. A `TodoProgressListener` forwards real-time progress to Telegram so the user sees each step as it completes. |
 | **Subagent Orchestration** | [Part 4: Subagent Orchestration](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents) | `TaskTool` and `TaskOutputTool` from the library, wired with multi-model routing. Three subagents defined in `.claude/agents/*.md` — **explore** (Sonnet, read-only), **plan** (Sonnet, architecture), **research** (Opus, deep analysis) — each with tailored tool subsets and model tiers. |
 | **A2A Protocol** | [Part 5: Agent2Agent Interoperability](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | Not yet adopted — planned for cross-agent communication. |
@@ -318,7 +323,7 @@ Where the blog series describes `AgentEnvironment` for injecting runtime context
 
 Herald separates tools into two categories matching how Spring AI handles them:
 
-- **`@Tool`-annotated Spring beans** (via `.defaultTools()`) — `MemoryTools`, `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool`, `TodoWriteTool`, `CronTools`, `GwsTools`, `TelegramSendTool`
+- **`@Tool`-annotated POJOs** (via `.defaultTools()`) — `MemoryTools`, `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool` (upstream), `TodoWriteTool`, `CronTools`, `GwsTools`, `TelegramSendTool`
 - **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool` from spring-ai-agent-utils
 
 This mirrors the library's design: custom domain tools as annotated beans, library-provided tools as pre-built callbacks.
