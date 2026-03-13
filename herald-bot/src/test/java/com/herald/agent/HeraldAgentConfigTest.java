@@ -104,7 +104,7 @@ class HeraldAgentConfigTest {
     @Test
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
-                agentConfig.modelSwitcher(null, configWith(null, null),
+                agentConfig.modelSwitcher(null, configWith(null, null), false,
                         null, null, null, null, null, null, null, null, null, null, null,
                         new ClassPathResource("prompts/NONEXISTENT.md"),
                         ".claude/agents", new ReloadableSkillsTool("skills"),

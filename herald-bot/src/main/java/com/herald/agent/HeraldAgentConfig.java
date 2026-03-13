@@ -101,6 +101,7 @@ public class HeraldAgentConfig {
     public ModelSwitcher modelSwitcher(
             @Qualifier("anthropicChatModel") ChatModel chatModel,
             HeraldConfig config,
+            @Value("${herald.agent.prompt-dump:false}") boolean promptDump,
             ChatMemory chatMemory,
             MemoryTools memoryTools,
             HeraldShellDecorator shellDecorator,
@@ -213,6 +214,7 @@ public class HeraldAgentConfig {
                                 new MemoryBlockAdvisor(memoryTools),
                                 compactionAdvisor,
                                 new OneShotMemoryAdvisor(chatMemory),
+                                new PromptDumpAdvisor(promptDump),
                                 ToolCallAdvisor.builder().build()
                         );
 
