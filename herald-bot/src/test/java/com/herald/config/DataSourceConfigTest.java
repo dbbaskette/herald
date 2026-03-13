@@ -52,7 +52,7 @@ class DataSourceConfigTest {
         populator.addScript(new ClassPathResource("schema.sql"));
         populator.execute(dataSource);
 
-        // Verify all 5 tables exist
+        // Verify all expected tables exist
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
@@ -62,7 +62,8 @@ class DataSourceConfigTest {
                 tables.add(rs.getString(1));
             }
             assertThat(tables).containsExactlyInAnyOrder(
-                    "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides");
+                    "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides",
+                    "SPRING_AI_CHAT_MEMORY", "settings");
         }
     }
 

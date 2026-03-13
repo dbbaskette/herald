@@ -138,7 +138,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockAnthropicModel, config, chatMemory,
+                mockAnthropicModel, config, false, chatMemory,
                 mock(MemoryTools.class), mock(HeraldShellDecorator.class),
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class), mock(TelegramSendTool.class),
                 mock(GwsTools.class), new WebTools(""), mock(CronTools.class), jdbcTemplate,

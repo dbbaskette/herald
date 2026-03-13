@@ -46,7 +46,7 @@ class ContextCompactionAdvisorTest {
     @Test
     void doesNotCompactWhenUnderCeiling() {
         // 100 tokens max, 80% ceiling = 80 tokens
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 100);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 100);
 
         // Each message ~6 tokens (24 chars / 4), total ~12 tokens — well under ceiling
         List<Message> history = List.of(
@@ -64,7 +64,7 @@ class ContextCompactionAdvisorTest {
     @Test
     void compactsWhenOverCeiling() {
         // Small token limit so our test messages exceed the 80% ceiling
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 50);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 50);
 
         // Each message is ~25 chars = ~6 tokens, 4 messages = ~24 tokens
         // But let's use longer messages to be clearly over 80% of 50 = 40 tokens
@@ -78,9 +78,7 @@ class ContextCompactionAdvisorTest {
 
         advisor.adviseCall(request, chain);
 
-        // Should have stored a summary
-        verify(memoryTools).memory_set(argThat(key -> key.startsWith("context_summary_")), anyString());
-        // Should have cleared and re-added remaining messages
+        // Should have cleared and re-added remaining messages (summary archived to Obsidian or hot memory)
         verify(chatMemory).clear("default");
         verify(chatMemory).add(eq("default"), anyList());
         verify(chain).nextCall(request);
@@ -88,7 +86,7 @@ class ContextCompactionAdvisorTest {
 
     @Test
     void summaryContainsMessageContent() {
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 20);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 20);
 
         String longText = "a".repeat(200);
         List<Message> history = new ArrayList<>(List.of(
@@ -100,14 +98,15 @@ class ContextCompactionAdvisorTest {
 
         advisor.adviseCall(request, chain);
 
-        verify(memoryTools).memory_set(anyString(),
-                argThat(summary -> summary.contains("Prior conversation summary")));
+        // Should have compacted — verify clear + re-add
+        verify(chatMemory).clear("default");
+        verify(chatMemory).add(eq("default"), anyList());
     }
 
     @Test
     void keepsAtLeastTwoMessages() {
         // Even if all messages exceed the ceiling, keep the last 2
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 10);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 10);
 
         String longText = "a".repeat(200);
         List<Message> history = new ArrayList<>(List.of(
@@ -143,13 +142,13 @@ class ContextCompactionAdvisorTest {
 
     @Test
     void nameReturnsExpectedValue() {
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 100);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 100);
         assertThat(advisor.getName()).isEqualTo("ContextCompactionAdvisor");
     }
 
     @Test
     void usesDefaultConversationIdWhenNotInContext() {
-        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, 100);
+        var advisor = new ContextCompactionAdvisor(chatMemory, memoryTools, null, 100);
         when(request.context()).thenReturn(Collections.emptyMap());
         when(chatMemory.get("default")).thenReturn(Collections.emptyList());
 

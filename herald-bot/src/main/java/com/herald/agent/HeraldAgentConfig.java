@@ -35,6 +35,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
@@ -64,7 +65,7 @@ public class HeraldAgentConfig {
     private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter DATETIME_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
-    private static final int MAX_CONVERSATION_MESSAGES = 100;
+    private static final int MAX_CONVERSATION_MESSAGES = 20;
 
     @Bean
     public TaskScheduler taskScheduler() {
@@ -137,7 +138,7 @@ public class HeraldAgentConfig {
 
         // Set up context compaction advisor — backstop against context window overflow
         ContextCompactionAdvisor compactionAdvisor =
-                new ContextCompactionAdvisor(chatMemory, memoryTools, config.maxContextTokens());
+                new ContextCompactionAdvisor(chatMemory, memoryTools, chatModel, config.maxContextTokens());
 
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
@@ -213,9 +214,15 @@ public class HeraldAgentConfig {
                                 contextMdAdvisor,
                                 new MemoryBlockAdvisor(memoryTools),
                                 compactionAdvisor,
-                                new OneShotMemoryAdvisor(chatMemory),
+                                new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES),
                                 new PromptDumpAdvisor(promptDump),
-                                ToolCallAdvisor.builder().build()
+                                // Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
+                                // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
+                                // OneShotMemoryAdvisor, causing memory to load/save on every
+                                // tool-call iteration and duplicating messages.
+                                ToolCallAdvisor.builder()
+                                        .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
+                                        .build()
                         );
 
         // Register available provider ChatModels and their default model names

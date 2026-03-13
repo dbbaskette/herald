@@ -69,8 +69,9 @@ public class JsonChatMemoryRepository implements ChatMemoryRepository {
 
     @Override
     public void saveAll(String conversationId, List<Message> messages) {
-        // Spring AI's MessageWindowChatMemory calls deleteByConversationId then saveAll
-        // with the full windowed list, so we just insert all.
+        // Spring AI 2.0.0 MessageWindowChatMemory no longer calls deleteByConversationId
+        // before saveAll — the repository is expected to handle the full replacement.
+        deleteByConversationId(conversationId);
         for (Message msg : messages) {
             try {
                 String json = serialize(msg);

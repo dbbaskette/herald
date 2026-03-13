@@ -44,11 +44,11 @@
                         <configuration>
                             <artifactItems>
                                 <artifactItem>
-                                    <groupId>org.mockito</groupId>
-                                    <artifactId>mockito-agent</artifactId>
-                                    <version>${mockito.version}</version>
+                                    <groupId>net.bytebuddy</groupId>
+                                    <artifactId>byte-buddy-agent</artifactId>
+                                    <version>${byte-buddy.version}</version>
                                     <outputDirectory>${project.build.directory}</outputDirectory>
-                                    <destFileName>mockito-agent.jar</destFileName>
+                                    <destFileName>byte-buddy-agent.jar</destFileName>
                                 </artifactItem>
                             </artifactItems>
                         </configuration>
@@ -60,7 +60,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!-- Preload Mockito agent so inline mock maker works on macOS/JDK 21 -->
-                    <argLine>-javaagent:${project.build.directory}/mockito-agent.jar -Djdk.attach.allowAttachSelf=true</argLine>
+                    <argLine>-javaagent:${project.build.directory}/byte-buddy-agent.jar -Djdk.attach.allowAttachSelf=true</argLine>
                 </configuration>
             </plugin>
         </plugins>

@@ -112,19 +112,29 @@ class PromptDumpAdvisor implements CallAdvisor {
                 }
             }
 
-            // Tool definitions
-            if (request.toolCallbacks() != null && !request.toolCallbacks().isEmpty()) {
-                sb.append("--- TOOLS (").append(request.toolCallbacks().size()).append(") ---\n");
-                for (var tool : request.toolCallbacks()) {
-                    var def = tool.getToolDefinition();
-                    sb.append("  - ").append(def.name());
-                    String desc = def.description();
-                    if (desc != null) {
-                        sb.append(" (").append(desc.length()).append(" chars desc)");
+            // Tool definitions (available via context map if present)
+            try {
+                @SuppressWarnings("unchecked")
+                var toolCallbacks = (java.util.Collection<?>) request.context().get("toolCallbacks");
+                if (toolCallbacks != null && !toolCallbacks.isEmpty()) {
+                    sb.append("--- TOOLS (").append(toolCallbacks.size()).append(") ---\n");
+                    for (var tool : toolCallbacks) {
+                        if (tool instanceof org.springframework.ai.tool.ToolCallback tc) {
+                            var def = tc.getToolDefinition();
+                            sb.append("  - ").append(def.name());
+                            String desc = def.description();
+                            if (desc != null) {
+                                sb.append(" (").append(desc.length()).append(" chars desc)");
+                            }
+                            sb.append("\n");
+                        } else {
+                            sb.append("  - ").append(tool.getClass().getSimpleName()).append("\n");
+                        }
                     }
                     sb.append("\n");
                 }
-                sb.append("\n");
+            } catch (Exception ignored) {
+                // Tool info not available in this request context
             }
 
             // Rough token estimate

@@ -11,6 +11,8 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.Ordered;
 
 import java.io.BufferedReader;
@@ -40,11 +42,14 @@ class ContextCompactionAdvisor implements CallAdvisor {
 
     private final ChatMemory chatMemory;
     private final MemoryTools memoryTools;
+    private final ChatModel summaryModel;
     private final int maxContextTokens;
 
-    ContextCompactionAdvisor(ChatMemory chatMemory, MemoryTools memoryTools, int maxContextTokens) {
+    ContextCompactionAdvisor(ChatMemory chatMemory, MemoryTools memoryTools, ChatModel summaryModel,
+                             int maxContextTokens) {
         this.chatMemory = chatMemory;
         this.memoryTools = memoryTools;
+        this.summaryModel = summaryModel;
         this.maxContextTokens = maxContextTokens;
     }
 
@@ -155,8 +160,45 @@ class ContextCompactionAdvisor implements CallAdvisor {
                 remaining.size(), estimateTokens(remaining));
     }
 
+    private static final String SUMMARY_PROMPT = """
+            Summarize the following conversation into a concise paragraph. Focus on:
+            - What topics were discussed
+            - What decisions were made
+            - What actions were taken or requested
+            - Any important context that would be needed to continue the conversation
+
+            Keep the summary under 200 words. Be specific — include names, file paths, \
+            and technical details that matter. Do not include filler or generic phrases.
+
+            Conversation:
+            %s
+            """;
+
     private String buildSummary(List<Message> messages) {
-        var sb = new StringBuilder("Prior conversation summary (auto-compacted): ");
+        String transcript = formatTranscript(messages);
+
+        // Use LLM for a meaningful summary
+        if (summaryModel != null) {
+            try {
+                String prompt = SUMMARY_PROMPT.formatted(transcript);
+                var response = summaryModel.call(new Prompt(prompt));
+                String summary = response.getResult().getOutput().getText();
+                if (summary != null && !summary.isBlank()) {
+                    return summary.strip();
+                }
+            } catch (Exception e) {
+                log.warn("LLM summarization failed, falling back to transcript truncation: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: truncated transcript
+        return transcript.length() > 1000
+                ? transcript.substring(0, 1000) + "\n... [truncated]"
+                : transcript;
+    }
+
+    private String formatTranscript(List<Message> messages) {
+        var sb = new StringBuilder();
         for (Message msg : messages) {
             String role = switch (msg) {
                 case UserMessage ignored -> "User";
@@ -165,10 +207,10 @@ class ContextCompactionAdvisor implements CallAdvisor {
             };
             String text = msg.getText();
             if (text != null && !text.isBlank()) {
-                String truncated = text.length() > 300
-                        ? text.substring(0, 300) + "..."
+                String truncated = text.length() > 500
+                        ? text.substring(0, 500) + "..."
                         : text;
-                sb.append(role).append(": ").append(truncated).append(" | ");
+                sb.append(role).append(": ").append(truncated).append("\n\n");
             }
         }
         return sb.toString().stripTrailing();

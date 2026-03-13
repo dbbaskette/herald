@@ -36,9 +36,11 @@ class OneShotMemoryAdvisor implements CallAdvisor {
     private static final ThreadLocal<Boolean> MEMORY_LOADED = ThreadLocal.withInitial(() -> false);
 
     private final ChatMemory chatMemory;
+    private final int maxMessages;
 
-    OneShotMemoryAdvisor(ChatMemory chatMemory) {
+    OneShotMemoryAdvisor(ChatMemory chatMemory, int maxMessages) {
         this.chatMemory = chatMemory;
+        this.maxMessages = maxMessages;
     }
 
     @Override
@@ -55,8 +57,18 @@ class OneShotMemoryAdvisor implements CallAdvisor {
         String conversationId = resolveConversationId(request);
 
         try {
-            // Load conversation history and prepend to the prompt
+            // Capture the user message(s) from THIS turn immediately — before the chain
+            // runs, because ToolCallAdvisor mutates the prompt's instruction list during
+            // tool-call iterations, which can duplicate user messages.
+            List<Message> originalUserMessages = request.prompt().getInstructions().stream()
+                    .filter(UserMessage.class::isInstance)
+                    .toList();
+
+            // Load conversation history (only the most recent messages) and prepend to the prompt
             List<Message> history = chatMemory.get(conversationId);
+            if (history.size() > maxMessages) {
+                history = history.subList(history.size() - maxMessages, history.size());
+            }
             List<Message> currentMessages = request.prompt().getInstructions();
 
             List<Message> combined = new ArrayList<>(history.size() + currentMessages.size());
@@ -70,8 +82,8 @@ class OneShotMemoryAdvisor implements CallAdvisor {
             // Run the full chain (ToolCallAdvisor loop happens here)
             ChatClientResponse response = chain.nextCall(request);
 
-            // Save the new user message + assistant response to memory
-            saveNewMessages(conversationId, currentMessages, response);
+            // Save only the captured user message + assistant response
+            saveNewMessages(conversationId, originalUserMessages, response);
 
             return response;
         } finally {
@@ -79,22 +91,15 @@ class OneShotMemoryAdvisor implements CallAdvisor {
         }
     }
 
-    private void saveNewMessages(String conversationId, List<Message> currentMessages, ChatClientResponse response) {
+    private void saveNewMessages(String conversationId, List<Message> userMessages, ChatClientResponse response) {
         try {
-            List<Message> toSave = new ArrayList<>();
+            List<Message> toSave = new ArrayList<>(userMessages);
 
-            // Save the user message(s) from this turn
-            for (Message msg : currentMessages) {
-                if (msg instanceof UserMessage) {
-                    toSave.add(msg);
-                }
-            }
-
-            // Save the final assistant response
+            // Save the final assistant response (skip empty tool-call-only responses)
             if (response != null && response.chatResponse() != null
                     && response.chatResponse().getResult() != null) {
                 AssistantMessage output = response.chatResponse().getResult().getOutput();
-                if (output != null) {
+                if (output != null && output.getText() != null && !output.getText().isBlank()) {
                     toSave.add(output);
                 }
             }
