@@ -237,8 +237,15 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | Yes | — |
 | `HERALD_TELEGRAM_ALLOWED_CHAT_ID` | Your Telegram chat ID | Yes | — |
 | `OPENAI_API_KEY` | OpenAI API key | No | — |
-| `OLLAMA_BASE_URL` | Ollama server URL | No | — |
 | `GEMINI_API_KEY` | Google Gemini API key | No | — |
+| `OLLAMA_BASE_URL` | Ollama server URL | No | — |
+| `HERALD_MODEL_DEFAULT` | Main agent model | No | `claude-sonnet-4-5` |
+| `HERALD_MODEL_HAIKU` | Fast/cheap subagent tier | No | `claude-haiku-4-5` |
+| `HERALD_MODEL_SONNET` | Mid-tier subagent | No | `claude-sonnet-4-5` |
+| `HERALD_MODEL_OPUS` | High-capability subagent tier | No | `claude-opus-4-5` |
+| `HERALD_MODEL_OPENAI` | OpenAI subagent tier | No | `gpt-4o` |
+| `HERALD_MODEL_OLLAMA` | Ollama (local) subagent tier | No | `llama3.2` |
+| `HERALD_MODEL_GEMINI` | Gemini subagent tier | No | `gemini-2.5-flash` |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Gmail/Calendar | No | — |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` | OAuth client secret | No | — |
 | `HERALD_WEB_SEARCH_API_KEY` | Brave Search API key | No | — |

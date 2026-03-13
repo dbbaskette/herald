@@ -13,7 +13,7 @@ spring:
       api-key: ${ANTHROPIC_API_KEY:}
       chat:
         options:
-          model: claude-sonnet-4-5
+          model: ${HERALD_MODEL_DEFAULT:claude-sonnet-4-5}
           max-tokens: 8192
     openai:
       # Disable auto-configuration — provider beans are created manually via herald.providers config
@@ -59,6 +59,13 @@ herald:
     context-file: ${HERALD_AGENT_CONTEXT_FILE:~/.herald/CONTEXT.md}
     max-context-tokens: ${HERALD_AGENT_MAX_CONTEXT_TOKENS:200000}
     skills-directory: ${HERALD_SKILLS_DIRECTORY:~/.herald/skills}
+    model:
+      haiku: ${HERALD_MODEL_HAIKU:claude-haiku-4-5}
+      sonnet: ${HERALD_MODEL_SONNET:claude-sonnet-4-5}
+      opus: ${HERALD_MODEL_OPUS:claude-opus-4-5}
+      openai: ${HERALD_MODEL_OPENAI:gpt-4o}
+      ollama: ${HERALD_MODEL_OLLAMA:llama3.2}
+      gemini: ${HERALD_MODEL_GEMINI:gemini-2.5-flash}
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
   web:
