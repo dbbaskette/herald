@@ -1,8 +1,6 @@
 package com.herald.agent;
 
 import com.herald.agent.profile.AgentProfile;
-import com.herald.tools.FileSystemTools;
-import com.herald.tools.WebTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -16,6 +14,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Standalone factory that builds a {@link ChatClient} from an {@link AgentProfile}
@@ -33,6 +32,7 @@ public final class AgentFactory {
 
     /**
      * Build a {@link ChatClient} from the given profile, system prompt, and chat model.
+     * Uses a default {@link ToolCategoryRegistry} with only stateless tools.
      *
      * @param profile      the agent profile (parsed from agents.md frontmatter)
      * @param systemPrompt the system prompt text (body of agents.md)
@@ -40,12 +40,78 @@ public final class AgentFactory {
      * @return a fully configured ChatClient
      */
     public static ChatClient fromProfile(AgentProfile profile, String systemPrompt, ChatModel chatModel) {
+        return fromProfile(profile, systemPrompt, chatModel, new ToolCategoryRegistry());
+    }
+
+    /**
+     * Build a {@link ChatClient} from the given profile, system prompt, chat model,
+     * and a pre-configured {@link ToolCategoryRegistry}.
+     *
+     * @param profile      the agent profile (parsed from agents.md frontmatter)
+     * @param systemPrompt the system prompt text (body of agents.md)
+     * @param chatModel    the Spring AI ChatModel to use
+     * @param registry     the tool category registry to resolve tool names
+     * @return a fully configured ChatClient
+     */
+    public static ChatClient fromProfile(AgentProfile profile, String systemPrompt,
+                                          ChatModel chatModel, ToolCategoryRegistry registry) {
         List<Advisor> advisors = buildAdvisors(profile);
-        List<Object> tools = resolveTools(profile.tools());
+        List<Object> tools = registry.resolve(profile.tools());
 
         var builder = ChatClient.builder(chatModel)
                 .defaultSystem(systemPrompt)
                 .defaultAdvisors(advisors);
+
+        if (!tools.isEmpty()) {
+            builder.defaultTools(tools.toArray());
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Build a {@link ChatClient} resolving the provider from the profile.
+     *
+     * @param profile          agent configuration
+     * @param systemPrompt     markdown body
+     * @param availableModels  map of provider name to ChatModel
+     * @param registry         tool category registry
+     * @param providerOverride CLI --provider override (nullable)
+     * @param modelOverride    CLI --model override (nullable)
+     * @return a fully configured ChatClient
+     */
+    public static ChatClient fromProfile(AgentProfile profile, String systemPrompt,
+                                          Map<String, ChatModel> availableModels,
+                                          ToolCategoryRegistry registry,
+                                          String providerOverride, String modelOverride) {
+        // Resolve provider: CLI override > profile > default "anthropic"
+        String provider = providerOverride != null ? providerOverride
+                : profile.provider() != null ? profile.provider()
+                : "anthropic";
+
+        ChatModel chatModel = availableModels.get(provider);
+        if (chatModel == null) {
+            throw new IllegalArgumentException(
+                    "Provider '" + provider + "' not available. "
+                    + "Available: " + availableModels.keySet() + ". "
+                    + "Check that the corresponding API key is set.");
+        }
+
+        // Model override: resolve via ChatOptions if provided
+        String model = modelOverride != null ? modelOverride
+                : profile.model() != null ? profile.model()
+                : null;
+
+        List<Advisor> advisors = buildAdvisors(profile);
+        List<Object> tools = registry.resolve(profile.tools());
+
+        var builder = ChatClient.builder(chatModel)
+                .defaultSystem(systemPrompt)
+                .defaultAdvisors(advisors);
+
+        if (model != null) {
+            builder.defaultOptions(ModelSwitcher.chatOptionsForModel(chatModel, model));
+        }
 
         if (!tools.isEmpty()) {
             builder.defaultTools(tools.toArray());
@@ -73,19 +139,4 @@ public final class AgentFactory {
         return advisors;
     }
 
-    private static List<Object> resolveTools(List<String> toolNames) {
-        if (toolNames == null || toolNames.isEmpty()) {
-            return List.of();
-        }
-
-        List<Object> tools = new ArrayList<>();
-        for (String name : toolNames) {
-            switch (name) {
-                case "filesystem" -> tools.add(new FileSystemTools());
-                case "web" -> tools.add(new WebTools(""));
-                default -> log.debug("Skipping tool '{}' — requires DI-provided instance", name);
-            }
-        }
-        return tools;
-    }
 }

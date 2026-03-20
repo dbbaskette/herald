@@ -16,6 +16,7 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,6 +39,10 @@ class EphemeralRunnerTest {
         return mockModel;
     }
 
+    private Map<String, ChatModel> singleProviderMap(ChatModel model) {
+        return Map.of("anthropic", model);
+    }
+
     @Test
     void runsPromptAndPrintsResponse(@TempDir Path tempDir) throws Exception {
         Path agentFile = tempDir.resolve("agent.md");
@@ -57,7 +62,7 @@ class EphemeralRunnerTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(baos);
 
-        var runner = new EphemeralRunner(mockModel, out);
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), out, System.err);
         var args = new DefaultApplicationArguments(
                 "--agents=" + agentFile, "--prompt=Say hello");
 
@@ -73,7 +78,7 @@ class EphemeralRunnerTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream err = new PrintStream(baos);
 
-        var runner = new EphemeralRunner(mockModel, System.out, err);
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), System.out, err);
         var args = new DefaultApplicationArguments(
                 "--agents=/nonexistent/agent.md", "--prompt=hello");
 
@@ -86,7 +91,7 @@ class EphemeralRunnerTest {
     @Test
     void doesNothingWithoutAgentsArg() throws Exception {
         ChatModel mockModel = createMockModel(null);
-        var runner = new EphemeralRunner(mockModel, System.out);
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), System.out, System.err);
         var args = new DefaultApplicationArguments();
 
         // Should return without doing anything
@@ -104,7 +109,7 @@ class EphemeralRunnerTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(baos);
 
-        var runner = new EphemeralRunner(mockModel, out);
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), out, System.err);
         ApplicationArguments args = new DefaultApplicationArguments(
                 "--agents=" + Path.of(resource.toURI()),
                 "--prompt=List all files in the current directory");
@@ -125,5 +130,38 @@ class EphemeralRunnerTest {
         // Profile tools should NOT include memory, cron, telegram
         assertThat(parsed.profile().tools()).doesNotContain("memory", "cron", "telegram_send");
         assertThat(parsed.profile().tools()).contains("filesystem", "web");
+    }
+
+    @Test
+    void endToEndCsvReporterDemo(@TempDir Path tempDir) throws Exception {
+        // Create agent file matching examples/csv-reporter.md format
+        Path agentFile = tempDir.resolve("csv-reporter.md");
+        Files.writeString(agentFile, """
+                ---
+                name: csv-reporter
+                description: CSV report generator
+                model: sonnet
+                tools: [filesystem]
+                ---
+
+                You are a data processing agent.
+                """);
+
+        // Mock ChatModel
+        ChatModel mockModel = createMockModel(
+                "Done. Wrote report.csv with 3 rows summarizing data.json.");
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(baos);
+
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), out, System.err);
+        ApplicationArguments args = new DefaultApplicationArguments(
+                "--agents=" + agentFile,
+                "--prompt=Summarize data.json into report.csv");
+
+        runner.run(args);
+
+        assertThat(baos.toString()).isNotEmpty();
+        assertThat(baos.toString()).contains("report.csv");
     }
 }
