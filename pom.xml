@@ -22,6 +22,7 @@
         <module>herald-core</module>
         <module>herald-persistence</module>
         <module>herald-telegram</module>
+        <module>herald-cli</module>
         <module>herald-bot</module>
         <module>herald-ui</module>
     </modules>
