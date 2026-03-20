@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * and persists token usage to the model_usage table.
  */
 @Component
-public class AgentMetrics {
+public class AgentMetrics implements AgentTurnListener {
 
     private static final Logger log = LoggerFactory.getLogger(AgentMetrics.class);
 
@@ -41,7 +41,8 @@ public class AgentMetrics {
     /**
      * Record metrics for a completed agent turn.
      */
-    void recordTurn(String provider, String model, long tokensIn, long tokensOut,
+    @Override
+    public void recordTurn(String provider, String model, long tokensIn, long tokensOut,
                     long latencyMs, List<String> toolCalls, String subagentId) {
         String turnId = UUID.randomUUID().toString();
 

@@ -27,7 +27,7 @@ class AgentServiceTest {
     private ChatClient chatClient;
     private ChatClientRequestSpec requestSpec;
     private CallResponseSpec callResponseSpec;
-    private AgentMetrics agentMetrics;
+    private AgentTurnListener agentTurnListener;
     private ModelSwitcher modelSwitcher;
     private AgentService agentService;
 
@@ -36,7 +36,7 @@ class AgentServiceTest {
         chatClient = mock(ChatClient.class);
         requestSpec = mock(ChatClientRequestSpec.class);
         callResponseSpec = mock(CallResponseSpec.class);
-        agentMetrics = mock(AgentMetrics.class);
+        agentTurnListener = mock(AgentTurnListener.class);
         modelSwitcher = mock(ModelSwitcher.class);
 
         when(modelSwitcher.getActiveClient()).thenReturn(chatClient);
@@ -45,7 +45,7 @@ class AgentServiceTest {
         when(requestSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(callResponseSpec);
 
-        agentService = new AgentService(modelSwitcher, agentMetrics);
+        agentService = new AgentService(modelSwitcher, agentTurnListener);
     }
 
     @Test
@@ -56,7 +56,7 @@ class AgentServiceTest {
 
         assertThat(result).isEqualTo("Hello from Herald!");
         verify(requestSpec).user("Hi");
-        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -87,7 +87,7 @@ class AgentServiceTest {
                 .hasMessage("API error");
 
         // Metrics should still be recorded on failure with zero tokens
-        verify(agentMetrics).recordTurn(eq("unknown"), eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()), isNull());
+        verify(agentTurnListener).recordTurn(eq("unknown"), eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()), isNull());
     }
 
     @Test
@@ -96,7 +96,7 @@ class AgentServiceTest {
 
         agentService.chat("test");
 
-        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -118,7 +118,7 @@ class AgentServiceTest {
 
         agentService.chat("run tools");
 
-        verify(agentMetrics).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(),
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(),
                 eq(List.of("shell_exec", "file_read")), isNull());
     }
 

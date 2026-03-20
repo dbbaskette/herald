@@ -7,8 +7,12 @@ import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -85,7 +89,7 @@ public class ModelSwitcher {
                     + "Available providers: " + availableModels.keySet());
         }
 
-        var options = HeraldAgentConfig.chatOptionsForModel(chatModel, model);
+        var options = chatOptionsForModel(chatModel, model);
         ChatClient newClient = clientBuilderFactory.apply(chatModel)
                 .defaultOptions(options)
                 .build();
@@ -128,6 +132,18 @@ public class ModelSwitcher {
             log.info("Refreshing active ChatClient for provider '{}'", provider);
             switchModel(provider, activeModel);
         }
+    }
+
+    /**
+     * Build vendor-specific ChatOptions for the given model.
+     * Extracted here so herald-core has no dependency on HeraldAgentConfig.
+     */
+    static ChatOptions chatOptionsForModel(ChatModel chatModel, String modelId) {
+        if (chatModel instanceof OpenAiChatModel) {
+            return OpenAiChatOptions.builder().model(modelId).build();
+        }
+        // Default to Anthropic
+        return AnthropicChatOptions.builder().model(modelId).build();
     }
 
     private void persistOverride(String provider, String model) {

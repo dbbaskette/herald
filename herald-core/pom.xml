@@ -10,34 +10,19 @@
         <version>0.4.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>herald-bot</artifactId>
-    <name>Herald Bot</name>
-    <description>Telegram bot and AI agent loop</description>
+    <artifactId>herald-core</artifactId>
+    <name>Herald Core</name>
+    <description>Core agent logic, tools, and prompt infrastructure — zero persistence dependencies</description>
 
     <dependencies>
-        <!-- Herald Core -->
-        <dependency>
-            <groupId>com.herald</groupId>
-            <artifactId>herald-core</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <!-- Spring Boot -->
+        <!-- Spring Boot (web for component scanning / actuator) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jdbc</artifactId>
         </dependency>
 
         <!-- Spring AI -->
@@ -49,28 +34,18 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
-        <!-- Note: 'model-' infix is correct for Spring AI 2.0.0-SNAPSHOT BOM -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
-        </dependency>
 
+        <!-- Community agent utilities -->
         <dependency>
             <groupId>org.springaicommunity</groupId>
             <artifactId>spring-ai-agent-utils</artifactId>
         </dependency>
 
-        <!-- Telegram Bot API -->
+        <!-- Optional: JDBC for ModelSwitcher persistence (null-safe at runtime) -->
         <dependency>
-            <groupId>com.github.pengrad</groupId>
-            <artifactId>java-telegram-bot-api</artifactId>
-            <version>7.7.0</version>
-        </dependency>
-
-        <!-- SQLite for chat memory -->
-        <dependency>
-            <groupId>org.xerial</groupId>
-            <artifactId>sqlite-jdbc</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+            <optional>true</optional>
         </dependency>
 
         <!-- Test -->
@@ -80,14 +55,5 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

@@ -19,6 +19,7 @@
     <description>Personal AI agent powered by Spring AI</description>
 
     <modules>
+        <module>herald-core</module>
         <module>herald-bot</module>
         <module>herald-ui</module>
     </modules>

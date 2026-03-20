@@ -10,6 +10,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -23,11 +24,12 @@ public class AgentService {
     public static final String DEFAULT_CONVERSATION_ID = "default";
 
     private final ModelSwitcher modelSwitcher;
-    private final AgentMetrics agentMetrics;
+    @Nullable
+    private final AgentTurnListener agentTurnListener;
 
-    public AgentService(ModelSwitcher modelSwitcher, AgentMetrics agentMetrics) {
+    public AgentService(ModelSwitcher modelSwitcher, @Nullable AgentTurnListener agentTurnListener) {
         this.modelSwitcher = modelSwitcher;
-        this.agentMetrics = agentMetrics;
+        this.agentTurnListener = agentTurnListener;
     }
 
     /**
@@ -75,8 +77,10 @@ public class AgentService {
             toolCalls = extractToolCalls(chatResponse);
         } finally {
             long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
-            String provider = AgentMetrics.deriveProvider(model);
-            agentMetrics.recordTurn(provider, model, tokensIn, tokensOut, latencyMs, toolCalls, null);
+            if (agentTurnListener != null) {
+                String provider = AgentTurnListener.deriveProvider(model);
+                agentTurnListener.recordTurn(provider, model, tokensIn, tokensOut, latencyMs, toolCalls, null);
+            }
         }
 
         String content = chatResponse != null && chatResponse.getResult() != null
