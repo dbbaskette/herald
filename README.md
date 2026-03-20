@@ -51,6 +51,16 @@ Herald can execute shell commands, manage your calendar and email, run scheduled
 - **Obsidian integration** — cold memory storage, session archival, and research notes in an Obsidian vault
 - **Management console** — Vue 3 web UI for skills editing, memory, cron, and status
 
+### Herald Console
+
+| System Status | Skills Editor |
+|:---:|:---:|
+| ![Status](assets/screenshots/herald-ui-status.png) | ![Skills](assets/screenshots/herald-ui-skills.png) |
+
+| Memory Viewer | Settings |
+|:---:|:---:|
+| ![Memory](assets/screenshots/herald-ui-memory.png) | ![Settings](assets/screenshots/herald-ui-settings.png) |
+
 ## Skills
 
 Skills are Markdown files with YAML front matter that teach Herald new capabilities without code changes. Drop a file into `skills/` and Herald picks it up immediately — no restart required.
