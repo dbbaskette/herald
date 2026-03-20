@@ -17,7 +17,8 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
-                            OpenAiProviderConfig ollama, OpenAiProviderConfig gemini) {
+                            OpenAiProviderConfig ollama, OpenAiProviderConfig gemini,
+                            OpenAiProviderConfig lmstudio) {
     }
 
     public record ProviderConfig(String apiKey) {

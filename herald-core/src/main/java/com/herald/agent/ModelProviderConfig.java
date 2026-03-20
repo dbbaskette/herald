@@ -58,4 +58,19 @@ public class ModelProviderConfig {
                 .openAiApi(api)
                 .build();
     }
+
+    @Bean("lmstudioChatModel")
+    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.lmstudio.base-url:}')")
+    public ChatModel lmstudioChatModel(HeraldConfig config) {
+        var lmstudioConfig = config.providers().lmstudio();
+        String apiKey = lmstudioConfig.apiKey() != null ? lmstudioConfig.apiKey() : "lm-studio";
+        String baseUrl = lmstudioConfig.baseUrl() != null ? lmstudioConfig.baseUrl() : "http://localhost:1234";
+        OpenAiApi api = OpenAiApi.builder()
+                .apiKey(apiKey)
+                .baseUrl(baseUrl)
+                .build();
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .build();
+    }
 }

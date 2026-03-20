@@ -147,9 +147,11 @@ public class HeraldAgentConfig {
             @Value("${herald.agent.model.openai:gpt-4o}") String openaiModel,
             @Value("${herald.agent.model.ollama:llama3.2}") String ollamaModel,
             @Value("${herald.agent.model.gemini:gemini-2.5-flash}") String geminiModel,
+            @Value("${herald.agent.model.lmstudio:qwen/qwen3.5-35b-a3b}") String lmstudioModel,
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
-            @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel) {
+            @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
+            @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
@@ -174,6 +176,8 @@ public class HeraldAgentConfig {
                 subagentTypeBuilder.chatClientBuilder("ollama", chatClientBuilderForModel(model, ollamaModel)));
         geminiChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("gemini", chatClientBuilderForModel(model, geminiModel)));
+        lmstudioChatModel.ifPresent(model ->
+                subagentTypeBuilder.chatClientBuilder("lmstudio", chatClientBuilderForModel(model, lmstudioModel)));
 
         var subagentType = subagentTypeBuilder.build();
 
@@ -240,12 +244,14 @@ public class HeraldAgentConfig {
         openaiChatModel.ifPresent(model -> availableModels.put("openai", model));
         ollamaChatModel.ifPresent(model -> availableModels.put("ollama", model));
         geminiChatModel.ifPresent(model -> availableModels.put("gemini", model));
+        lmstudioChatModel.ifPresent(model -> availableModels.put("lmstudio", model));
 
         Map<String, String> providerDefaultModels = new LinkedHashMap<>();
         providerDefaultModels.put("anthropic", defaultModel);
         if (openaiChatModel.isPresent()) providerDefaultModels.put("openai", openaiModel);
         if (ollamaChatModel.isPresent()) providerDefaultModels.put("ollama", ollamaModel);
         if (geminiChatModel.isPresent()) providerDefaultModels.put("gemini", geminiModel);
+        if (lmstudioChatModel.isPresent()) providerDefaultModels.put("lmstudio", lmstudioModel);
 
         // Resolve the default provider from env var (falls back to anthropic)
         String requestedProvider = config.defaultProvider();

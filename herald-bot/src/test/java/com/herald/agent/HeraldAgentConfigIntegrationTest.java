@@ -46,6 +46,7 @@ class HeraldAgentConfigIntegrationTest {
     private static final String OPENAI_MODEL = "gpt-4o";
     private static final String OLLAMA_MODEL = "llama3.2";
     private static final String GEMINI_MODEL = "gemini-2.5-flash";
+    private static final String LMSTUDIO_MODEL = "qwen/qwen3.5-35b-a3b";
 
     @Test
     void modelSwitcherBeanCreatedWithAllToolsAndAdvisors(@TempDir Path tempDir) {
@@ -74,7 +75,7 @@ class HeraldAgentConfigIntegrationTest {
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, Optional.empty(), Optional.empty(), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -117,7 +118,7 @@ class HeraldAgentConfigIntegrationTest {
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, Optional.empty(), Optional.empty(), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -151,8 +152,8 @@ class HeraldAgentConfigIntegrationTest {
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL,
-                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -221,8 +222,8 @@ class HeraldAgentConfigIntegrationTest {
                 tempDir.toString(),
                 new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL,
-                Optional.empty(), Optional.empty(), Optional.empty());
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
