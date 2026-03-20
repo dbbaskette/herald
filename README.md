@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/banner.jpg" alt="Herald — Personal AI Assistant" width="100%">
+  <img src="assets/banner.jpg" alt="Herald — AI Agent Framework" width="100%">
 </p>
 
 # Herald
 
-**Personal AI Assistant** — a single-user, always-on AI agent that lives in Telegram and runs 24/7 on your Mac.
+**AI agent framework** — run as a persistent personal assistant on Telegram, or as a single-shot task agent from the command line.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
 ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--SNAPSHOT-blueviolet.svg)
 
-> An AI agent that knows who you are, runs on your machine, can do things on your behalf, and reaches out to you — not just the other way around.
+> Two modes, one framework: an always-on assistant that knows who you are and reaches out proactively, or a focused task agent you point at a job and walk away.
 
 ## Table of Contents
 
@@ -34,9 +34,13 @@
 
 ## About
 
-Most AI assistants are stateless chat windows — you ask, they answer, they forget. Herald is different. It's a personal AI agent that runs continuously on your Mac, connects to you through Telegram, and builds a persistent understanding of who you are, what you care about, and what you need.
+Herald is a dual-mode AI agent built on Spring AI.
 
-Herald can execute shell commands, manage your calendar and email, run scheduled tasks like morning briefings, and delegate complex research to specialized subagents — all while maintaining a growing memory of your preferences and context.
+**Persistent mode** (`herald-bot`) — an always-on personal assistant that runs 24/7 on your Mac, connects through Telegram, and builds a persistent understanding of who you are. It manages your calendar, email, and scheduled tasks, delegates complex research to subagents, and maintains a growing memory of your preferences and context across sessions.
+
+**Ephemeral mode** (`herald-cli`) — a task agent you configure with a single `agents.md` file and point at a job. No database, no Telegram, no long-running process. Define the tools, give it a prompt, get a result.
+
+Both modes share the same core: the same advisor chain, tool system, multi-provider model routing, and skills framework.
 
 ## Features
 
