@@ -1,0 +1,91 @@
+package com.herald.agent;
+
+import com.herald.agent.profile.AgentProfile;
+import com.herald.tools.FileSystemTools;
+import com.herald.tools.WebTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.core.Ordered;
+
+import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Standalone factory that builds a {@link ChatClient} from an {@link AgentProfile}
+ * and system prompt, without requiring Spring DI. Suitable for ephemeral and
+ * subagent use cases where the full {@link HeraldAgentConfig} wiring is not needed.
+ */
+public final class AgentFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentFactory.class);
+    private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
+    private static final DateTimeFormatter DATETIME_FORMAT =
+            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
+
+    private AgentFactory() {}
+
+    /**
+     * Build a {@link ChatClient} from the given profile, system prompt, and chat model.
+     *
+     * @param profile      the agent profile (parsed from agents.md frontmatter)
+     * @param systemPrompt the system prompt text (body of agents.md)
+     * @param chatModel    the Spring AI ChatModel to use
+     * @return a fully configured ChatClient
+     */
+    public static ChatClient fromProfile(AgentProfile profile, String systemPrompt, ChatModel chatModel) {
+        List<Advisor> advisors = buildAdvisors(profile);
+        List<Object> tools = resolveTools(profile.tools());
+
+        var builder = ChatClient.builder(chatModel)
+                .defaultSystem(systemPrompt)
+                .defaultAdvisors(advisors);
+
+        if (!tools.isEmpty()) {
+            builder.defaultTools(tools.toArray());
+        }
+
+        return builder.build();
+    }
+
+    private static List<Advisor> buildAdvisors(AgentProfile profile) {
+        List<Advisor> advisors = new ArrayList<>();
+
+        // Always include date/time injection
+        advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
+
+        // Include CONTEXT.md advisor when a context file is configured
+        if (profile.contextFile() != null && !profile.contextFile().isBlank()) {
+            advisors.add(new ContextMdAdvisor(Path.of(profile.contextFile())));
+        }
+
+        // ToolCallAdvisor must be present for tool use; ordered just before ChatModelCallAdvisor
+        advisors.add(ToolCallAdvisor.builder()
+                .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
+                .build());
+
+        return advisors;
+    }
+
+    private static List<Object> resolveTools(List<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) {
+            return List.of();
+        }
+
+        List<Object> tools = new ArrayList<>();
+        for (String name : toolNames) {
+            switch (name) {
+                case "filesystem" -> tools.add(new FileSystemTools());
+                case "web" -> tools.add(new WebTools(""));
+                default -> log.debug("Skipping tool '{}' — requires DI-provided instance", name);
+            }
+        }
+        return tools;
+    }
+}
