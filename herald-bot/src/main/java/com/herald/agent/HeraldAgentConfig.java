@@ -79,11 +79,21 @@ public class HeraldAgentConfig {
         return scheduler;
     }
 
-    // Keep in sync with .defaultTools() and .defaultToolCallbacks() in modelSwitcher()
     @Bean
     @Qualifier("activeToolNames")
-    public List<String> activeToolNames() {
-        return List.of("memory", "shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "gws", "web", "telegram_send", "cron");
+    public List<String> activeToolNames(
+            Optional<MemoryTools> memoryTools,
+            Optional<CronTools> cronTools,
+            Optional<TelegramSendTool> telegramSendTool,
+            Optional<GwsTools> gwsTools) {
+        List<String> names = new ArrayList<>(List.of(
+                "shell", "filesystem", "todoWrite", "askUserQuestion",
+                "task", "taskOutput", "skills", "web"));
+        memoryTools.ifPresent(t -> names.add("memory"));
+        cronTools.ifPresent(t -> names.add("cron"));
+        telegramSendTool.ifPresent(t -> names.add("telegram_send"));
+        gwsTools.ifPresent(t -> names.add("gws"));
+        return List.copyOf(names);
     }
 
     @Bean
