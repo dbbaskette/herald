@@ -64,9 +64,9 @@ class DateTimePromptAdvisorTest {
     @Test
     void runsBeforeMemoryBlockAdvisor() {
         var advisor = new DateTimePromptAdvisor(TIMEZONE, FORMAT);
-        var memoryAdvisor = new MemoryBlockAdvisor(null);
 
-        assertThat(advisor.getOrder()).isLessThan(memoryAdvisor.getOrder());
+        // MemoryBlockAdvisor (in herald-persistence) uses HIGHEST_PRECEDENCE + 100
+        assertThat(advisor.getOrder()).isLessThan(Ordered.HIGHEST_PRECEDENCE + 100);
     }
 
     @Test
