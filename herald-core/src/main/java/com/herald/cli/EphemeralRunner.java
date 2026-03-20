@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -15,9 +14,7 @@ import org.springframework.stereotype.Component;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Scanner;
 
 /**
@@ -34,6 +31,7 @@ import java.util.Scanner;
  * to select a specific provider/model at runtime.
  */
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "agents")
 public class EphemeralRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(EphemeralRunner.class);
@@ -42,13 +40,8 @@ public class EphemeralRunner implements ApplicationRunner {
     private final PrintStream out;
     private final PrintStream err;
 
-    public EphemeralRunner(
-            @Qualifier("anthropicChatModel") ChatModel anthropicChatModel,
-            @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
-            @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
-            @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel) {
-        this(buildAvailableModels(anthropicChatModel, openaiChatModel, ollamaChatModel, geminiChatModel),
-                System.out, System.err);
+    public EphemeralRunner(ChatModel chatModel) {
+        this(Map.of("default", chatModel), System.out, System.err);
     }
 
     EphemeralRunner(Map<String, ChatModel> availableModels, PrintStream out, PrintStream err) {
@@ -57,16 +50,12 @@ public class EphemeralRunner implements ApplicationRunner {
         this.err = err;
     }
 
-    private static Map<String, ChatModel> buildAvailableModels(
-            ChatModel anthropicChatModel,
-            Optional<ChatModel> openaiChatModel,
-            Optional<ChatModel> ollamaChatModel,
-            Optional<ChatModel> geminiChatModel) {
-        Map<String, ChatModel> models = new LinkedHashMap<>();
-        models.put("anthropic", anthropicChatModel);
-        openaiChatModel.ifPresent(m -> models.put("openai", m));
-        ollamaChatModel.ifPresent(m -> models.put("ollama", m));
-        geminiChatModel.ifPresent(m -> models.put("gemini", m));
+    EphemeralRunner(Map<String, ChatModel> availableModels, PrintStream out) {
+        this(availableModels, out, System.err);
+    }
+
+    private static Map<String, ChatModel> placeholder() {
+        var models = new java.util.LinkedHashMap<String, ChatModel>();
         return models;
     }
 
