@@ -257,6 +257,30 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_CONFIG` | Override config file path | No | `~/.herald/herald.yaml` |
 
+## Ephemeral Mode
+
+Herald can run without a database in ephemeral mode. Only `ANTHROPIC_API_KEY` is required.
+
+**Minimal configuration:**
+
+```
+ANTHROPIC_API_KEY=sk-...
+```
+
+**What's disabled in ephemeral mode:**
+- No SQLite database (set `herald.memory.db-path` to enable persistence)
+- No Telegram integration (set `herald.telegram.bot-token` to enable)
+- No persistent memory, cron jobs, or chat history
+- AskUserQuestion falls back to console stdin/stdout
+
+**Full persistent mode requires:**
+
+```
+ANTHROPIC_API_KEY=sk-...
+herald.memory.db-path=./herald.db
+herald.telegram.bot-token=your-bot-token
+```
+
 ## Telegram Commands
 
 | Command | Description |
