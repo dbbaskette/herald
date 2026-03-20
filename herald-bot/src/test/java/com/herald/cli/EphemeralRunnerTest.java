@@ -1,5 +1,6 @@
 package com.herald.cli;
 
+import com.herald.agent.profile.AgentProfileParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -7,6 +8,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.DefaultApplicationArguments;
 
 import java.io.ByteArrayOutputStream;
@@ -89,5 +91,39 @@ class EphemeralRunnerTest {
 
         // Should return without doing anything
         runner.run(args);
+    }
+
+    @Test
+    void endToEndEphemeralAgentFromClasspathResource() throws Exception {
+        // Load agent definition from classpath
+        var resource = getClass().getResource("/test-agent.md");
+        assertThat(resource).isNotNull();
+
+        ChatModel mockModel = createMockModel("Found 3 files in the current directory.");
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(baos);
+
+        var runner = new EphemeralRunner(mockModel, out);
+        ApplicationArguments args = new DefaultApplicationArguments(
+                "--agents=" + Path.of(resource.toURI()),
+                "--prompt=List all files in the current directory");
+
+        runner.run(args);
+
+        String output = baos.toString();
+        assertThat(output).isNotEmpty();
+    }
+
+    @Test
+    void ephemeralAgentDoesNotHavePersistenceTools() throws Exception {
+        var resource = getClass().getResource("/test-agent.md");
+        assertThat(resource).isNotNull();
+
+        var parsed = AgentProfileParser.parseFile(Path.of(resource.toURI()));
+
+        // Profile tools should NOT include memory, cron, telegram
+        assertThat(parsed.profile().tools()).doesNotContain("memory", "cron", "telegram_send");
+        assertThat(parsed.profile().tools()).contains("filesystem", "web");
     }
 }
