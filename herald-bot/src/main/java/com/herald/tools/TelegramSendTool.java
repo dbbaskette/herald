@@ -4,6 +4,7 @@ import com.herald.telegram.TelegramSender;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
  * Used by cron job executions and also available in regular conversations.
  */
 @Component
+@ConditionalOnBean(TelegramSender.class)
 public class TelegramSendTool {
 
     private final TelegramSender telegramSender;
