@@ -1,3 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-brand: #c8a55a;
+    --color-brand-light: #e2c97d;
+    --color-brand-dim: #a68a3e;
+    --color-surface: #fafaf8;
+    --color-surface-raised: #ffffff;
+    --color-border: #e8e5df;
+    --color-border-light: #f0ede8;
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #6b6860;
+    --color-text-muted: #9e9a92;
+    --color-sidebar: #141617;
+    --color-sidebar-hover: #1e2023;
+    --color-sidebar-active: #262a2d;
+    --color-sidebar-text: #a8a5a0;
+    --color-sidebar-text-active: #f0ede8;
+  }
+
+  html {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+  }
+
+  body {
+    margin: 0;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  /* Refined scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+  }
+}
+
+@layer components {
+  /* Page header */
+  .page-title {
+    @apply text-xl font-semibold tracking-tight;
+    color: var(--color-text-primary);
+  }
+
+  /* Card surface */
+  .card {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-light);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors;
+    background: var(--color-brand);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-brand-dim);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-surface);
+    border-color: var(--color-text-muted);
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Form input */
+  .input {
+    @apply w-full px-3 py-2 text-sm rounded-lg transition-colors;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 2px rgba(200, 165, 90, 0.15);
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+
+  .status-dot--live {
+    background: #4ade80;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+  }
+
+  .status-dot--warning {
+    background: #fbbf24;
+  }
+
+  .status-dot--error {
+    background: #ef4444;
+  }
+
+  .status-dot--idle {
+    background: var(--color-text-muted);
+  }
+
+  /* Section label (used for card headers, group labels) */
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    color: var(--color-text-muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* Subtle table styling */
+  .table-header {
+    @apply text-left text-xs font-medium uppercase tracking-wider;
+    color: var(--color-text-muted);
+    letter-spacing: 0.06em;
+  }
+}
