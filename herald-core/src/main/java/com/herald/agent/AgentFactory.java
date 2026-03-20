@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Standalone factory that builds a {@link ChatClient} from an {@link AgentProfile}
@@ -60,6 +61,57 @@ public final class AgentFactory {
         var builder = ChatClient.builder(chatModel)
                 .defaultSystem(systemPrompt)
                 .defaultAdvisors(advisors);
+
+        if (!tools.isEmpty()) {
+            builder.defaultTools(tools.toArray());
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Build a {@link ChatClient} resolving the provider from the profile.
+     *
+     * @param profile          agent configuration
+     * @param systemPrompt     markdown body
+     * @param availableModels  map of provider name to ChatModel
+     * @param registry         tool category registry
+     * @param providerOverride CLI --provider override (nullable)
+     * @param modelOverride    CLI --model override (nullable)
+     * @return a fully configured ChatClient
+     */
+    public static ChatClient fromProfile(AgentProfile profile, String systemPrompt,
+                                          Map<String, ChatModel> availableModels,
+                                          ToolCategoryRegistry registry,
+                                          String providerOverride, String modelOverride) {
+        // Resolve provider: CLI override > profile > default "anthropic"
+        String provider = providerOverride != null ? providerOverride
+                : profile.provider() != null ? profile.provider()
+                : "anthropic";
+
+        ChatModel chatModel = availableModels.get(provider);
+        if (chatModel == null) {
+            throw new IllegalArgumentException(
+                    "Provider '" + provider + "' not available. "
+                    + "Available: " + availableModels.keySet() + ". "
+                    + "Check that the corresponding API key is set.");
+        }
+
+        // Model override: resolve via ChatOptions if provided
+        String model = modelOverride != null ? modelOverride
+                : profile.model() != null ? profile.model()
+                : null;
+
+        List<Advisor> advisors = buildAdvisors(profile);
+        List<Object> tools = registry.resolve(profile.tools());
+
+        var builder = ChatClient.builder(chatModel)
+                .defaultSystem(systemPrompt)
+                .defaultAdvisors(advisors);
+
+        if (model != null) {
+            builder.defaultOptions(ModelSwitcher.chatOptionsForModel(chatModel, model));
+        }
 
         if (!tools.isEmpty()) {
             builder.defaultTools(tools.toArray());

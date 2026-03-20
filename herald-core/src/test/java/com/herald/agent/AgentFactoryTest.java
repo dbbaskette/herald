@@ -7,8 +7,10 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class AgentFactoryTest {
@@ -76,6 +78,68 @@ class AgentFactoryTest {
 
         ChatClient client = AgentFactory.fromProfile(profile, "prompt",
                 mock(ChatModel.class));
+
+        assertThat(client).isNotNull();
+    }
+
+    // --- Multi-provider overload tests ---
+
+    @Test
+    void resolvesProviderFromProfile() {
+        var profile = new AgentProfile("test", "test", "sonnet", "anthropic",
+                List.of(), null, null, false, null, null);
+        ChatModel mockModel = mock(ChatModel.class);
+
+        Map<String, ChatModel> providers = Map.of("anthropic", mockModel);
+
+        ChatClient client = AgentFactory.fromProfile(profile, "prompt",
+                providers, new ToolCategoryRegistry(), null, null);
+
+        assertThat(client).isNotNull();
+    }
+
+    @Test
+    void throwsForMissingProvider() {
+        var profile = new AgentProfile("test", "test", null, "openai",
+                List.of(), null, null, false, null, null);
+
+        Map<String, ChatModel> providers = Map.of("anthropic", mock(ChatModel.class));
+
+        assertThatThrownBy(() -> AgentFactory.fromProfile(profile, "prompt",
+                providers, new ToolCategoryRegistry(), null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("openai")
+                .hasMessageContaining("not available");
+    }
+
+    @Test
+    void cliOverrideTakesPrecedenceOverProfile() {
+        var profile = new AgentProfile("test", "test", "sonnet", "anthropic",
+                List.of(), null, null, false, null, null);
+        ChatModel openaiModel = mock(ChatModel.class);
+
+        Map<String, ChatModel> providers = Map.of(
+                "anthropic", mock(ChatModel.class),
+                "openai", openaiModel);
+
+        ChatClient client = AgentFactory.fromProfile(profile, "prompt",
+                providers, new ToolCategoryRegistry(), "openai", null);
+
+        assertThat(client).isNotNull();
+    }
+
+    @Test
+    void defaultsToAnthropicWhenNoProviderSpecified() {
+        var profile = new AgentProfile("test", "test", null, null,
+                List.of(), null, null, false, null, null);
+        ChatModel anthropicModel = mock(ChatModel.class);
+
+        Map<String, ChatModel> providers = Map.of(
+                "anthropic", anthropicModel,
+                "openai", mock(ChatModel.class));
+
+        ChatClient client = AgentFactory.fromProfile(profile, "prompt",
+                providers, new ToolCategoryRegistry(), null, null);
 
         assertThat(client).isNotNull();
     }
