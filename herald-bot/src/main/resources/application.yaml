@@ -72,6 +72,8 @@ herald:
       ollama: ${HERALD_MODEL_OLLAMA:llama3.2}
       gemini: ${HERALD_MODEL_GEMINI:gemini-2.5-flash}
       lmstudio: ${HERALD_MODEL_LMSTUDIO:qwen/qwen3.5-35b-a3b}
+  obsidian:
+    vault-path: ${HERALD_OBSIDIAN_VAULT_PATH:}
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
   web:

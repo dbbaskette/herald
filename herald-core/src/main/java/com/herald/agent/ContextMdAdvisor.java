@@ -100,4 +100,82 @@ class ContextMdAdvisor implements CallAdvisor {
             log.warn("Failed to create starter CONTEXT.md at {}: {}", contextFilePath, e.getMessage());
         }
     }
+
+    /**
+     * Updates the Obsidian Configuration section in CONTEXT.md from the configured vault path.
+     * Derives the vault name and Herald folder from the path. Called at startup.
+     */
+    void updateObsidianConfig(String vaultPath) {
+        if (vaultPath == null || vaultPath.isBlank() || !Files.exists(contextFilePath)) {
+            return;
+        }
+
+        // Derive vault name and parent from the path
+        // e.g. "/Users/.../Documents/Herald-Memory" → vault parent = "Documents" parent, folder = "Herald-Memory"
+        Path resolved = Path.of(vaultPath.replace("~", System.getProperty("user.home")));
+        String folderName = resolved.getFileName().toString();
+        String parentName = resolved.getParent() != null ? resolved.getParent().getFileName().toString() : folderName;
+
+        // Check if Herald-Memory is a subfolder (common case) or a standalone vault
+        // If the folder itself IS the vault, use it directly
+        String vaultName;
+        String heraldFolder;
+        // Try to detect: is this a vault root or a subfolder?
+        // If .obsidian dir exists inside the path, it's a vault root
+        if (Files.isDirectory(resolved.resolve(".obsidian"))) {
+            vaultName = folderName;
+            heraldFolder = "";
+        } else {
+            // It's a subfolder inside a parent vault
+            vaultName = parentName;
+            heraldFolder = folderName;
+        }
+
+        String section = buildObsidianSection(vaultName, heraldFolder, resolved.toString());
+
+        try {
+            String content = Files.readString(contextFilePath, StandardCharsets.UTF_8);
+            String marker = "## Obsidian Configuration";
+
+            if (content.contains(marker)) {
+                // Replace existing section (up to next ## or end of file)
+                content = content.replaceAll(
+                        "## Obsidian Configuration\\n[\\s\\S]*?(?=\\n## |\\Z)",
+                        section);
+            } else {
+                // Insert before ## Notes or at end
+                if (content.contains("## Notes")) {
+                    content = content.replace("## Notes", section + "\n## Notes");
+                } else {
+                    content = content + "\n" + section;
+                }
+            }
+
+            Files.writeString(contextFilePath, content, StandardCharsets.UTF_8);
+            log.info("Updated Obsidian config in CONTEXT.md: vault={}, folder={}", vaultName, heraldFolder);
+        } catch (IOException e) {
+            log.warn("Failed to update Obsidian config in CONTEXT.md: {}", e.getMessage());
+        }
+    }
+
+    private String buildObsidianSection(String vaultName, String heraldFolder, String fullPath) {
+        var sb = new StringBuilder();
+        sb.append("## Obsidian Configuration\n\n");
+        sb.append("- **Vault name:** ").append(vaultName).append("\n");
+        if (!heraldFolder.isEmpty()) {
+            sb.append("- **Herald folder:** ").append(heraldFolder)
+                    .append(" (all Herald notes go under this subfolder)\n");
+            sb.append("- **Vault path:** ").append(Path.of(fullPath).getParent()).append("\n");
+            sb.append("- When using the obsidian CLI, always use `vault=\"").append(vaultName)
+                    .append("\"` and prefix paths with `").append(heraldFolder).append("/`\n");
+            sb.append("- Example: `obsidian search vault=\"").append(vaultName)
+                    .append("\" query=\"...\" path=\"").append(heraldFolder).append("/Chat-Sessions\"`\n\n");
+        } else {
+            sb.append("- **Vault path:** ").append(fullPath).append("\n");
+            sb.append("- When using the obsidian CLI, always use `vault=\"").append(vaultName).append("\"`\n");
+            sb.append("- Example: `obsidian search vault=\"").append(vaultName)
+                    .append("\" query=\"...\" path=\"Chat-Sessions\"`\n\n");
+        }
+        return sb.toString();
+    }
 }

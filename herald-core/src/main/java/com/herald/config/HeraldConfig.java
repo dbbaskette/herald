@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
-                           Weather weather) {
+                           Weather weather, Obsidian obsidian) {
 
     public record Memory(String dbPath) {
     }
@@ -67,6 +67,19 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Weather(String location) {
+    }
+
+    public record Obsidian(String vaultPath) {
+    }
+
+    /**
+     * Returns the Obsidian vault path if configured, or empty string.
+     */
+    public String obsidianVaultPath() {
+        if (obsidian != null && obsidian.vaultPath() != null && !obsidian.vaultPath().isBlank()) {
+            return obsidian.vaultPath();
+        }
+        return "";
     }
 
     public String weatherLocation() {

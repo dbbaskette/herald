@@ -59,7 +59,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
@@ -99,7 +99,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -133,7 +133,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -203,7 +203,7 @@ class HeraldAgentConfigIntegrationTest {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false,
@@ -235,7 +235,7 @@ class HeraldAgentConfigIntegrationTest {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
 
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), Optional.empty(),

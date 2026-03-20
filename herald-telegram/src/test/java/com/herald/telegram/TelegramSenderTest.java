@@ -23,7 +23,7 @@ class TelegramSenderTest {
         HeraldConfig config = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
-                null, null, null, null);
+                null, null, null, null, null);
         sender = new TelegramSender(bot, config, new MessageFormatter());
     }
 

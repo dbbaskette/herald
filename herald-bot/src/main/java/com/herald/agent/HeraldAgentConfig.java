@@ -160,6 +160,7 @@ public class HeraldAgentConfig {
         Path contextFilePath = resolveTildePath(config.contextFile());
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(contextFilePath);
         contextMdAdvisor.ensureTemplateExists(loadContextTemplate());
+        contextMdAdvisor.updateObsidianConfig(config.obsidianVaultPath());
 
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
