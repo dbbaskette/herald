@@ -3,6 +3,7 @@ package com.herald.agent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,9 @@ public class AgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
     public static final String DEFAULT_CONVERSATION_ID = "default";
+
+    /** Strip reasoning tags emitted by some local models (Qwen, DeepSeek, etc.) */
+    private static final Pattern THINK_TAGS = Pattern.compile("<think>.*?</think>\\s*", Pattern.DOTALL);
 
     private final ModelSwitcher modelSwitcher;
     @Nullable
@@ -90,7 +94,11 @@ public class AgentService {
         log.info("Agent response generated (conversation={}), length={}",
                 conversationId, content != null ? content.length() : 0);
 
-        return content != null ? content : "";
+        return content != null ? stripThinkTags(content) : "";
+    }
+
+    static String stripThinkTags(String text) {
+        return THINK_TAGS.matcher(text).replaceAll("").strip();
     }
 
     private List<String> extractToolCalls(ChatResponse chatResponse) {

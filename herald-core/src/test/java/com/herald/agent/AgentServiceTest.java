@@ -141,4 +141,28 @@ class AgentServiceTest {
                 .build();
         return new ChatResponse(List.of(generation), metadata);
     }
+
+    @Test
+    void stripThinkTagsRemovesReasoningBlock() {
+        String input = "<think>User is greeting me, respond concisely.</think>\nHello! How can I help?";
+        assertThat(AgentService.stripThinkTags(input)).isEqualTo("Hello! How can I help?");
+    }
+
+    @Test
+    void stripThinkTagsHandlesMultilineThinking() {
+        String input = "<think>\nLine 1\nLine 2\n</think>\n\nActual response here.";
+        assertThat(AgentService.stripThinkTags(input)).isEqualTo("Actual response here.");
+    }
+
+    @Test
+    void stripThinkTagsPassesThroughCleanText() {
+        String input = "No think tags here.";
+        assertThat(AgentService.stripThinkTags(input)).isEqualTo("No think tags here.");
+    }
+
+    @Test
+    void stripThinkTagsHandlesMultipleBlocks() {
+        String input = "<think>first</think>Hello <think>second</think>world";
+        assertThat(AgentService.stripThinkTags(input)).isEqualTo("Hello world");
+    }
 }
