@@ -16,7 +16,9 @@ The CLI communicates with the running Obsidian desktop app via IPC.
 
 ## Prerequisites
 
-The `obsidian` CLI must be registered and the Obsidian app must be running. Test with:
+**The command is `obsidian`, NOT `obsidian-cli`.** Never use `obsidian-cli` — that command does not exist. The CLI is built into the Obsidian desktop app (v1.12+).
+
+The Obsidian app must be running with CLI enabled. Test with:
 
 ```bash
 obsidian version
