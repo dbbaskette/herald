@@ -112,7 +112,11 @@ class ContextMdAdvisor implements CallAdvisor {
 
         // Derive vault name and parent from the path
         // e.g. "/Users/.../Documents/Herald-Memory" → vault parent = "Documents" parent, folder = "Herald-Memory"
-        Path resolved = Path.of(vaultPath.replace("~", System.getProperty("user.home")));
+        // Only expand ~ at the start of the path (not iCloud~md~obsidian tildes)
+        String expanded = vaultPath.startsWith("~/")
+                ? System.getProperty("user.home") + vaultPath.substring(1)
+                : vaultPath;
+        Path resolved = Path.of(expanded);
         String folderName = resolved.getFileName().toString();
         String parentName = resolved.getParent() != null ? resolved.getParent().getFileName().toString() : folderName;
 
