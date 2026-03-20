@@ -1,6 +1,8 @@
 package com.herald.agent.profile;
 
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -38,7 +40,7 @@ public final class AgentProfileParser {
         String yamlBlock = content.substring(firstDelim + 3, secondDelim).trim();
         String body = content.substring(secondDelim + 3).trim();
 
-        Yaml yaml = new Yaml();
+        Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()));
         Map<String, Object> frontmatter = yaml.load(yamlBlock);
         if (frontmatter == null) {
             throw new IllegalArgumentException("Empty frontmatter");

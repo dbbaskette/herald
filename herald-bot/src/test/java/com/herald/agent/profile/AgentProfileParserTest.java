@@ -1,6 +1,7 @@
 package com.herald.agent.profile;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -140,8 +141,8 @@ class AgentProfileParserTest {
     }
 
     @Test
-    void parsesFromFile() throws IOException {
-        Path file = Files.createTempFile("agent", ".md");
+    void parsesFromFile(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("agent.md");
         Files.writeString(file, """
                 ---
                 name: file-agent
@@ -158,8 +159,6 @@ class AgentProfileParserTest {
         assertThat(result.profile().name()).isEqualTo("file-agent");
         assertThat(result.profile().memory()).isTrue();
         assertThat(result.systemPrompt()).isEqualTo("You are loaded from a file.");
-
-        Files.deleteIfExists(file);
     }
 
     @Test
