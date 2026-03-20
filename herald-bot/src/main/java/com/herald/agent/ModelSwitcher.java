@@ -49,6 +49,10 @@ public class ModelSwitcher {
      * If one exists and the provider is available, switch to it.
      */
     void loadPersistedOverride() {
+        if (jdbcTemplate == null) {
+            log.info("No database configured — skipping persisted model override");
+            return;
+        }
         try {
             var overrides = jdbcTemplate.query(
                     "SELECT provider, model FROM model_overrides ORDER BY updated_at DESC LIMIT 1",
@@ -127,6 +131,10 @@ public class ModelSwitcher {
     }
 
     private void persistOverride(String provider, String model) {
+        if (jdbcTemplate == null) {
+            log.debug("No database configured — model override not persisted");
+            return;
+        }
         try {
             jdbcTemplate.update("DELETE FROM model_overrides");
             jdbcTemplate.update(

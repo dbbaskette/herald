@@ -22,6 +22,7 @@ import org.springframework.ai.chat.client.ChatClient;
 // MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
 // re-loading/re-saving memory on each ToolCallAdvisor iteration
 import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
@@ -52,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,17 +105,17 @@ public class HeraldAgentConfig {
             @Qualifier("anthropicChatModel") ChatModel chatModel,
             HeraldConfig config,
             @Value("${herald.agent.prompt-dump:false}") boolean promptDump,
-            ChatMemory chatMemory,
-            MemoryTools memoryTools,
+            Optional<ChatMemory> chatMemoryOpt,
+            Optional<MemoryTools> memoryToolsOpt,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             ApplicationEventPublisher eventPublisher,
             ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
-            TelegramSendTool telegramSendTool,
-            GwsTools gwsTools,
+            Optional<TelegramSendTool> telegramSendToolOpt,
+            Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
-            CronTools cronTools,
-            JdbcTemplate jdbcTemplate,
+            Optional<CronTools> cronToolsOpt,
+            Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             ReloadableSkillsTool reloadableSkillsTool,
@@ -135,10 +137,6 @@ public class HeraldAgentConfig {
         Path contextFilePath = resolveTildePath(config.contextFile());
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(contextFilePath);
         contextMdAdvisor.ensureTemplateExists(loadContextTemplate());
-
-        // Set up context compaction advisor — backstop against context window overflow
-        ContextCompactionAdvisor compactionAdvisor =
-                new ContextCompactionAdvisor(chatMemory, memoryTools, chatModel, config.maxContextTokens());
 
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
@@ -203,27 +201,20 @@ public class HeraldAgentConfig {
                 })
                 .build();
 
+        // Build advisor chain and tool list dynamically based on available beans
+        var advisorChain = buildAdvisorChain(memoryToolsOpt, chatMemoryOpt,
+                contextMdAdvisor, chatModel, config, promptDump);
+
+        var toolList = buildToolList(memoryToolsOpt, shellDecorator, fsTools,
+                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
+
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
-                        .defaultTools(memoryTools, shellDecorator, fsTools, todoTool, askTool, telegramSendTool, gwsTools, webTools, cronTools)
+                        .defaultTools(toolList.toArray())
                         .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
-                        .defaultAdvisors(
-                                new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT),
-                                contextMdAdvisor,
-                                new MemoryBlockAdvisor(memoryTools),
-                                compactionAdvisor,
-                                new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES),
-                                new PromptDumpAdvisor(promptDump),
-                                // Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
-                                // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
-                                // OneShotMemoryAdvisor, causing memory to load/save on every
-                                // tool-call iteration and duplicating messages.
-                                ToolCallAdvisor.builder()
-                                        .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
-                                        .build()
-                        );
+                        .defaultAdvisors(advisorChain);
 
         // Register available provider ChatModels and their default model names
         Map<String, ChatModel> availableModels = new LinkedHashMap<>();
@@ -258,12 +249,78 @@ public class HeraldAgentConfig {
                 .defaultOptions(chatOptionsForModel(initialChatModel, initialModel))
                 .build();
 
-        var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplate,
+        var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplateOpt.orElse(null),
                 clientBuilderFactory, initialClient, initialProvider, initialModel);
         switcher.loadPersistedOverride();
         return switcher;
     }
 
+
+    List<Advisor> buildAdvisorChain(
+            Optional<MemoryTools> memoryToolsOpt,
+            Optional<ChatMemory> chatMemoryOpt,
+            ContextMdAdvisor contextMdAdvisor,
+            ChatModel chatModel,
+            HeraldConfig config,
+            boolean promptDump) {
+
+        List<Advisor> advisors = new ArrayList<>();
+
+        // Always active
+        advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
+        advisors.add(contextMdAdvisor);
+
+        // Persistence-dependent
+        memoryToolsOpt.ifPresent(mt -> advisors.add(new MemoryBlockAdvisor(mt)));
+
+        if (chatMemoryOpt.isPresent()) {
+            ChatMemory chatMemory = chatMemoryOpt.get();
+            if (memoryToolsOpt.isPresent()) {
+                advisors.add(new ContextCompactionAdvisor(
+                        chatMemory, memoryToolsOpt.get(), chatModel, config.maxContextTokens()));
+            }
+            advisors.add(new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES));
+        }
+
+        // Conditional on property (not persistence)
+        advisors.add(new PromptDumpAdvisor(promptDump));
+
+        // Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
+        // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
+        // OneShotMemoryAdvisor, causing memory to load/save on every
+        // tool-call iteration and duplicating messages.
+        advisors.add(ToolCallAdvisor.builder()
+                .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
+                .build());
+
+        return advisors;
+    }
+
+    List<Object> buildToolList(
+            Optional<MemoryTools> memoryToolsOpt,
+            HeraldShellDecorator shellDecorator,
+            FileSystemTools fsTools,
+            org.springaicommunity.agent.tools.TodoWriteTool todoTool,
+            AskUserQuestionTool askTool,
+            Optional<TelegramSendTool> telegramSendToolOpt,
+            Optional<GwsTools> gwsToolsOpt,
+            WebTools webTools,
+            Optional<CronTools> cronToolsOpt) {
+
+        List<Object> tools = new ArrayList<>();
+        tools.add(shellDecorator);
+        tools.add(fsTools);
+        tools.add(todoTool);
+        tools.add(askTool);
+        tools.add(webTools);
+
+        memoryToolsOpt.ifPresent(tools::add);
+        telegramSendToolOpt.ifPresent(tools::add);
+        gwsToolsOpt.ifPresent(tools::add);
+        cronToolsOpt.ifPresent(tools::add);
+
+        return tools;
+    }
 
     private ChatClient.Builder chatClientBuilderForModel(ChatModel chatModel, String modelId) {
         return ChatClient.builder(chatModel)
