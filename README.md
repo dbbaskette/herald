@@ -13,6 +13,25 @@
 
 > An AI agent that knows who you are, runs on your machine, can do things on your behalf, and reaches out to you — not just the other way around.
 
+## Table of Contents
+
+- [About](#about)
+- [Features](#features)
+- [Skills](#skills)
+- [Architecture](#architecture)
+- [Data Flow](#data-flow)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Ephemeral Mode](#ephemeral-mode)
+- [Telegram Commands](#telegram-commands)
+- [Project Structure](#project-structure)
+- [Agentic Patterns](#agentic-patterns--spring-ai-agent-utils)
+- [Technology Stack](#technology-stack)
+- [Database Schema](#database-schema)
+- [Build Phases](#build-phases)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## About
 
 Most AI assistants are stateless chat windows — you ask, they answer, they forget. Herald is different. It's a personal AI agent that runs continuously on your Mac, connects to you through Telegram, and builds a persistent understanding of who you are, what you care about, and what you need.
