@@ -14,8 +14,8 @@ import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
-import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentReferences;
-import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
+import com.herald.agent.subagent.HeraldSubagentFactory;
+import com.herald.agent.subagent.HeraldSubagentReferences;
 import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
@@ -143,7 +143,7 @@ public class HeraldAgentConfig {
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
-        var subagentTypeBuilder = ClaudeSubagentType.builder()
+        var subagentTypeBuilder = HeraldSubagentFactory.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
                 .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
@@ -156,12 +156,12 @@ public class HeraldAgentConfig {
         geminiChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("gemini", chatClientBuilderForModel(model, geminiModel)));
 
-        var claudeSubagentType = subagentTypeBuilder.build();
+        var subagentType = subagentTypeBuilder.build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
 
         var taskToolBuilder = TaskTool.builder()
-                .subagentTypes(claudeSubagentType)
+                .subagentTypes(subagentType)
                 .taskRepository(taskRepository);
 
         if (!subagentRefs.isEmpty()) {
@@ -291,11 +291,7 @@ public class HeraldAgentConfig {
     }
 
     List<SubagentReference> loadSubagentReferences(String agentsDirectory) {
-        Path agentsPath = Path.of(agentsDirectory);
-        if (Files.isDirectory(agentsPath)) {
-            return ClaudeSubagentReferences.fromRootDirectory(agentsDirectory);
-        }
-        return List.of();
+        return HeraldSubagentReferences.fromDirectory(agentsDirectory);
     }
 
     private String loadPromptTemplate(Resource resource) {
