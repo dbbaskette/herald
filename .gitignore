@@ -42,3 +42,4 @@ dist/
 # Environment / secrets
 .env
 herald.yaml
+.worktrees/
