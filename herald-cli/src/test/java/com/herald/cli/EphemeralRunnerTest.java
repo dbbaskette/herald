@@ -131,4 +131,37 @@ class EphemeralRunnerTest {
         assertThat(parsed.profile().tools()).doesNotContain("memory", "cron", "telegram_send");
         assertThat(parsed.profile().tools()).contains("filesystem", "web");
     }
+
+    @Test
+    void endToEndCsvReporterDemo(@TempDir Path tempDir) throws Exception {
+        // Create agent file matching examples/csv-reporter.md format
+        Path agentFile = tempDir.resolve("csv-reporter.md");
+        Files.writeString(agentFile, """
+                ---
+                name: csv-reporter
+                description: CSV report generator
+                model: sonnet
+                tools: [filesystem]
+                ---
+
+                You are a data processing agent.
+                """);
+
+        // Mock ChatModel
+        ChatModel mockModel = createMockModel(
+                "Done. Wrote report.csv with 3 rows summarizing data.json.");
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(baos);
+
+        var runner = new EphemeralRunner(singleProviderMap(mockModel), out, System.err);
+        ApplicationArguments args = new DefaultApplicationArguments(
+                "--agents=" + agentFile,
+                "--prompt=Summarize data.json into report.csv");
+
+        runner.run(args);
+
+        assertThat(baos.toString()).isNotEmpty();
+        assertThat(baos.toString()).contains("report.csv");
+    }
 }

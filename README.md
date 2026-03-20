@@ -261,6 +261,34 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 
 Herald can run without a database in ephemeral mode. Only `ANTHROPIC_API_KEY` is required.
 
+### Quickstart: Ephemeral Mode
+
+1. **Create an agent definition** (`my-agent.md`):
+   ```yaml
+   ---
+   name: my-agent
+   description: A helpful assistant
+   model: sonnet
+   tools: [filesystem, web]
+   ---
+
+   You are a helpful assistant with access to the filesystem and web.
+   ```
+
+2. **Set your API key:**
+   ```bash
+   export ANTHROPIC_API_KEY=sk-...
+   ```
+
+3. **Run it:**
+   ```bash
+   # Single prompt
+   java -jar herald-cli.jar --agents=my-agent.md --prompt="List files in /tmp"
+
+   # Interactive REPL
+   java -jar herald-cli.jar --agents=my-agent.md
+   ```
+
 **Minimal configuration:**
 
 ```
