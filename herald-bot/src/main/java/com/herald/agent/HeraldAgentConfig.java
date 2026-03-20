@@ -5,6 +5,7 @@ import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
+import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
@@ -184,14 +185,11 @@ public class HeraldAgentConfig {
                 .taskRepository(taskRepository)
                 .build();
 
-        // Build upstream AskUserQuestionTool with Telegram-backed handler (or no-op fallback)
+        // Build upstream AskUserQuestionTool with Telegram-backed handler (or console fallback)
         TelegramQuestionHandler telegramHandler = questionHandlerProvider.getIfAvailable();
         AskUserQuestionTool.QuestionHandler questionHandler = telegramHandler != null
                 ? telegramHandler
-                : questions -> {
-                    log.warn("AskUserQuestion called but Telegram is not configured — returning empty");
-                    return Map.of();
-                };
+                : new CommandLineQuestionHandler();
         AskUserQuestionTool askTool = AskUserQuestionTool.builder()
                 .questionHandler(questionHandler)
                 .answersValidation(telegramHandler != null)
