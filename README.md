@@ -4,14 +4,12 @@
 
 # Herald
 
-**AI agent framework** — run as a persistent personal assistant on Telegram, or as a single-shot task agent from the command line.
+**One JAR, two personalities.** Configure it as an always-on personal assistant with Telegram and persistent memory, or point it at an `agents.md` file and use it as a single-shot task agent. Same engine, different mission.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
 ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--SNAPSHOT-blueviolet.svg)
-
-> Two modes, one framework: an always-on assistant that knows who you are and reaches out proactively, or a focused task agent you point at a job and walk away.
 
 ## Table of Contents
 
@@ -22,7 +20,7 @@
 - [Data Flow](#data-flow)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [Ephemeral Mode](#ephemeral-mode)
+- [Task Agent Mode](#task-agent-mode)
 - [Telegram Commands](#telegram-commands)
 - [Project Structure](#project-structure)
 - [Agentic Patterns](#agentic-patterns--spring-ai-agent-utils)
@@ -34,13 +32,24 @@
 
 ## About
 
-Herald is a dual-mode AI agent built on Spring AI.
+Herald is one app that becomes two different agents depending on how you configure it.
 
-**Persistent mode** (`herald-bot`) — an always-on personal assistant that runs 24/7 on your Mac, connects through Telegram, and builds a persistent understanding of who you are. It manages your calendar, email, and scheduled tasks, delegates complex research to subagents, and maintains a growing memory of your preferences and context across sessions.
+**Personal assistant mode** — set a Telegram bot token and a database path, and Herald becomes an always-on AI assistant that runs 24/7 on your Mac. It connects through Telegram, builds persistent memory of who you are, manages your calendar and email, runs scheduled briefings, and delegates complex research to specialized subagents.
 
-**Ephemeral mode** (`herald-cli`) — a task agent you configure with a single `agents.md` file and point at a job. No database, no Telegram, no long-running process. Define the tools, give it a prompt, get a result.
+**Task agent mode** — pass `--agents=my-agent.md` and Herald becomes a focused task agent. An `agents.md` file defines the agent's personality, tools, and model in a single file. Give it a prompt, get a result, done. No database, no Telegram, no long-running process.
 
-Both modes share the same core: the same advisor chain, tool system, multi-provider model routing, and skills framework.
+```bash
+# Personal assistant — always-on with Telegram and memory
+./run.sh bot
+
+# Task agent — one-shot execution from agents.md
+java -jar herald-bot.jar --agents=cf-agent.md --prompt="List all CF spaces"
+
+# Task agent — interactive REPL
+java -jar herald-bot.jar --agents=code-reviewer.md
+```
+
+The personality switch is just configuration. The same JAR, the same advisor chain, the same tool system, the same multi-provider model routing. What changes is what you plug in.
 
 ## Features
 
@@ -98,33 +107,32 @@ Herald's `ReloadableSkillsTool` wraps the upstream `SkillsTool` with a `WatchSer
 
 ```mermaid
 flowchart LR
-    A["Telegram"] -->|long poll| B["herald-bot<br/>(Spring Boot)"]
+    A["Telegram"] -->|long poll| B["herald-bot.jar<br/>(Spring Boot)"]
     B -->|ChatClient| C["Claude API<br/>(Anthropic)"]
     B -->|TaskTool| D["Subagents<br/>(Research, Explore, Plan)"]
     B -->|MCP Client| E["Google Calendar<br/>Gmail"]
     B -->|JDBC| F[("SQLite<br/>~/.herald/herald.db")]
     G["Herald Console<br/>(Vue 3)"] -->|REST API| H["herald-ui<br/>(Spring Boot)"]
     H -->|read| F
-    I["CLI"] -->|--agents| J["herald-cli<br/>(Ephemeral)"]
-    J -->|ChatClient| C
+    I["CLI"] -->|--agents| B
 ```
 
-Herald is a modular Spring Boot monorepo with 6 Maven modules producing 3 runnable JARs:
+Herald is a modular Spring Boot monorepo. One JAR (`herald-bot.jar`) does everything — what it does depends on what you configure:
 
 | Module | Role | Dependency |
 |--------|------|------------|
-| **herald-core** | Agentic loop, advisors, tools, AgentFactory | Spring AI |
+| **herald-core** | Agentic loop, advisors, tools, AgentFactory, CLI runner | Spring AI |
 | **herald-persistence** | SQLite, memory, cron, persistence advisors | herald-core + JDBC |
 | **herald-telegram** | Telegram transport, commands, question handler | herald-core + herald-persistence |
-| **herald-cli** | Ephemeral CLI runner (`--agents`, `--prompt`) | herald-core only |
-| **herald-bot** | Thin wiring: assembles core + persistence + telegram | All modules |
+| **herald-bot** | Thin wiring: assembles all modules into one executable | All modules |
 | **herald-ui** | Management console (REST API + Vue 3) | herald-persistence |
 
-| Executable | Use Case | Port |
-|------------|----------|------|
-| **herald-bot.jar** | Always-on Telegram bot with persistence | 8081 |
-| **herald-cli.jar** | One-shot or REPL ephemeral agent | — |
-| **herald-ui.jar** | Web management console | 8080 |
+| Configuration | What Herald Becomes |
+|---------------|-------------------|
+| `bot-token` + `db-path` | Personal assistant (Telegram + memory + cron) |
+| `db-path` only | Persistent agent without Telegram (REST API) |
+| `--agents=file.md` | Task agent (one-shot or REPL, no persistence) |
+| `--agents=file.md --prompt="..."` | Single-prompt execution, exits when done |
 
 ## Data Flow
 
@@ -183,7 +191,7 @@ cd herald
 ./mvnw package -DskipTests
 ```
 
-This builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-cli`, `herald-bot`, and `herald-ui`.
+This builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-bot`, and `herald-ui`.
 
 ### Step 3: Configure Environment
 
@@ -300,11 +308,11 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_CONFIG` | Override config file path | No | `~/.herald/herald.yaml` |
 
-## Ephemeral Mode
+## Task Agent Mode
 
-Herald can run without a database in ephemeral mode. Only `ANTHROPIC_API_KEY` is required.
+Pass `--agents=` to the same `herald-bot.jar` and it becomes a task agent. No Telegram, no database, no long-running process. The `agents.md` file defines everything: personality, tools, model.
 
-### Quickstart: Ephemeral Mode
+### Quickstart
 
 1. **Create an agent definition** (`my-agent.md`):
    ```yaml
@@ -325,32 +333,23 @@ Herald can run without a database in ephemeral mode. Only `ANTHROPIC_API_KEY` is
 
 3. **Run it:**
    ```bash
-   # Single prompt
-   java -jar herald-cli.jar --agents=my-agent.md --prompt="List files in /tmp"
+   # Single prompt — runs the task, prints the result, exits
+   java -jar herald-bot.jar --agents=my-agent.md --prompt="List files in /tmp"
 
-   # Interactive REPL
-   java -jar herald-cli.jar --agents=my-agent.md
+   # Interactive REPL — type prompts, get responses, Ctrl+D to exit
+   java -jar herald-bot.jar --agents=my-agent.md
    ```
 
-**Minimal configuration:**
+The only required env var is `ANTHROPIC_API_KEY` (or the key for whichever provider your agent uses). Everything else activates based on what config is present:
 
-```
-ANTHROPIC_API_KEY=sk-...
-```
+| What you set | What Herald does |
+|-------------|-----------------|
+| Nothing extra | Task agent — in-memory conversation, console I/O |
+| `herald.memory.db-path` | Adds persistent memory and cron |
+| `herald.telegram.bot-token` | Adds Telegram transport |
+| Both | Full personal assistant mode |
 
-**What's disabled in ephemeral mode:**
-- No SQLite database (set `herald.memory.db-path` to enable persistence)
-- No Telegram integration (set `herald.telegram.bot-token` to enable)
-- No persistent memory, cron jobs, or chat history
-- AskUserQuestion falls back to console stdin/stdout
-
-**Full persistent mode requires:**
-
-```
-ANTHROPIC_API_KEY=sk-...
-herald.memory.db-path=./herald.db
-herald.telegram.bot-token=your-bot-token
-```
+See `examples/` for ready-to-use agent definitions.
 
 ## Telegram Commands
 
@@ -394,11 +393,7 @@ herald/
 │   └── src/main/java/com/herald/
 │       ├── telegram/                # Poller, sender, commands, question handler
 │       └── tools/                   # TelegramSendTool
-├── herald-cli/                      # Ephemeral CLI runner
-│   └── src/main/java/com/herald/
-│       ├── cli/                     # EphemeralRunner (--agents, --prompt)
-│       └── agent/                   # ConsoleTodoProgressListener
-├── herald-bot/                      # Thin wiring module (6 source files)
+├── herald-bot/                      # Thin wiring module — the single executable JAR
 │   └── src/main/java/com/herald/
 │       ├── HeraldApplication.java   # Spring Boot entry point
 │       ├── agent/                   # HeraldAgentConfig (wiring)
@@ -568,7 +563,7 @@ erDiagram
 | 5 | Herald Console | Done |
 | **Dual-Mode Phase 1** | Extract Core Agent Loop | Done |
 | **Dual-Mode Phase 2** | Ephemeral Runtime (CLI) | Done |
-| **Dual-Mode Phase 3** | Maven Module Split (6 modules) | Done |
+| **Dual-Mode Phase 3** | Maven Module Split (5 modules) | Done |
 | **Dual-Mode Phase 4** | agents.md Specification | Done |
 | 6 | Polish | Voice, vision, Docker sandbox, dark mode |
 
