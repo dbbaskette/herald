@@ -72,16 +72,26 @@ flowchart LR
     B -->|JDBC| F[("SQLite<br/>~/.herald/herald.db")]
     G["Herald Console<br/>(Vue 3)"] -->|REST API| H["herald-ui<br/>(Spring Boot)"]
     H -->|read| F
+    I["CLI"] -->|--agents| J["herald-cli<br/>(Ephemeral)"]
+    J -->|ChatClient| C
 ```
 
-Herald is a Spring Boot monorepo producing two runnable JARs:
+Herald is a modular Spring Boot monorepo with 6 Maven modules producing 3 runnable JARs:
 
-| Service | Role | Port |
-|---------|------|------|
-| **herald-bot** | Telegram bot, agent loop, tools, cron | 8081 |
-| **herald-ui** | Management console (REST API + Vue 3) | 8080 |
+| Module | Role | Dependency |
+|--------|------|------------|
+| **herald-core** | Agentic loop, advisors, tools, AgentFactory | Spring AI |
+| **herald-persistence** | SQLite, memory, cron, persistence advisors | herald-core + JDBC |
+| **herald-telegram** | Telegram transport, commands, question handler | herald-core + herald-persistence |
+| **herald-cli** | Ephemeral CLI runner (`--agents`, `--prompt`) | herald-core only |
+| **herald-bot** | Thin wiring: assembles core + persistence + telegram | All modules |
+| **herald-ui** | Management console (REST API + Vue 3) | herald-persistence |
 
-Both run as macOS `launchd` services and share a single SQLite database.
+| Executable | Use Case | Port |
+|------------|----------|------|
+| **herald-bot.jar** | Always-on Telegram bot with persistence | 8081 |
+| **herald-cli.jar** | One-shot or REPL ephemeral agent | — |
+| **herald-ui.jar** | Web management console | 8080 |
 
 ## Data Flow
 
@@ -140,7 +150,7 @@ cd herald
 ./mvnw package -DskipTests
 ```
 
-This builds both the `herald-bot` and `herald-ui` JARs.
+This builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-cli`, `herald-bot`, and `herald-ui`.
 
 ### Step 3: Configure Environment
 
@@ -331,31 +341,46 @@ herald.telegram.bot-token=your-bot-token
 
 ```
 herald/
-├── pom.xml                          # Parent POM — Spring AI BOM
+├── pom.xml                          # Parent POM — Spring AI BOM, 6 modules
 ├── Makefile                         # Build, install, service management
-├── herald-bot/                      # Core bot service
+├── herald-core/                     # Agentic loop foundation (zero persistence deps)
 │   └── src/main/java/com/herald/
-│       ├── HeraldApplication.java
-│       ├── agent/                   # ChatClient config, agent service
-│       ├── telegram/                # Poller, commands, formatting
-│       ├── memory/                  # Memory tools (@Tool beans)
-│       ├── tools/                   # Shell decorator, web tools
-│       ├── cron/                    # Cron service, briefing jobs
-│       └── config/                  # Configuration properties
+│       ├── agent/                   # AgentFactory, AgentService, ModelSwitcher
+│       │   ├── profile/             # AgentProfile record, AgentProfileParser
+│       │   └── subagent/            # HeraldSubagentFactory, HeraldSubagentReferences
+│       ├── tools/                   # FileSystemTools, WebTools, ShellSecurityConfig
+│       └── config/                  # HeraldConfig, ModelProviderConfig
+├── herald-persistence/              # SQLite, memory, cron
+│   └── src/main/java/com/herald/
+│       ├── memory/                  # MemoryTools, MemoryRepository, archival jobs
+│       ├── cron/                    # CronService, CronTools, BriefingJob
+│       ├── agent/                   # Persistence advisors, AgentMetrics
+│       ├── tools/                   # HeraldShellDecorator, GwsTools
+│       └── config/                  # DataSourceConfig, JsonChatMemoryRepository
+├── herald-telegram/                 # Telegram transport
+│   └── src/main/java/com/herald/
+│       ├── telegram/                # Poller, sender, commands, question handler
+│       └── tools/                   # TelegramSendTool
+├── herald-cli/                      # Ephemeral CLI runner
+│   └── src/main/java/com/herald/
+│       ├── cli/                     # EphemeralRunner (--agents, --prompt)
+│       └── agent/                   # ConsoleTodoProgressListener
+├── herald-bot/                      # Thin wiring module (6 source files)
+│   └── src/main/java/com/herald/
+│       ├── HeraldApplication.java   # Spring Boot entry point
+│       ├── agent/                   # HeraldAgentConfig (wiring)
+│       └── api/                     # ChatController, ModelController
 ├── herald-ui/                       # Management console
-│   ├── src/main/java/com/herald/ui/
-│   │   ├── api/                     # REST controllers
-│   │   └── sse/                     # SSE status stream
+│   ├── src/main/java/com/herald/ui/ # REST controllers, SSE
 │   └── frontend/                    # Vue 3 + Vite
+├── examples/                        # Example agents.md files
 ├── skills/                          # Reloadable skill definitions
-├── .claude/
-│   └── agents/                      # Custom subagent definitions (research.md)
-├── com.herald.plist                 # launchd service definition (bot)
-├── com.herald-ui.plist              # launchd service definition (UI)
+├── .claude/agents/                  # Custom subagent definitions
 └── docs/
-    ├── herald-patterns-comparison.md # Blog series vs Herald feature comparison
-    ├── gws-setup.md                 # Google Workspace CLI setup guide
-    └── obsidian-setup.md            # Obsidian vault integration guide
+    ├── agents-md-spec.md            # agents.md format specification
+    ├── herald-patterns-comparison.md
+    ├── gws-setup.md
+    └── obsidian-setup.md
 ```
 
 ## Agentic Patterns — Spring AI Agent Utils
@@ -501,13 +526,17 @@ erDiagram
 
 ## Build Phases
 
-| Phase | Focus | Key Deliverable |
-|-------|-------|-----------------|
-| 1 | Core Loop + Spring AI Foundation | Telegram ↔ Claude ↔ Tools end-to-end |
-| 2 | Subagents + Multi-Provider | TaskTool delegation, Ollama support |
-| 3 | Skills & Memory | SkillsTool hot-reload, CONTEXT.md, auto-memory |
-| 4 | Proactive & MCP | Cron jobs, morning briefing, Calendar/Gmail |
-| 5 | Herald Console | Vue 3 management UI with skills editor |
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 1 | Core Loop + Spring AI Foundation | Done |
+| 2 | Subagents + Multi-Provider | Done |
+| 3 | Skills & Memory | Done |
+| 4 | Proactive & MCP | Done |
+| 5 | Herald Console | Done |
+| **Dual-Mode Phase 1** | Extract Core Agent Loop | Done |
+| **Dual-Mode Phase 2** | Ephemeral Runtime (CLI) | Done |
+| **Dual-Mode Phase 3** | Maven Module Split (6 modules) | Done |
+| **Dual-Mode Phase 4** | agents.md Specification | Done |
 | 6 | Polish | Voice, vision, Docker sandbox, dark mode |
 
 ## Contributing
