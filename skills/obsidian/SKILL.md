@@ -9,7 +9,9 @@ description: >
 
 # Obsidian Knowledge Base Skill
 
-Manage the **Herald-Memory** Obsidian vault using the official `obsidian` CLI (requires Obsidian 1.12+ with CLI enabled).
+**This is NOT a tool you call directly. Use the shell tool to run `obsidian` CLI commands.**
+
+Manage the Obsidian vault using the `obsidian` CLI via shell commands (requires Obsidian 1.12+ with CLI enabled).
 The CLI communicates with the running Obsidian desktop app via IPC.
 
 **IMPORTANT: The Obsidian desktop app must be running with CLI enabled (Settings → General → Command line interface → Toggle ON).**
