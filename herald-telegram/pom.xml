@@ -10,29 +10,22 @@
         <version>0.4.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>herald-bot</artifactId>
-    <name>Herald Bot</name>
-    <description>Telegram bot and AI agent loop</description>
+    <artifactId>herald-telegram</artifactId>
+    <name>Herald Telegram</name>
+    <description>Telegram transport — bot polling, message sending, and slash-command handling</description>
 
     <dependencies>
-        <!-- Herald Core -->
+        <!-- Herald Core (MessageSender, AgentService, HeraldConfig, TodoProgressEvent, etc.) -->
         <dependency>
             <groupId>com.herald</groupId>
             <artifactId>herald-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Herald Persistence -->
+        <!-- Herald Persistence (MemoryTools, CronService, UsageTracker) -->
         <dependency>
             <groupId>com.herald</groupId>
             <artifactId>herald-persistence</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <!-- Herald Telegram -->
-        <dependency>
-            <groupId>com.herald</groupId>
-            <artifactId>herald-telegram</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -43,12 +36,22 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!-- Community agent utilities (AskUserQuestionTool) -->
+        <dependency>
+            <groupId>org.springaicommunity</groupId>
+            <artifactId>spring-ai-agent-utils</artifactId>
+        </dependency>
+
+        <!-- Telegram Bot API -->
+        <dependency>
+            <groupId>com.github.pengrad</groupId>
+            <artifactId>java-telegram-bot-api</artifactId>
+            <version>7.7.0</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -56,14 +59,5 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

@@ -346,11 +346,7 @@ public class HeraldAgentConfig {
     }
 
     static org.springframework.ai.chat.prompt.ChatOptions chatOptionsForModel(ChatModel chatModel, String modelId) {
-        if (chatModel instanceof OpenAiChatModel) {
-            return OpenAiChatOptions.builder().model(modelId).build();
-        }
-        // Default to Anthropic (includes AnthropicChatModel and any future Anthropic-compatible models)
-        return AnthropicChatOptions.builder().model(modelId).build();
+        return ModelSwitcher.chatOptionsForModel(chatModel, modelId);
     }
 
     /**

@@ -10,9 +10,9 @@
         <version>0.4.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>herald-bot</artifactId>
-    <name>Herald Bot</name>
-    <description>Telegram bot and AI agent loop</description>
+    <artifactId>herald-cli</artifactId>
+    <name>Herald CLI</name>
+    <description>Ephemeral CLI agent execution for Herald</description>
 
     <dependencies>
         <!-- Herald Core -->
@@ -22,33 +22,18 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Herald Persistence -->
-        <dependency>
-            <groupId>com.herald</groupId>
-            <artifactId>herald-persistence</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <!-- Herald Telegram -->
-        <dependency>
-            <groupId>com.herald</groupId>
-            <artifactId>herald-telegram</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
+
+        <!-- Spring AI agent utilities (CommandLineQuestionHandler etc.) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
+            <groupId>org.springaicommunity</groupId>
+            <artifactId>spring-ai-agent-utils</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
