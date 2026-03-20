@@ -27,6 +27,7 @@ import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -36,6 +37,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -96,6 +98,12 @@ public class HeraldAgentConfig {
         telegramSendTool.ifPresent(t -> names.add("telegram_send"));
         gwsTools.ifPresent(t -> names.add("gws"));
         return List.copyOf(names);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ChatMemoryRepository.class)
+    public ChatMemoryRepository inMemoryChatMemoryRepository() {
+        return new InMemoryChatMemoryRepository();
     }
 
     @Bean
