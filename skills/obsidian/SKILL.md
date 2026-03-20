@@ -16,12 +16,14 @@ The CLI communicates with the running Obsidian desktop app via IPC.
 
 ## Prerequisites
 
-**The command is `obsidian`, NOT `obsidian-cli`.** Never use `obsidian-cli` — that command does not exist. The CLI is built into the Obsidian desktop app (v1.12+).
+**Two critical rules:**
+1. **The command is `obsidian`, NOT `obsidian-cli`.** The CLI is built into the Obsidian desktop app (v1.12+).
+2. **ALWAYS include `vault="Herald-Memory"` on every command.** Without it, the CLI targets whichever vault is open in the app, which may be the wrong one.
 
 The Obsidian app must be running with CLI enabled. Test with:
 
 ```bash
-obsidian version
+obsidian vault vault="Herald-Memory"
 ```
 
 If this fails, tell the user: "The Obsidian CLI is not available. Make sure Obsidian 1.12+ is installed, running, and CLI is enabled in Settings → General → Command line interface → Toggle ON. See https://help.obsidian.md/cli for setup."
@@ -113,7 +115,7 @@ After a meaningful conversation (not trivial greetings or single-question lookup
 2. Write a structured summary (not a raw transcript):
 
 ```bash
-obsidian create path="Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
+obsidian create vault="Herald-Memory" path="Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
 ```
 
 ### What to include in the summary
@@ -135,7 +137,7 @@ obsidian create path="Chat-Sessions/2026-03-10-herald-model-config.md" content="
 When Herald performs web research or deep analysis, save the findings:
 
 ```bash
-obsidian create path="Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
+obsidian create vault="Herald-Memory" path="Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
 ```
 
 ## Saving Daily Briefings
@@ -143,7 +145,7 @@ obsidian create path="Research/spring-ai-jdbc-chat-memory.md" content="---\ntags
 Morning briefings and weekly reviews go to `Daily/`:
 
 ```bash
-obsidian create path="Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
+obsidian create vault="Herald-Memory" path="Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
 ```
 
 ## Referencing Past Context
@@ -152,16 +154,16 @@ Before answering questions, search the vault for relevant prior context:
 
 ```bash
 # Search chat sessions for prior discussions
-obsidian search query="Spring AI" path="Chat-Sessions"
+obsidian search vault="Herald-Memory" query="Spring AI" path="Chat-Sessions"
 
 # Search research notes
-obsidian search query="model switching" path="Research"
+obsidian search vault="Herald-Memory" query="model switching" path="Research"
 
 # Search project notes
-obsidian search query="architecture" path="Projects/Herald"
+obsidian search vault="Herald-Memory" query="architecture" path="Projects/Herald"
 
 # Read a specific note for full context
-obsidian read path="Chat-Sessions/2026-03-10-herald-model-config.md"
+obsidian read vault="Herald-Memory" path="Chat-Sessions/2026-03-10-herald-model-config.md"
 ```
 
 Use this to:
