@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.MessageSender;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.model.request.ChatAction;
@@ -18,7 +19,7 @@ import java.util.List;
 
 @Component
 @ConditionalOnProperty("herald.telegram.bot-token")
-public class TelegramSender {
+public class TelegramSender implements MessageSender {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramSender.class);
     private static final int MAX_RETRIES = 3;
@@ -34,6 +35,7 @@ public class TelegramSender {
         this.formatter = formatter;
     }
 
+    @Override
     public void sendMessage(String text) {
         List<String> chunks = formatter.split(text);
         for (String chunk : chunks) {

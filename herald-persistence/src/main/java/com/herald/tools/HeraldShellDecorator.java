@@ -14,7 +14,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import com.herald.telegram.TelegramSender;
+import com.herald.agent.MessageSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -35,14 +35,14 @@ public class HeraldShellDecorator {
     private final List<Pattern> blocklist;
     private final ShellSecurityConfig securityConfig;
     private final ShellCommandExecutor delegate;
-    private final TelegramSender telegramSender;
+    private final MessageSender telegramSender;
     private final JdbcTemplate jdbcTemplate;
     private final ConcurrentHashMap<String, CompletableFuture<Boolean>> pendingConfirmations = new ConcurrentHashMap<>();
 
     @Autowired
     public HeraldShellDecorator(ShellSecurityConfig securityConfig,
                          Optional<ShellCommandExecutor> delegate,
-                         Optional<TelegramSender> telegramSender,
+                         Optional<MessageSender> messageSender,
                          JdbcTemplate jdbcTemplate) {
         this.securityConfig = securityConfig;
         this.jdbcTemplate = jdbcTemplate;
@@ -50,7 +50,7 @@ public class HeraldShellDecorator {
                 .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE))
                 .toList();
         this.delegate = delegate.orElse(command -> executeCommandInternal(command, securityConfig.getShellTimeoutSeconds()));
-        this.telegramSender = telegramSender.orElse(null);
+        this.telegramSender = messageSender.orElse(null);
     }
 
     // Package-private constructor for testing without Optional wrappers

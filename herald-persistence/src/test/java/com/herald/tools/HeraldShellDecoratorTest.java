@@ -7,7 +7,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.herald.telegram.TelegramSender;
+import com.herald.agent.MessageSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
@@ -269,7 +269,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(1); // 1s timeout for fast test
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.empty(), Optional.of(mockSender), null);
 
@@ -285,7 +285,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         CountDownLatch messageSent = new CountDownLatch(1);
         AtomicReference<String> capturedMessage = new AtomicReference<>();
         doAnswer((Answer<Void>) invocation -> {
@@ -315,7 +315,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         CountDownLatch messageSent = new CountDownLatch(1);
         AtomicReference<String> capturedMessage = new AtomicReference<>();
         doAnswer((Answer<Void>) invocation -> {
@@ -347,7 +347,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         CountDownLatch messageSent = new CountDownLatch(1);
         AtomicReference<String> capturedMessage = new AtomicReference<>();
         doAnswer((Answer<Void>) invocation -> {
@@ -379,7 +379,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(1);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.empty(), Optional.of(mockSender), null);
 
@@ -396,7 +396,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(1);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         HeraldShellDecorator dec = new HeraldShellDecorator(
                 config, Optional.empty(), Optional.of(mockSender), null);
 
@@ -458,7 +458,7 @@ class HeraldShellDecoratorTest {
         config.setShellBlocklist(List.of());
         config.setConfirmationTimeoutSeconds(5);
 
-        TelegramSender mockSender = mock(TelegramSender.class);
+        MessageSender mockSender = mock(MessageSender.class);
         CountDownLatch messageSent = new CountDownLatch(1);
         AtomicReference<String> capturedMessage = new AtomicReference<>();
         doAnswer((Answer<Void>) invocation -> {

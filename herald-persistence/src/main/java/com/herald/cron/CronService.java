@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 
 import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
-import com.herald.telegram.TelegramSender;
+import com.herald.agent.MessageSender;
 
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -32,7 +32,7 @@ public class CronService {
 
     private final CronRepository cronRepository;
     private final ObjectProvider<AgentService> agentServiceProvider;
-    private final TelegramSender telegramSender;
+    private final MessageSender messageSender;
     private final ChatMemory chatMemory;
     private final BriefingJob briefingJob;
     private final ZoneId timezone;
@@ -40,11 +40,11 @@ public class CronService {
     private final Map<Long, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
 
     public CronService(CronRepository cronRepository, ObjectProvider<AgentService> agentServiceProvider,
-                       Optional<TelegramSender> telegramSender, ChatMemory chatMemory,
+                       Optional<MessageSender> messageSender, ChatMemory chatMemory,
                        HeraldConfig config, BriefingJob briefingJob, TaskScheduler taskScheduler) {
         this.cronRepository = cronRepository;
         this.agentServiceProvider = agentServiceProvider;
-        this.telegramSender = telegramSender.orElse(null);
+        this.messageSender = messageSender.orElse(null);
         this.chatMemory = chatMemory;
         this.briefingJob = briefingJob;
         this.timezone = ZoneId.of(config.cronTimezone());
@@ -179,18 +179,18 @@ public class CronService {
                 prompt = job.prompt();
             }
             String response = agentServiceProvider.getObject().chat(prompt, conversationId);
-            if (telegramSender != null) {
-                telegramSender.sendMessage(response);
+            if (messageSender != null) {
+                messageSender.sendMessage(response);
             } else {
-                log.info("Cron job '{}' result (no Telegram configured): {}", job.name(), response);
+                log.info("Cron job '{}' result (no messaging configured): {}", job.name(), response);
             }
             cronRepository.updateLastRun(job.name(), LocalDateTime.now());
             log.info("Cron job '{}' completed successfully", job.name());
         } catch (Exception e) {
             log.error("Cron job '{}' failed", job.name(), e);
-            if (telegramSender != null) {
+            if (messageSender != null) {
                 try {
-                    telegramSender.sendMessage("Cron job '" + job.name() + "' failed: " + e.getMessage());
+                    messageSender.sendMessage("Cron job '" + job.name() + "' failed: " + e.getMessage());
                 } catch (Exception sendError) {
                     log.error("Failed to send error notification for cron job '{}'", job.name(), sendError);
                 }

@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import com.herald.agent.AgentService;
 import com.herald.config.HeraldConfig;
-import com.herald.telegram.TelegramSender;
+import com.herald.agent.MessageSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -22,7 +22,7 @@ class CronServiceTest {
 
     private CronRepository cronRepository;
     private AgentService agentService;
-    private TelegramSender telegramSender;
+    private MessageSender messageSender;
     private ChatMemory chatMemory;
     private BriefingJob briefingJob;
     private CronService cronService;
@@ -31,7 +31,7 @@ class CronServiceTest {
     void setUp() {
         cronRepository = mock(CronRepository.class);
         agentService = mock(AgentService.class);
-        telegramSender = mock(TelegramSender.class);
+        messageSender = mock(MessageSender.class);
         chatMemory = mock(ChatMemory.class);
         briefingJob = mock(BriefingJob.class);
 
@@ -41,7 +41,7 @@ class CronServiceTest {
                 new HeraldConfig.Cron("America/New_York"), null);
         TaskScheduler scheduler = createTaskScheduler();
         cronService = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
         cronService.loadJobs();
     }
 
@@ -136,7 +136,7 @@ class CronServiceTest {
                 new HeraldConfig.Cron("America/New_York"), null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
         service.loadJobs();
 
         // findEnabled called at least twice: once in setUp, once here
@@ -163,7 +163,7 @@ class CronServiceTest {
         cronService.executeJob(job);
 
         verify(agentService).chat("hello", "cron-test-job");
-        verify(telegramSender).sendMessage("result");
+        verify(messageSender).sendMessage("result");
         verify(cronRepository).updateLastRun(eq("test-job"), any());
         verify(chatMemory).clear("cron-test-job");
     }
@@ -186,7 +186,7 @@ class CronServiceTest {
 
         cronService.executeJob(job);
 
-        verify(telegramSender).sendMessage("Cron job 'test-job' failed: agent error");
+        verify(messageSender).sendMessage("Cron job 'test-job' failed: agent error");
     }
 
     @Test
@@ -199,7 +199,7 @@ class CronServiceTest {
 
         verify(briefingJob).buildMorningPrompt();
         verify(agentService).chat("enriched prompt", "cron-morning-briefing");
-        verify(telegramSender).sendMessage("briefing result");
+        verify(messageSender).sendMessage("briefing result");
     }
 
     @Test
@@ -212,7 +212,7 @@ class CronServiceTest {
 
         verify(briefingJob).buildWeeklyPrompt();
         verify(agentService).chat("weekly prompt", "cron-weekly-review");
-        verify(telegramSender).sendMessage("weekly result");
+        verify(messageSender).sendMessage("weekly result");
     }
 
     @Test
@@ -254,7 +254,7 @@ class CronServiceTest {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(telegramSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
         assertThat(service).isNotNull();
     }
 
@@ -272,7 +272,7 @@ class CronServiceTest {
         service.executeJob(job);
 
         verify(agentService).chat("hello", "cron-test-job");
-        verify(telegramSender, never()).sendMessage(any());
+        verify(messageSender, never()).sendMessage(any());
         verify(cronRepository).updateLastRun(eq("test-job"), any());
     }
 }
