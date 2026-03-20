@@ -16,14 +16,15 @@ The CLI communicates with the running Obsidian desktop app via IPC.
 
 ## Prerequisites
 
-**Two critical rules:**
+**Three critical rules:**
 1. **The command is `obsidian`, NOT `obsidian-cli`.** The CLI is built into the Obsidian desktop app (v1.12+).
-2. **ALWAYS include `vault="Herald-Memory"` on every command.** Without it, the CLI targets whichever vault is open in the app, which may be the wrong one.
+2. **ALWAYS include the vault name from CONTEXT.md on every command.** Check the "Obsidian Configuration" section of CONTEXT.md for the vault name and Herald folder path. Without `vault=`, the CLI targets whichever vault is open in the app.
+3. **Prefix all paths with the Herald folder from CONTEXT.md.** Herald notes live in a subfolder, not at the vault root.
 
 The Obsidian app must be running with CLI enabled. Test with:
 
 ```bash
-obsidian vault vault="Herald-Memory"
+obsidian vault vault="<vault-name-from-CONTEXT.md>"
 ```
 
 If this fails, tell the user: "The Obsidian CLI is not available. Make sure Obsidian 1.12+ is installed, running, and CLI is enabled in Settings → General → Command line interface → Toggle ON. See https://help.obsidian.md/cli for setup."
@@ -40,7 +41,7 @@ export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
 
 Herald uses a dedicated vault called **Herald-Memory** with a structured folder layout. All Herald-generated content goes here — never into the user's personal vaults unless explicitly asked.
 
-**IMPORTANT:** Always include `vault="Herald-Memory"` on every CLI command to avoid targeting the wrong vault (the CLI defaults to whichever vault is currently open in the Obsidian app).
+**IMPORTANT:** Always include the vault name and Herald folder prefix from CONTEXT.md on every CLI command.
 
 ### Folder Structure
 
@@ -87,15 +88,15 @@ Herald-Memory/
 If the vault exists but the folder structure hasn't been created yet, create the folders on first use:
 
 ```bash
-obsidian create vault="Herald-Memory" path="Chat-Sessions/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="Daily/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="Research/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="Projects/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="People/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="Reference/.gitkeep" content="" overwrite
-obsidian create vault="Herald-Memory" path="Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
-obsidian create vault="Herald-Memory" path="Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
-obsidian create vault="Herald-Memory" path="Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Chat-Sessions/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Daily/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Research/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Projects/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/People/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Reference/.gitkeep" content="" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
 ```
 
 ## Saving Chat Sessions
@@ -115,7 +116,7 @@ After a meaningful conversation (not trivial greetings or single-question lookup
 2. Write a structured summary (not a raw transcript):
 
 ```bash
-obsidian create vault="Herald-Memory" path="Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
 ```
 
 ### What to include in the summary
@@ -137,7 +138,7 @@ obsidian create vault="Herald-Memory" path="Chat-Sessions/2026-03-10-herald-mode
 When Herald performs web research or deep analysis, save the findings:
 
 ```bash
-obsidian create vault="Herald-Memory" path="Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
 ```
 
 ## Saving Daily Briefings
@@ -145,7 +146,7 @@ obsidian create vault="Herald-Memory" path="Research/spring-ai-jdbc-chat-memory.
 Morning briefings and weekly reviews go to `Daily/`:
 
 ```bash
-obsidian create vault="Herald-Memory" path="Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
 ```
 
 ## Referencing Past Context
@@ -154,16 +155,16 @@ Before answering questions, search the vault for relevant prior context:
 
 ```bash
 # Search chat sessions for prior discussions
-obsidian search vault="Herald-Memory" query="Spring AI" path="Chat-Sessions"
+obsidian search vault="Documents" query="Spring AI" path="Herald-Memory/Chat-Sessions"
 
 # Search research notes
-obsidian search vault="Herald-Memory" query="model switching" path="Research"
+obsidian search vault="Documents" query="model switching" path="Herald-Memory/Research"
 
 # Search project notes
-obsidian search vault="Herald-Memory" query="architecture" path="Projects/Herald"
+obsidian search vault="Documents" query="architecture" path="Herald-Memory/Projects/Herald"
 
 # Read a specific note for full context
-obsidian read vault="Herald-Memory" path="Chat-Sessions/2026-03-10-herald-model-config.md"
+obsidian read vault="Documents" path="Herald-Memory/Chat-Sessions/2026-03-10-herald-model-config.md"
 ```
 
 Use this to:
