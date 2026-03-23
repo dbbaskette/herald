@@ -70,11 +70,6 @@ public class VaultSearchTools {
 
     @Tool(description = "Re-scan and re-index the Obsidian vault. Use if you suspect the search index is stale or if files have been added/modified outside of Herald.")
     public String vault_reindex() {
-        try {
-            vaultIndexer.reindex();
-            return "Vault reindex completed successfully.";
-        } catch (Exception e) {
-            return "Vault reindex failed: " + e.getMessage();
-        }
+        return vaultIndexer.reindex();
     }
 }

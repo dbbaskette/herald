@@ -69,17 +69,17 @@ public class VaultIndexer {
      * Full reindex: scans vault, detects changes via hash comparison, indexes changed files,
      * removes deleted file documents, and persists updated hashes.
      */
-    public void reindex() {
+    public String reindex() {
         String vaultPathStr = config.obsidianVaultPath();
         if (vaultPathStr == null || vaultPathStr.isBlank()) {
             log.warn("Obsidian vault path not configured — skipping reindex");
-            return;
+            return "Vault path not configured";
         }
 
         Path vaultPath = resolveTildePath(vaultPathStr);
         if (!Files.isDirectory(vaultPath)) {
             log.warn("Vault path does not exist or is not a directory: {}", vaultPath);
-            return;
+            return "Vault path does not exist: " + vaultPath;
         }
 
         Path hashesPath = resolveTildePath(config.vaultIndexHashesPath());
@@ -106,9 +106,14 @@ public class VaultIndexer {
 
             saveHashes(hashesPath, newHashes);
             saveVectorStore();
-            log.info("Vault reindex complete");
+
+            String summary = String.format("Vault reindex complete: %d indexed, %d removed, %d total files",
+                    changed.size(), deleted.size(), newHashes.size());
+            log.info(summary);
+            return summary;
         } catch (Exception e) {
             log.error("Error during vault reindex", e);
+            return "Reindex failed: " + e.getMessage();
         } finally {
             lock.writeLock().unlock();
         }
