@@ -1,6 +1,8 @@
 package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
+import com.herald.memory.VaultSearchTools;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
@@ -106,7 +108,8 @@ class HeraldAgentConfigTest {
         assertThatThrownBy(() ->
                 agentConfig.modelSwitcher(null, configWith(null, null), false,
                         Optional.empty(), Optional.empty(), null, null, null, null,
-                        Optional.empty(), Optional.empty(), null, Optional.empty(), Optional.empty(),
+                        Optional.empty(), Optional.empty(), null, Optional.empty(),
+                        Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(), Optional.empty(),
                         new ClassPathResource("prompts/NONEXISTENT.md"),
                         ".claude/agents", new ReloadableSkillsTool("skills"),
                         "claude-sonnet-4-5", "claude-haiku-4-5",
@@ -132,7 +135,7 @@ class HeraldAgentConfigTest {
 
     private HeraldConfig configWith(String persona, String extra) {
         return new HeraldConfig(null, null,
-                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null, null, null);
     }
 
     private String loadPromptTemplate() throws IOException {

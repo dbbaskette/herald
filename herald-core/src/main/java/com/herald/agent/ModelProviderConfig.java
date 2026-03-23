@@ -2,7 +2,11 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.document.MetadataMode;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
@@ -72,5 +76,21 @@ public class ModelProviderConfig {
         return OpenAiChatModel.builder()
                 .openAiApi(api)
                 .build();
+    }
+
+    @Bean("lmstudioEmbeddingModel")
+    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.lmstudio.base-url:}')")
+    public EmbeddingModel lmstudioEmbeddingModel(HeraldConfig config) {
+        var lmstudioConfig = config.providers().lmstudio();
+        String apiKey = lmstudioConfig.apiKey() != null ? lmstudioConfig.apiKey() : "lm-studio";
+        String baseUrl = lmstudioConfig.baseUrl() != null ? lmstudioConfig.baseUrl() : "http://localhost:1234";
+        OpenAiApi api = OpenAiApi.builder()
+                .apiKey(apiKey)
+                .baseUrl(baseUrl)
+                .build();
+        OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
+                .model("text-embedding-nomic-embed-text-v2-moe")
+                .build();
+        return new OpenAiEmbeddingModel(api, MetadataMode.EMBED, options);
     }
 }

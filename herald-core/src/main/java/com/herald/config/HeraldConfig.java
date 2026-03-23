@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
-                           Weather weather, Obsidian obsidian) {
+                           Weather weather, Obsidian obsidian, Vault vault, Archival archival) {
 
     public record Memory(String dbPath) {
     }
@@ -72,6 +72,25 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record Obsidian(String vaultPath) {
     }
 
+    public record Vault(
+        String vectorStorePath,
+        String indexHashesPath,
+        Boolean autoIndexOnStartup,
+        Boolean fileWatcherEnabled,
+        VaultSearch search,
+        VaultChunking chunking
+    ) {
+        public record VaultSearch(Integer autoTopK, Integer toolDefaultTopK, Double minSimilarity) {}
+        public record VaultChunking(Integer smallFileThreshold, Integer maxChunkSize) {}
+    }
+
+    public record Archival(
+        Integer messageThreshold,
+        Integer idleTimeoutMinutes,
+        Integer minMessagesForIdle,
+        Integer keepRecentMessages
+    ) {}
+
     /**
      * Returns the Obsidian vault path if configured, or empty string.
      */
@@ -94,6 +113,69 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return cron.timezone();
         }
         return "America/New_York";
+    }
+
+    public String vaultVectorStorePath() {
+        return vault != null && vault.vectorStorePath() != null
+            ? vault.vectorStorePath() : "~/.herald/vector-store.json";
+    }
+
+    public String vaultIndexHashesPath() {
+        return vault != null && vault.indexHashesPath() != null
+            ? vault.indexHashesPath() : "~/.herald/vault-index-hashes.json";
+    }
+
+    public boolean vaultAutoIndexOnStartup() {
+        return vault == null || vault.autoIndexOnStartup() == null || vault.autoIndexOnStartup();
+    }
+
+    public boolean vaultFileWatcherEnabled() {
+        return vault == null || vault.fileWatcherEnabled() == null || vault.fileWatcherEnabled();
+    }
+
+    public int vaultAutoTopK() {
+        return vault != null && vault.search() != null && vault.search().autoTopK() != null
+            ? vault.search().autoTopK() : 2;
+    }
+
+    public int vaultToolDefaultTopK() {
+        return vault != null && vault.search() != null && vault.search().toolDefaultTopK() != null
+            ? vault.search().toolDefaultTopK() : 5;
+    }
+
+    public double vaultMinSimilarity() {
+        return vault != null && vault.search() != null && vault.search().minSimilarity() != null
+            ? vault.search().minSimilarity() : 0.7;
+    }
+
+    public int vaultSmallFileThreshold() {
+        return vault != null && vault.chunking() != null && vault.chunking().smallFileThreshold() != null
+            ? vault.chunking().smallFileThreshold() : 500;
+    }
+
+    public int vaultMaxChunkSize() {
+        return vault != null && vault.chunking() != null && vault.chunking().maxChunkSize() != null
+            ? vault.chunking().maxChunkSize() : 1000;
+    }
+
+    public int archivalMessageThreshold() {
+        return archival != null && archival.messageThreshold() != null
+            ? archival.messageThreshold() : 5;
+    }
+
+    public int archivalIdleTimeoutMinutes() {
+        return archival != null && archival.idleTimeoutMinutes() != null
+            ? archival.idleTimeoutMinutes() : 30;
+    }
+
+    public int archivalMinMessagesForIdle() {
+        return archival != null && archival.minMessagesForIdle() != null
+            ? archival.minMessagesForIdle() : 2;
+    }
+
+    public int archivalKeepRecentMessages() {
+        return archival != null && archival.keepRecentMessages() != null
+            ? archival.keepRecentMessages() : 5;
     }
 
     public String dbPath() {

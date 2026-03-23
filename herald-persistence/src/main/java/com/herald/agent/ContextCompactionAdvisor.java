@@ -142,10 +142,10 @@ class ContextCompactionAdvisor implements CallAdvisor {
         }
 
         List<Message> toSummarize = history.subList(0, splitIndex);
-        String summary = buildSummary(toSummarize);
 
-        // Archive compacted context to Obsidian so it's never silently lost
-        archiveToObsidian(summary);
+        // Archive FULL transcript to Obsidian before compacting — the summary may lose detail
+        String fullTranscript = formatTranscript(toSummarize);
+        archiveToObsidian(fullTranscript);
 
         // Replace history with remaining messages
         List<Message> remaining = new ArrayList<>(history.subList(splitIndex, history.size()));
@@ -223,11 +223,11 @@ class ContextCompactionAdvisor implements CallAdvisor {
      * Archive a compaction summary to the Obsidian vault as a Chat-Sessions note.
      * Falls back to hot memory if Obsidian is unavailable.
      */
-    private void archiveToObsidian(String summary) {
+    private void archiveToObsidian(String transcript) {
         String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String path = "Chat-Sessions/" + date + "-context-compaction-" + System.currentTimeMillis() + ".md";
-        String content = "---\\ntags: [context-compaction]\\ndate: " + date
-                + "\\n---\\n\\n# Context Compaction\\n\\n" + sanitizeForCli(summary);
+        String path = "Chat-Sessions/" + date + "-compacted-" + System.currentTimeMillis() + ".md";
+        String content = "---\\ntags: [chat-session, compacted]\\ndate: " + date
+                + "\\n---\\n\\n# Chat Session (compacted)\\n\\n" + sanitizeForCli(transcript);
 
         try {
             ProcessBuilder pb = new ProcessBuilder(
@@ -254,7 +254,7 @@ class ContextCompactionAdvisor implements CallAdvisor {
         } catch (Exception e) {
             log.warn("Failed to archive to Obsidian ({}), falling back to hot memory: {}", e.getMessage(), path);
             String key = "context_summary_" + System.currentTimeMillis();
-            memoryTools.memory_set(key, summary);
+            memoryTools.memory_set(key, transcript);
         }
     }
 

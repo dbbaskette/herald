@@ -3,6 +3,8 @@ package com.herald.agent;
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
+import com.herald.memory.VaultSearchTools;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -59,7 +61,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
@@ -71,6 +73,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -99,7 +102,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -114,6 +117,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -133,7 +137,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -148,6 +152,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -203,7 +208,7 @@ class HeraldAgentConfigIntegrationTest {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false,
@@ -217,6 +222,8 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(),  // gwsTools
                 new WebTools(""),
                 Optional.empty(),  // cronTools
+                Optional.<VaultSearchTools>empty(),  // vaultSearchTools
+                Optional.<SimpleVectorStore>empty(),  // vectorStore
                 Optional.empty(),  // jdbcTemplate
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(),
@@ -235,10 +242,10 @@ class HeraldAgentConfigIntegrationTest {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
 
         var advisors = agentConfig.buildAdvisorChain(
-                Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.<SimpleVectorStore>empty(),
                 contextMdAdvisor, mockModel, config, false);
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, PromptDumpAdvisor, ToolCallAdvisor
@@ -263,7 +270,8 @@ class HeraldAgentConfigIntegrationTest {
                 todoTool, askTool,
                 Optional.empty(), Optional.empty(),
                 new WebTools(""),
-                Optional.empty());
+                Optional.empty(),
+                Optional.<VaultSearchTools>empty());
 
         // shellDecorator, fsTools, todoTool, askTool, webTools = 5
         assertThat(tools).hasSize(5);

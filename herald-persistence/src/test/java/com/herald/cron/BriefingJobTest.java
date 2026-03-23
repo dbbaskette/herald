@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 
 class BriefingJobTest {
 
-    private final HeraldConfig defaultConfig = new HeraldConfig(null, null, null, null, null, null, null);
+    private final HeraldConfig defaultConfig = new HeraldConfig(null, null, null, null, null, null, null, null, null);
 
     private BriefingJob createJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
                                   MemoryRepository memRepo, boolean webSearch,
@@ -50,7 +50,7 @@ class BriefingJobTest {
     @Test
     void morningPromptIncludesWeatherViaWebSearchWhenAvailable() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null);
+                new HeraldConfig.Weather("London"), null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
         MemoryRepository memRepo = mockMemoryRepository();
@@ -68,7 +68,7 @@ class BriefingJobTest {
     @Test
     void morningPromptFallsBackToWttrWhenNoWebSearch() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null);
+                new HeraldConfig.Weather("London"), null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
         MemoryRepository memRepo = mockMemoryRepository();
@@ -87,7 +87,7 @@ class BriefingJobTest {
     @Test
     void morningPromptOmitsWeatherOnFetchFailure() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null);
+                new HeraldConfig.Weather("London"), null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
@@ -239,7 +239,7 @@ class BriefingJobTest {
         when(memRepo.get("user.city")).thenReturn("San Francisco");
 
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null);
+                new HeraldConfig.Weather("London"), null, null, null);
 
         BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
 
@@ -256,7 +256,7 @@ class BriefingJobTest {
         when(memRepo.get("user.city")).thenReturn(null);
 
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null);
+                new HeraldConfig.Weather("London"), null, null, null);
 
         BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
 

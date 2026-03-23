@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.herald.config.HeraldConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,18 +33,19 @@ public class ChatArchivalJob {
     private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
     private static final String OBSIDIAN_VAULT = "Herald-Memory";
     private static final int MAX_SUMMARY_CHARS = 3000;
-    private static final int KEEP_RECENT_MESSAGES = 20;
 
     private final JdbcTemplate jdbcTemplate;
+    private final HeraldConfig config;
 
-    public ChatArchivalJob(JdbcTemplate jdbcTemplate) {
+    public ChatArchivalJob(JdbcTemplate jdbcTemplate, HeraldConfig config) {
         this.jdbcTemplate = jdbcTemplate;
+        this.config = config;
     }
 
     /**
-     * Runs every hour (3-minute initial delay to let the app initialize).
+     * Runs every 15 minutes (3-minute initial delay to let the app initialize).
      */
-    @Scheduled(fixedRate = 3600_000, initialDelay = 180_000)
+    @Scheduled(fixedRate = 900_000, initialDelay = 180_000)  // 15 min
     public void archiveSessions() {
         if (!isObsidianAvailable()) {
             log.debug("Obsidian CLI not available — skipping chat archival");
@@ -61,8 +64,11 @@ public class ChatArchivalJob {
         int archived = 0;
         for (String conversationId : conversationIds) {
             int count = countMessages(conversationId);
-            if (count <= KEEP_RECENT_MESSAGES) {
-                continue; // Not enough messages to warrant archiving
+            int threshold = config.archivalMessageThreshold();
+            boolean idle = isConversationIdle(conversationId);
+
+            if (!shouldArchive(count, idle, threshold, config.archivalMinMessagesForIdle())) {
+                continue;
             }
 
             String summary = buildSessionSummary(conversationId);
@@ -103,8 +109,8 @@ public class ChatArchivalJob {
         }
 
         StringBuilder sb = new StringBuilder();
-        // Skip the most recent KEEP_RECENT_MESSAGES — those stay in memory
-        int archiveEnd = Math.max(0, messages.size() - KEEP_RECENT_MESSAGES);
+        // Skip the most recent messages — those stay in memory
+        int archiveEnd = Math.max(0, messages.size() - config.archivalKeepRecentMessages());
 
         for (int i = 0; i < archiveEnd; i++) {
             Map<String, Object> msg = messages.get(i);
@@ -220,14 +226,15 @@ public class ChatArchivalJob {
     }
 
     /**
-     * Remove messages older than the most recent KEEP_RECENT_MESSAGES.
+     * Remove messages older than the most recent kept messages.
      */
     private void trimOldMessages(String conversationId) {
+        int keepRecent = config.archivalKeepRecentMessages();
         // Get the timestamp of the Nth most recent message
         List<String> timestamps = jdbcTemplate.queryForList(
                 "SELECT timestamp FROM SPRING_AI_CHAT_MEMORY "
                 + "WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT 1 OFFSET ?",
-                String.class, conversationId, KEEP_RECENT_MESSAGES - 1);
+                String.class, conversationId, keepRecent - 1);
 
         if (timestamps.isEmpty()) {
             return;
@@ -240,6 +247,30 @@ public class ChatArchivalJob {
 
         if (deleted > 0) {
             log.info("Trimmed {} old messages from conversation '{}'", deleted, conversationId);
+        }
+    }
+
+    private boolean isConversationIdle(String conversationId) {
+        String lastTimestamp = jdbcTemplate.queryForObject(
+                "SELECT MAX(timestamp) FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = ?",
+                String.class, conversationId);
+        return isTimestampIdle(lastTimestamp, config.archivalIdleTimeoutMinutes());
+    }
+
+    // Package-private for testing
+    static boolean shouldArchive(int messageCount, boolean isIdle, int messageThreshold, int minMessagesForIdle) {
+        if (messageCount > messageThreshold) return true;
+        if (isIdle && messageCount >= minMessagesForIdle) return true;
+        return false;
+    }
+
+    static boolean isTimestampIdle(String timestamp, long idleMinutes) {
+        if (timestamp == null) return false;
+        try {
+            LocalDateTime lastMsg = LocalDateTime.parse(timestamp);
+            return lastMsg.plusMinutes(idleMinutes).isBefore(LocalDateTime.now());
+        } catch (Exception e) {
+            return false;
         }
     }
 

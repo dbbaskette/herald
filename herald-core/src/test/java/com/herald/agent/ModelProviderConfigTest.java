@@ -49,12 +49,12 @@ class ModelProviderConfigTest {
     private HeraldConfig configWithOpenAi(String apiKey, String baseUrl) {
         var providers = new HeraldConfig.Providers(null,
                 new HeraldConfig.OpenAiProviderConfig(apiKey, baseUrl), null, null, null);
-        return new HeraldConfig(null, null, null, providers, null, null, null);
+        return new HeraldConfig(null, null, null, providers, null, null, null, null, null);
     }
 
     private HeraldConfig configWithOllama(String baseUrl, String apiKey) {
         var providers = new HeraldConfig.Providers(null, null,
                 new HeraldConfig.OpenAiProviderConfig(apiKey, baseUrl), null, null);
-        return new HeraldConfig(null, null, null, providers, null, null, null);
+        return new HeraldConfig(null, null, null, providers, null, null, null, null, null);
     }
 }
