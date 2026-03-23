@@ -243,7 +243,8 @@ public class HeraldAgentConfig {
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
                         .defaultTools(toolList.toArray())
-                        .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool)
+                        .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool,
+                                skillAlias(reloadableSkillsTool))
                         .defaultAdvisors(advisorChain);
 
         // Register available provider ChatModels and their default model names
@@ -407,5 +408,28 @@ public class HeraldAgentConfig {
             return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
         }
         return Path.of(path);
+    }
+
+    /**
+     * Creates a "skill" alias for the "skills" tool so models that hallucinate
+     * the singular name still work.
+     */
+    private static ToolCallback skillAlias(ReloadableSkillsTool delegate) {
+        return new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                ToolDefinition original = delegate.getToolDefinition();
+                return ToolDefinition.builder()
+                        .name("skill")
+                        .description(original.description())
+                        .inputSchema(original.inputSchema())
+                        .build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                return delegate.call(toolInput);
+            }
+        };
     }
 }
