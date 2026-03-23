@@ -50,6 +50,13 @@ Store anything that needs explanation or context:
 
 **Rule of thumb:** if it needs more than 2-3 sentences, put it in Obsidian.
 
+## Semantic Vault Search (Vector Store)
+When available, Herald automatically searches the Obsidian vault for relevant context on each turn.
+- The `<vault-context>` block in the system prompt contains auto-retrieved excerpts — use them naturally without mentioning the block itself.
+- Use `vault_search(query)` for deeper semantic searches when the auto-injected context is insufficient or when the user asks about past conversations, research, or archived knowledge.
+- Use `vault_reindex()` to force a re-scan if you suspect the search index is stale or if files were recently added.
+- Vault search complements (does not replace) the Obsidian CLI tools — use CLI for creating notes, vault_search for finding relevant content.
+
 ## Prior Context Lookup
 When Dan asks about memory, knowledge, or past context ("what do you remember?", "do I have any memory entries?", "what did we decide about X?", "what do you know about Y?"), **always check BOTH tiers**:
 1. Call `memory_list` for hot memory (SQLite)
