@@ -11,8 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Component
-@ConditionalOnBean(SimpleVectorStore.class)
 public class VaultSearchTools {
 
     private final SimpleVectorStore vectorStore;

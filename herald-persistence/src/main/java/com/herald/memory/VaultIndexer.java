@@ -27,8 +27,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
-@Component
-@ConditionalOnBean(SimpleVectorStore.class)
 public class VaultIndexer {
 
     private static final Logger log = LoggerFactory.getLogger(VaultIndexer.class);
@@ -51,8 +49,8 @@ public class VaultIndexer {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Async
     public void onApplicationReady() {
+        log.info("VaultIndexer startup triggered");
         if (config.vaultAutoIndexOnStartup()) {
             try {
                 reindex();

@@ -34,6 +34,18 @@ public class VaultVectorStoreConfig {
         return store;
     }
 
+    @Bean
+    @ConditionalOnBean(SimpleVectorStore.class)
+    public VaultIndexer vaultIndexer(SimpleVectorStore vectorStore, HeraldConfig config) {
+        return new VaultIndexer(vectorStore, config);
+    }
+
+    @Bean
+    @ConditionalOnBean(SimpleVectorStore.class)
+    public VaultSearchTools vaultSearchTools(SimpleVectorStore vectorStore, VaultIndexer vaultIndexer, HeraldConfig config) {
+        return new VaultSearchTools(vectorStore, vaultIndexer, config);
+    }
+
     static Path resolveTildePath(String path) {
         if (path.startsWith("~/") || path.equals("~")) {
             return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
