@@ -60,6 +60,49 @@ const gwsStatus = ref<{ installed: boolean; clientConfigured: boolean; authentic
 const gwsLoading = ref(false)
 const gwsActionMessage = ref('')
 const gwsAuthUrl = ref('')
+const clientSecretFileInput = ref<HTMLInputElement | null>(null)
+const clientSecretMessage = ref('')
+
+function uploadClientSecret() {
+  clientSecretFileInput.value?.click()
+}
+
+async function onClientSecretFile(event: Event) {
+  clientSecretMessage.value = ''
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const json = JSON.parse(text)
+
+    // Google client_secret.json has either "installed" or "web" key
+    const creds = json.installed || json.web
+    if (!creds?.client_id || !creds?.client_secret) {
+      clientSecretMessage.value = 'Invalid file — no client_id/client_secret found'
+      return
+    }
+
+    // Save to settings
+    await store.saveSettings({
+      'google.client-id': creds.client_id,
+      'google.client-secret': creds.client_secret,
+    })
+
+    // Update form fields
+    form.value['google.client-id'] = creds.client_id
+    form.value['google.client-secret'] = creds.client_secret
+
+    clientSecretMessage.value = 'Credentials imported successfully'
+    await fetchGwsStatus()
+  } catch (e: any) {
+    clientSecretMessage.value = 'Failed to parse file: ' + e.message
+  } finally {
+    // Reset file input so the same file can be re-selected
+    target.value = ''
+  }
+}
 
 async function fetchGwsStatus() {
   gwsLoading.value = true
@@ -274,6 +317,31 @@ function hasChanges(): boolean {
                 <template v-else-if="!gwsStatus.installed">gws CLI not installed</template>
                 <template v-else-if="!gwsStatus.clientConfigured">OAuth credentials not configured — enter Client ID and Secret above, save, then connect</template>
                 <template v-else>Not connected</template>
+              </span>
+            </div>
+
+            <!-- Upload client_secret.json -->
+            <div v-if="!gwsStatus.clientConfigured && gwsStatus.installed" class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p class="text-sm text-gray-700 mb-2">
+                Upload your <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">client_secret.json</code> from Google Cloud Console
+                (APIs &amp; Services &rarr; Credentials &rarr; OAuth 2.0 Client ID &rarr; Download JSON)
+              </p>
+              <input
+                ref="clientSecretFileInput"
+                type="file"
+                accept=".json,application/json"
+                class="hidden"
+                @change="onClientSecretFile"
+              />
+              <button
+                type="button"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+                @click="uploadClientSecret()"
+              >
+                Upload client_secret.json
+              </button>
+              <span v-if="clientSecretMessage" class="ml-3 text-sm" :class="clientSecretMessage.includes('success') ? 'text-green-600' : 'text-red-600'">
+                {{ clientSecretMessage }}
               </span>
             </div>
 
