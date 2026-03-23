@@ -14,6 +14,7 @@ import org.springframework.core.io.ClassPathResource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -114,7 +115,8 @@ class HeraldAgentConfigTest {
                         ".claude/agents", new ReloadableSkillsTool("skills"),
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
-                        "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()))
+                        "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                        List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web")))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }

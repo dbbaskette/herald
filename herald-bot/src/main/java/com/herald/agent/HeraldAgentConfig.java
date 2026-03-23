@@ -158,7 +158,8 @@ public class HeraldAgentConfig {
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
             @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
-            @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel) {
+            @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
+            @Qualifier("activeToolNames") List<String> activeToolNames) {
 
         String promptTemplate = loadPromptTemplate(promptResource);
         String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
@@ -244,8 +245,8 @@ public class HeraldAgentConfig {
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
                         .defaultTools(toolList.toArray())
-                        .defaultToolCallbacks(taskTool, taskOutputTool, reloadableSkillsTool,
-                                skillAlias(reloadableSkillsTool))
+                        .defaultToolCallbacks(buildToolCallbacks(taskTool, taskOutputTool,
+                                reloadableSkillsTool, activeToolNames))
                         .defaultAdvisors(advisorChain);
 
         // Register available provider ChatModels and their default model names
@@ -412,16 +413,59 @@ public class HeraldAgentConfig {
     }
 
     /**
-     * Creates a "skill" alias for the "skills" tool so models that hallucinate
-     * the singular name still work.
+     * Builds the array of ToolCallbacks: core tools + aliases for hallucinated names.
      */
-    private static ToolCallback skillAlias(ReloadableSkillsTool delegate) {
+    private static ToolCallback[] buildToolCallbacks(
+            ToolCallback taskTool,
+            ToolCallback taskOutputTool,
+            ReloadableSkillsTool skillsTool,
+            List<String> registeredToolNames) {
+        List<ToolCallback> callbacks = new ArrayList<>();
+        callbacks.add(taskTool);
+        callbacks.add(taskOutputTool);
+        callbacks.add(skillsTool);
+        callbacks.addAll(buildToolAliases(skillsTool, registeredToolNames));
+        return callbacks.toArray(new ToolCallback[0]);
+    }
+
+    /**
+     * Creates alias ToolCallbacks for tool names that local models commonly hallucinate.
+     * Each alias delegates to the correct real tool, rewriting the input if needed.
+     */
+    private static List<ToolCallback> buildToolAliases(
+            ReloadableSkillsTool skillsTool,
+            List<String> registeredToolNames) {
+
+        List<ToolCallback> aliases = new ArrayList<>();
+
+        // Static aliases: common hallucinated name → real tool + input rewrite
+        // "skill" → skills (singular vs plural)
+        aliases.add(toolAlias("skill", skillsTool));
+
+        // Models often call skill names directly as tool names (e.g., "google-calendar",
+        // "gmail", "obsidian", "weather") instead of calling "skills" with the skill name.
+        // Generate an alias for each loaded skill that routes through the skills tool.
+        if (skillsTool.hasSkills()) {
+            for (var skill : skillsTool.getSkills()) {
+                String skillName = skill.name();
+                // Don't create alias if it collides with a real tool name
+                if (!registeredToolNames.contains(skillName)) {
+                    aliases.add(skillRouterAlias(skillName, skillsTool));
+                }
+            }
+        }
+
+        return aliases;
+    }
+
+    /** Simple alias: different name, same behavior */
+    private static ToolCallback toolAlias(String aliasName, ToolCallback delegate) {
         return new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {
                 ToolDefinition original = delegate.getToolDefinition();
                 return ToolDefinition.builder()
-                        .name("skill")
+                        .name(aliasName)
                         .description(original.description())
                         .inputSchema(original.inputSchema())
                         .build();
@@ -430,6 +474,30 @@ public class HeraldAgentConfig {
             @Override
             public String call(String toolInput) {
                 return delegate.call(toolInput);
+            }
+        };
+    }
+
+    /**
+     * Creates an alias that routes a hallucinated skill-as-tool-name through the skills tool.
+     * When the model calls "google-calendar" as a tool, this invokes skills("google-calendar").
+     */
+    private static ToolCallback skillRouterAlias(String skillName, ReloadableSkillsTool skillsTool) {
+        return new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder()
+                        .name(skillName)
+                        .description("Alias — loads the " + skillName + " skill")
+                        .inputSchema("{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[]}")
+                        .build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                // Route through the skills tool with this skill name as the command
+                String rewrittenInput = "{\"command\":\"" + skillName + "\"}";
+                return skillsTool.call(rewrittenInput);
             }
         };
     }
