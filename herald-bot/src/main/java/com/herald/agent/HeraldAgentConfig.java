@@ -32,6 +32,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -136,6 +137,7 @@ public class HeraldAgentConfig {
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
             Optional<CronTools> cronToolsOpt,
+            Optional<SimpleVectorStore> vectorStoreOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
@@ -226,7 +228,7 @@ public class HeraldAgentConfig {
 
         // Build advisor chain and tool list dynamically based on available beans
         var advisorChain = buildAdvisorChain(memoryToolsOpt, chatMemoryOpt,
-                contextMdAdvisor, chatModel, config, promptDump);
+                vectorStoreOpt, contextMdAdvisor, chatModel, config, promptDump);
 
         var toolList = buildToolList(memoryToolsOpt, shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
@@ -284,6 +286,7 @@ public class HeraldAgentConfig {
     List<Advisor> buildAdvisorChain(
             Optional<MemoryTools> memoryToolsOpt,
             Optional<ChatMemory> chatMemoryOpt,
+            Optional<SimpleVectorStore> vectorStoreOpt,
             ContextMdAdvisor contextMdAdvisor,
             ChatModel chatModel,
             HeraldConfig config,
@@ -297,6 +300,7 @@ public class HeraldAgentConfig {
 
         // Persistence-dependent
         memoryToolsOpt.ifPresent(mt -> advisors.add(new MemoryBlockAdvisor(mt)));
+        vectorStoreOpt.ifPresent(vs -> advisors.add(new VaultSearchAdvisor(vs, config)));
 
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
