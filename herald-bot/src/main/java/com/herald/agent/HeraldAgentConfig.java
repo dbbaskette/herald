@@ -3,6 +3,7 @@ package com.herald.agent;
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.memory.MemoryTools;
+import com.herald.memory.VaultSearchTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
@@ -90,7 +91,8 @@ public class HeraldAgentConfig {
             Optional<MemoryTools> memoryTools,
             Optional<CronTools> cronTools,
             Optional<TelegramSendTool> telegramSendTool,
-            Optional<GwsTools> gwsTools) {
+            Optional<GwsTools> gwsTools,
+            Optional<VaultSearchTools> vaultSearchTools) {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
                 "task", "taskOutput", "skills", "web"));
@@ -98,6 +100,7 @@ public class HeraldAgentConfig {
         cronTools.ifPresent(t -> names.add("cron"));
         telegramSendTool.ifPresent(t -> names.add("telegram_send"));
         gwsTools.ifPresent(t -> names.add("gws"));
+        vaultSearchTools.ifPresent(t -> names.addAll(List.of("vault_search", "vault_reindex")));
         return List.copyOf(names);
     }
 
@@ -137,6 +140,7 @@ public class HeraldAgentConfig {
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
             Optional<CronTools> cronToolsOpt,
+            Optional<VaultSearchTools> vaultSearchToolsOpt,
             Optional<SimpleVectorStore> vectorStoreOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
@@ -231,7 +235,8 @@ public class HeraldAgentConfig {
                 vectorStoreOpt, contextMdAdvisor, chatModel, config, promptDump);
 
         var toolList = buildToolList(memoryToolsOpt, shellDecorator, fsTools,
-                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
+                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt,
+                vaultSearchToolsOpt);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
@@ -334,7 +339,8 @@ public class HeraldAgentConfig {
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
-            Optional<CronTools> cronToolsOpt) {
+            Optional<CronTools> cronToolsOpt,
+            Optional<VaultSearchTools> vaultSearchToolsOpt) {
 
         List<Object> tools = new ArrayList<>();
         tools.add(shellDecorator);
@@ -347,6 +353,7 @@ public class HeraldAgentConfig {
         telegramSendToolOpt.ifPresent(tools::add);
         gwsToolsOpt.ifPresent(tools::add);
         cronToolsOpt.ifPresent(tools::add);
+        vaultSearchToolsOpt.ifPresent(tools::add);
 
         return tools;
     }
