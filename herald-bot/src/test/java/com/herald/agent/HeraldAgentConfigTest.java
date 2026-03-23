@@ -132,7 +132,7 @@ class HeraldAgentConfigTest {
 
     private HeraldConfig configWith(String persona, String extra) {
         return new HeraldConfig(null, null,
-                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null);
+                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null, null, null);
     }
 
     private String loadPromptTemplate() throws IOException {

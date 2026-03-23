@@ -38,7 +38,7 @@ class CronServiceTest {
         when(cronRepository.findEnabled()).thenReturn(List.of());
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"), null, null);
+                new HeraldConfig.Cron("America/New_York"), null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         cronService = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
@@ -133,7 +133,7 @@ class CronServiceTest {
         when(cronRepository.findEnabled()).thenReturn(List.of(enabled));
 
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"), null, null);
+                new HeraldConfig.Cron("America/New_York"), null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
@@ -251,7 +251,7 @@ class CronServiceTest {
 
     @Test
     void defaultTimezoneUsedWhenConfigIsNull() {
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null);
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
@@ -261,7 +261,7 @@ class CronServiceTest {
     @Test
     void worksWithoutTelegramSender() {
         HeraldConfig config = new HeraldConfig(null, null, null, null,
-                new HeraldConfig.Cron("America/New_York"), null, null);
+                new HeraldConfig.Cron("America/New_York"), null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
                 Optional.empty(), chatMemory, config, briefingJob, scheduler);
