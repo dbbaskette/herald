@@ -74,6 +74,23 @@ herald:
       lmstudio: ${HERALD_MODEL_LMSTUDIO:qwen/qwen3.5-35b-a3b}
   obsidian:
     vault-path: ${HERALD_OBSIDIAN_VAULT_PATH:}
+  vault:
+    vector-store-path: ~/.herald/vector-store.json
+    index-hashes-path: ~/.herald/vault-index-hashes.json
+    auto-index-on-startup: true
+    file-watcher-enabled: true
+    search:
+      auto-top-k: 2
+      tool-default-top-k: 5
+      min-similarity: 0.7
+    chunking:
+      small-file-threshold: 500
+      max-chunk-size: 1000
+  archival:
+    message-threshold: 5
+    idle-timeout-minutes: 30
+    min-messages-for-idle: 2
+    keep-recent-messages: 5
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
   web:
