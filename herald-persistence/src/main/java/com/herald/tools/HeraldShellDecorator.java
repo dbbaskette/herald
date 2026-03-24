@@ -97,7 +97,11 @@ public class HeraldShellDecorator {
         if (SUDO_PATTERN.matcher(command).find()) {
             return true;
         }
-        if (command.matches("(?i).*>\\s*/(?:etc|usr|var|sys|boot|proc|dev)(?:/.*|$).*")) {
+        // Check for writes to system directories, but exclude /dev/null (safe redirect)
+        if (command.matches("(?i).*>\\s*/(?:etc|usr|var|sys|boot|proc)(?:/.*|$).*")) {
+            return true;
+        }
+        if (command.matches("(?i).*>\\s*/dev/(?!null\\b).*")) {
             return true;
         }
         if (command.matches("(?i).*\\|\\s*(?:sh|bash|zsh|dash|ksh)\\b.*")) {
