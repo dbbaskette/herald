@@ -7,9 +7,12 @@ import org.springaicommunity.agent.utils.Skills;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.core.io.Resource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -23,14 +26,20 @@ public class ReloadableSkillsTool implements ToolCallback {
     private static final Logger log = LoggerFactory.getLogger(ReloadableSkillsTool.class);
 
     private final String skillsDirectory;
+    private final List<Resource> classpathResources;
     private volatile ToolCallback delegate;
     private volatile List<SkillsTool.Skill> currentSkills;
 
     public ReloadableSkillsTool(String skillsDirectory) {
+        this(skillsDirectory, List.of());
+    }
+
+    public ReloadableSkillsTool(String skillsDirectory, List<Resource> classpathResources) {
         if (skillsDirectory.startsWith("~")) {
             skillsDirectory = System.getProperty("user.home") + skillsDirectory.substring(1);
         }
         this.skillsDirectory = skillsDirectory;
+        this.classpathResources = classpathResources != null ? List.copyOf(classpathResources) : List.of();
         reload();
     }
 
@@ -40,25 +49,40 @@ public class ReloadableSkillsTool implements ToolCallback {
      * @return the number of skills loaded
      */
     public int reload() {
+        List<SkillsTool.Skill> allSkills = new ArrayList<>();
+
+        // Load from filesystem directory
         Path skillsPath = Path.of(skillsDirectory);
-        if (!Files.isDirectory(skillsPath)) {
-            this.currentSkills = List.of();
+        if (Files.isDirectory(skillsPath)) {
+            allSkills.addAll(Skills.loadDirectory(skillsDirectory));
+        } else {
+            log.debug("Skills directory {} does not exist", skillsDirectory);
+        }
+
+        // Load from classpath resources
+        if (!classpathResources.isEmpty()) {
+            allSkills.addAll(Skills.loadResources(classpathResources));
+        }
+
+        this.currentSkills = Collections.unmodifiableList(allSkills);
+        if (allSkills.isEmpty()) {
             this.delegate = null;
-            log.info("Skills directory {} does not exist; 0 skills loaded", skillsDirectory);
+            log.info("No skills loaded (directory: {}, classpath resources: {})",
+                    skillsDirectory, classpathResources.size());
             return 0;
         }
-        List<SkillsTool.Skill> skills = Skills.loadDirectory(skillsDirectory);
-        this.currentSkills = skills;
-        if (skills.isEmpty()) {
-            this.delegate = null;
-            log.info("No skills found in {}", skillsDirectory);
-            return 0;
+
+        var builder = SkillsTool.builder();
+        if (Files.isDirectory(skillsPath)) {
+            builder.addSkillsDirectory(skillsDirectory);
         }
-        this.delegate = SkillsTool.builder()
-                .addSkillsDirectory(skillsDirectory)
-                .build();
-        log.info("Loaded {} skill(s) from {}", skills.size(), skillsDirectory);
-        return skills.size();
+        if (!classpathResources.isEmpty()) {
+            builder.addSkillsResources(classpathResources);
+        }
+        this.delegate = builder.build();
+        log.info("Loaded {} skill(s) (directory: {}, classpath: {})",
+                allSkills.size(), skillsDirectory, classpathResources.size());
+        return allSkills.size();
     }
 
     public List<SkillsTool.Skill> getSkills() {
@@ -96,9 +120,85 @@ public class ReloadableSkillsTool implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        if (delegate != null) {
-            return delegate.call(toolInput);
+        if (delegate == null) {
+            return "No skills are currently loaded.";
         }
-        return "No skills are currently loaded.";
+        String result = delegate.call(toolInput);
+
+        // Extract skill name from input and check for allowed-tools constraint
+        String skillName = extractSkillName(toolInput);
+        if (skillName != null) {
+            List<String> allowedTools = getAllowedTools(skillName);
+            if (!allowedTools.isEmpty()) {
+                result = "<allowed-tools>\nWhile executing this skill, you may ONLY use these tools: "
+                        + String.join(", ", allowedTools)
+                        + "\n</allowed-tools>\n\n" + result;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns the {@code allowed-tools} list from a skill's frontmatter, or an empty list
+     * if not specified. Supports both comma-separated strings and YAML list syntax.
+     * When present, the agent should restrict tool calls to these tools while executing the skill.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getAllowedTools(String skillName) {
+        if (currentSkills == null) return List.of();
+        return currentSkills.stream()
+                .filter(s -> s.name().equals(skillName))
+                .findFirst()
+                .map(s -> s.frontMatter().get("allowed-tools"))
+                .map(ReloadableSkillsTool::parseStringOrList)
+                .orElse(List.of());
+    }
+
+    /**
+     * Parses a frontmatter value that may be a List (YAML list) or a comma-separated String.
+     */
+    static List<String> parseStringOrList(Object value) {
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .filter(v -> v instanceof String)
+                    .map(v -> ((String) v).trim())
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+        }
+        if (value instanceof String str && !str.isBlank()) {
+            return List.of(str.split(",")).stream()
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+        }
+        return List.of();
+    }
+
+    /**
+     * Returns the {@code model} preference from a skill's frontmatter, or null if not specified.
+     */
+    public String getSkillModel(String skillName) {
+        if (currentSkills == null) return null;
+        return currentSkills.stream()
+                .filter(s -> s.name().equals(skillName))
+                .findFirst()
+                .map(s -> s.frontMatter().get("model"))
+                .filter(v -> v instanceof String)
+                .map(v -> (String) v)
+                .orElse(null);
+    }
+
+    private static String extractSkillName(String toolInput) {
+        if (toolInput == null) return null;
+        // Input is JSON like {"command":"skill-name"}
+        int idx = toolInput.indexOf("\"command\"");
+        if (idx < 0) return null;
+        int colon = toolInput.indexOf(':', idx);
+        if (colon < 0) return null;
+        int firstQuote = toolInput.indexOf('"', colon + 1);
+        if (firstQuote < 0) return null;
+        int lastQuote = toolInput.indexOf('"', firstQuote + 1);
+        if (lastQuote < 0) return null;
+        return toolInput.substring(firstQuote + 1, lastQuote);
     }
 }
