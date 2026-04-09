@@ -1,14 +1,11 @@
 package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
-import com.herald.memory.VaultSearchTools;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
@@ -30,7 +27,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("TestBot — a test persona", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         assertThat(result).contains("You are **TestBot — a test persona**");
         assertThat(result).doesNotContain("{persona}");
@@ -41,7 +38,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         // Dynamic placeholders are resolved per-turn by DateTimePromptAdvisor, not at startup
         assertThat(result).contains("{current_datetime}");
@@ -53,7 +50,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, "Always respond in haiku format.");
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         assertThat(result).contains("Always respond in haiku format.");
         assertThat(result).doesNotContain("{system_prompt_extra}");
@@ -64,7 +61,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         assertThat(result).doesNotContain("{system_prompt_extra}");
     }
@@ -87,7 +84,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         assertThat(result).contains("You are **Herald");
         assertThat(result).doesNotContain("{persona}");
@@ -98,7 +95,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("   ", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "");
 
         assertThat(result).contains("You are **Herald");
         assertThat(result).doesNotContain("{persona}");
@@ -108,14 +105,21 @@ class HeraldAgentConfigTest {
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
                 agentConfig.modelSwitcher(null, configWith(null, null), false,
-                        Optional.empty(), Optional.empty(), null, null, null, null,
-                        Optional.empty(), Optional.empty(), null, Optional.empty(),
-                        Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(), Optional.empty(),
+                        Optional.empty(),
+                        mock(com.herald.tools.HeraldShellDecorator.class),
+                        new com.herald.tools.FileSystemTools(),
+                        mock(org.springframework.context.ApplicationEventPublisher.class),
+                        mock(org.springframework.beans.factory.ObjectProvider.class),
+                        Optional.empty(), Optional.empty(),
+                        new com.herald.tools.WebTools(""),
+                        Optional.empty(), Optional.empty(),
                         new ClassPathResource("prompts/NONEXISTENT.md"),
+                        new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                         ".claude/agents", new ReloadableSkillsTool("skills"),
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
-                        "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                        "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b",
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                         List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web")))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
@@ -124,20 +128,21 @@ class HeraldAgentConfigTest {
     @Test
     void chatOptionsForAnthropicModelReturnsAnthropicOptions() {
         var model = mock(AnthropicChatModel.class);
-        ChatOptions options = HeraldAgentConfig.chatOptionsForModel(model, "claude-sonnet-4-5");
-        assertThat(options).isInstanceOf(AnthropicChatOptions.class);
+        ChatOptions.Builder<?> options = HeraldAgentConfig.chatOptionsForModel(model, "claude-sonnet-4-5");
+        assertThat(options.build()).isInstanceOf(AnthropicChatOptions.class);
     }
 
     @Test
-    void chatOptionsForOpenAiModelReturnsOpenAiOptions() {
+    void chatOptionsForOpenAiModelReturnsChatOptions() {
         var model = mock(OpenAiChatModel.class);
-        ChatOptions options = HeraldAgentConfig.chatOptionsForModel(model, "gpt-4o");
-        assertThat(options).isInstanceOf(OpenAiChatOptions.class);
+        ChatOptions.Builder<?> options = HeraldAgentConfig.chatOptionsForModel(model, "gpt-4o");
+        assertThat(options.build()).isInstanceOf(ChatOptions.class);
+        assertThat(options.build().getModel()).isEqualTo("gpt-4o");
     }
 
     private HeraldConfig configWith(String persona, String extra) {
         return new HeraldConfig(null, null,
-                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent(persona, extra, null, null, null), null, null, null, null, null, null, null);
     }
 
     private String loadPromptTemplate() throws IOException {

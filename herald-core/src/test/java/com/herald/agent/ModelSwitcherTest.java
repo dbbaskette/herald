@@ -44,7 +44,7 @@ class ModelSwitcherTest {
         providerDefaultModels.put("ollama", "llama3.2");
 
         ChatClient switchedClient = mock(ChatClient.class);
-        when(mockBuilder.defaultOptions(any())).thenReturn(mockBuilder);
+        when(mockBuilder.defaultOptions(any(org.springframework.ai.chat.prompt.ChatOptions.Builder.class))).thenReturn(mockBuilder);
         when(mockBuilder.build()).thenReturn(switchedClient);
 
         Function<ChatModel, ChatClient.Builder> factory = cm -> mockBuilder;

@@ -1,6 +1,5 @@
 package com.herald.agent;
 
-import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -15,23 +14,18 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.Ordered;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Advisor that monitors conversation history token usage and compacts old messages
  * when the estimated token count exceeds 80% of the configured context window.
  *
- * <p>When compaction triggers, the oldest messages are summarized into a condensed
- * text and stored as a memory entry via {@link MemoryTools}, ensuring context is
- * never silently lost. The compacted messages are then removed from chat history.</p>
+ * <p>When compaction triggers, the oldest messages are removed from chat history.
+ * The LLM-generated summary is logged but not persisted — long-term facts should
+ * be saved to AutoMemoryTools by the agent during the conversation.</p>
  *
- * <p>Must run before {@code MessageChatMemoryAdvisor} so that compaction happens
+ * <p>Must run before {@code OneShotMemoryAdvisor} so that compaction happens
  * before history is loaded into the prompt.</p>
  */
 class ContextCompactionAdvisor implements CallAdvisor {
@@ -41,20 +35,15 @@ class ContextCompactionAdvisor implements CallAdvisor {
     static final int CHARS_PER_TOKEN = 4;
 
     private final ChatMemory chatMemory;
-    private final MemoryTools memoryTools;
     private final ChatModel summaryModel;
     private final int maxContextTokens;
 
-    ContextCompactionAdvisor(ChatMemory chatMemory, MemoryTools memoryTools, ChatModel summaryModel,
-                             int maxContextTokens) {
+    ContextCompactionAdvisor(ChatMemory chatMemory, ChatModel summaryModel, int maxContextTokens) {
         this.chatMemory = chatMemory;
-        this.memoryTools = memoryTools;
         this.summaryModel = summaryModel;
         this.maxContextTokens = maxContextTokens;
     }
 
-    // Shared with OneShotMemoryAdvisor — only run memory-related logic on the first
-    // invocation, not on ToolCallAdvisor re-entries.
     private static final ThreadLocal<Boolean> COMPACTION_DONE = ThreadLocal.withInitial(() -> false);
 
     @Override
@@ -88,14 +77,9 @@ class ContextCompactionAdvisor implements CallAdvisor {
 
     @Override
     public int getOrder() {
-        // Run after MemoryBlockAdvisor (HIGHEST_PRECEDENCE + 100) but before
-        // MessageChatMemoryAdvisor so compaction happens before history is loaded into prompt.
         return Ordered.HIGHEST_PRECEDENCE + 150;
     }
 
-    /**
-     * Estimate the token count for a list of messages using a character-based heuristic.
-     */
     static int estimateTokens(List<Message> messages) {
         if (messages == null || messages.isEmpty()) {
             return 0;
@@ -141,12 +125,6 @@ class ContextCompactionAdvisor implements CallAdvisor {
             return;
         }
 
-        List<Message> toSummarize = history.subList(0, splitIndex);
-
-        // Archive FULL transcript to Obsidian before compacting — the summary may lose detail
-        String fullTranscript = formatTranscript(toSummarize);
-        archiveToObsidian(fullTranscript);
-
         // Replace history with remaining messages
         List<Message> remaining = new ArrayList<>(history.subList(splitIndex, history.size()));
         chatMemory.clear(conversationId);
@@ -154,7 +132,7 @@ class ContextCompactionAdvisor implements CallAdvisor {
             chatMemory.add(conversationId, remaining);
         }
 
-        log.info("Compacted context: removed {} messages (~{} tokens), archived to Obsidian. "
+        log.info("Compacted context: removed {} messages (~{} tokens). "
                         + "Remaining: {} messages (~{} tokens)",
                 splitIndex, removedTokens,
                 remaining.size(), estimateTokens(remaining));
@@ -174,29 +152,6 @@ class ContextCompactionAdvisor implements CallAdvisor {
             %s
             """;
 
-    private String buildSummary(List<Message> messages) {
-        String transcript = formatTranscript(messages);
-
-        // Use LLM for a meaningful summary
-        if (summaryModel != null) {
-            try {
-                String prompt = SUMMARY_PROMPT.formatted(transcript);
-                var response = summaryModel.call(new Prompt(prompt));
-                String summary = response.getResult().getOutput().getText();
-                if (summary != null && !summary.isBlank()) {
-                    return summary.strip();
-                }
-            } catch (Exception e) {
-                log.warn("LLM summarization failed, falling back to transcript truncation: {}", e.getMessage());
-            }
-        }
-
-        // Fallback: truncated transcript
-        return transcript.length() > 1000
-                ? transcript.substring(0, 1000) + "\n... [truncated]"
-                : transcript;
-    }
-
     private String formatTranscript(List<Message> messages) {
         var sb = new StringBuilder();
         for (Message msg : messages) {
@@ -214,55 +169,6 @@ class ContextCompactionAdvisor implements CallAdvisor {
             }
         }
         return sb.toString().stripTrailing();
-    }
-
-    private static final String OBSIDIAN_CLI = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
-    private static final String OBSIDIAN_VAULT = "Herald-Memory";
-
-    /**
-     * Archive a compaction summary to the Obsidian vault as a Chat-Sessions note.
-     * Falls back to hot memory if Obsidian is unavailable.
-     */
-    private void archiveToObsidian(String transcript) {
-        String date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String path = "Chat-Sessions/" + date + "-compacted-" + System.currentTimeMillis() + ".md";
-        String content = "---\\ntags: [chat-session, compacted]\\ndate: " + date
-                + "\\n---\\n\\n# Chat Session (compacted)\\n\\n" + sanitizeForCli(transcript);
-
-        try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    OBSIDIAN_CLI, "create",
-                    "vault=" + OBSIDIAN_VAULT,
-                    "path=" + path,
-                    "content=" + content,
-                    "overwrite");
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new RuntimeException("Obsidian CLI timed out");
-            }
-            if (process.exitValue() != 0) {
-                try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                    String error = r.lines().reduce("", (a, b) -> a + " " + b).trim();
-                    throw new RuntimeException("Obsidian CLI error: " + error);
-                }
-            }
-            log.info("Archived compaction summary to Obsidian: {}", path);
-        } catch (Exception e) {
-            log.warn("Failed to archive to Obsidian ({}), falling back to hot memory: {}", e.getMessage(), path);
-            String key = "context_summary_" + System.currentTimeMillis();
-            memoryTools.memory_set(key, transcript);
-        }
-    }
-
-    /**
-     * Escape characters that would break the CLI content= parameter.
-     */
-    private static String sanitizeForCli(String input) {
-        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
 
     private String resolveConversationId(ChatClientRequest request) {

@@ -5,7 +5,6 @@ import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
 import com.herald.cron.CronJob;
 import com.herald.cron.CronService;
-import com.herald.memory.MemoryTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.herald.agent.ReloadableSkillsTool;
@@ -21,7 +20,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 public class CommandHandler {
@@ -30,7 +28,6 @@ public class CommandHandler {
 
     private static final DateTimeFormatter CRON_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private final MemoryTools memoryTools;
     private final CronService cronService;
     private final ChatMemory chatMemory;
     private final TelegramSender sender;
@@ -39,14 +36,12 @@ public class CommandHandler {
     private final ReloadableSkillsTool reloadableSkillsTool;
     private final int activeToolsCount;
     private final int maxContextTokens;
-    private final AtomicBoolean pendingMemoryClear = new AtomicBoolean(false);
 
-    public CommandHandler(MemoryTools memoryTools, CronService cronService, ChatMemory chatMemory,
+    public CommandHandler(CronService cronService, ChatMemory chatMemory,
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                           @Qualifier("activeToolNames") List<String> activeToolNames,
                           ReloadableSkillsTool reloadableSkillsTool,
                           @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
-        this.memoryTools = memoryTools;
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -92,9 +87,7 @@ public class CommandHandler {
                 /status — System status: uptime, model, memory count
                 /reset — Clear conversation history (memory is preserved)
                 /debug — Show context size, memory entries, active tools
-                /memory list — Display all stored memory entries
-                /memory set <key> <value> — Store a memory entry
-                /memory clear — Clear all memory entries
+                /memory — Memory is now managed by the agent via long-term memory files
                 /model status — Show current model and daily token usage
                 /model <provider> <model> — Switch to a different model
                 /skills list — List all loaded skills
@@ -110,7 +103,6 @@ public class CommandHandler {
     private void handleStatus() {
         long uptimeMillis = ManagementFactory.getRuntimeMXBean().getUptime();
         String uptime = formatUptime(uptimeMillis);
-        int memoryCount = memoryTools.count();
 
         String modelName = modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel();
         String status = """
@@ -118,9 +110,8 @@ public class CommandHandler {
 
                 Uptime: %s
                 Model: %s
-                Memory entries: %d
                 Active tools: %d
-                """.formatted(uptime, modelName, memoryCount, activeToolsCount);
+                """.formatted(uptime, modelName, activeToolsCount);
         sender.sendMessage(status);
     }
 
@@ -131,7 +122,6 @@ public class CommandHandler {
     }
 
     private void handleDebug() {
-        int memoryCount = memoryTools.count();
         List<Message> messages = chatMemory.get(AgentService.DEFAULT_CONVERSATION_ID);
         int contextMessages = messages.size();
         int estimatedTokens = estimateTokens(messages);
@@ -144,14 +134,13 @@ public class CommandHandler {
 
                 Context messages: %d
                 Context size: ~%s tokens (%d%% of %s limit, ceiling %s)
-                Memory entries: %d
                 Active tools: %d
                 Model: %s
                 Available providers: %s
                 """.formatted(contextMessages,
                 formatTokens(estimatedTokens), usagePercent,
                 formatTokens(maxContextTokens), formatTokens(ceiling),
-                memoryCount, activeToolsCount, modelName,
+                activeToolsCount, modelName,
                 String.join(", ", modelSwitcher.getAvailableProviders()));
         sender.sendMessage(debug);
     }
@@ -166,45 +155,8 @@ public class CommandHandler {
     }
 
     private void handleMemory(String[] parts) {
-        if (parts.length < 2) {
-            sender.sendMessage("Usage: /memory list | /memory set <key> <value> | /memory clear");
-            return;
-        }
-
-        String subcommand = parts[1].toLowerCase();
-        switch (subcommand) {
-            case "list" -> {
-                String result = memoryTools.memory_list();
-                sender.sendMessage(result);
-            }
-            case "clear" -> {
-                if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2]) && pendingMemoryClear.get()) {
-                    pendingMemoryClear.set(false);
-                    memoryTools.clearAll();
-                    sender.sendMessage("All memory entries cleared.");
-                    log.info("Memory cleared via /memory clear confirm command");
-                } else if (parts.length >= 3 && "confirm".equalsIgnoreCase(parts[2])) {
-                    sender.sendMessage("No pending confirmation. Use `/memory clear` first.");
-                } else if (pendingMemoryClear.compareAndSet(false, true)) {
-                    sender.sendMessage("Are you sure? Reply `/memory clear confirm` to proceed.");
-                } else {
-                    sender.sendMessage("Confirmation already pending. Reply `/memory clear confirm` to proceed.");
-                }
-            }
-            case "set" -> {
-                if (parts.length < 4) {
-                    sender.sendMessage("Usage: /memory set <key> <value>");
-                    return;
-                }
-                String key = parts[2];
-                String value = parts[3];
-                String result = memoryTools.memory_set(key, value);
-                sender.sendMessage(result);
-            }
-            default -> sender.sendMessage(
-                    "Unknown memory subcommand: " + subcommand
-                            + "\nUsage: /memory list | /memory set <key> <value> | /memory clear");
-        }
+        sender.sendMessage("Memory is now managed by the agent via long-term memory files (AutoMemoryTools). "
+                + "Ask the agent directly to view or manage memories — e.g., \"what do you remember about me?\"");
     }
 
     private void handleModel(String[] parts) {

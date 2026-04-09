@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.herald.config.HeraldConfig;
-import com.herald.memory.MemoryRepository;
 import com.herald.tools.GwsAvailabilityChecker;
 
 @Component
@@ -35,25 +34,21 @@ public class BriefingJob {
 
     private final HeraldConfig config;
     private final GwsAvailabilityChecker gwsChecker;
-    private final MemoryRepository memoryRepository;
     private final boolean webSearchAvailable;
     private final WeatherFetcher weatherFetcher;
 
     @Autowired
     public BriefingJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
-                       MemoryRepository memoryRepository,
                        @Value("${herald.web.search-api-key:}") String webSearchApiKey) {
-        this(config, gwsChecker, memoryRepository,
+        this(config, gwsChecker,
                 webSearchApiKey != null && !webSearchApiKey.isBlank(),
                 BriefingJob::fetchWeatherHttp);
     }
 
     BriefingJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
-                MemoryRepository memoryRepository, boolean webSearchAvailable,
-                WeatherFetcher weatherFetcher) {
+                boolean webSearchAvailable, WeatherFetcher weatherFetcher) {
         this.config = config;
         this.gwsChecker = gwsChecker;
-        this.memoryRepository = memoryRepository;
         this.webSearchAvailable = webSearchAvailable;
         this.weatherFetcher = weatherFetcher;
     }
@@ -151,10 +146,6 @@ public class BriefingJob {
     }
 
     String resolveCity() {
-        String city = memoryRepository.get("user.city");
-        if (city != null && !city.isBlank()) {
-            return city;
-        }
         return config.weatherLocation();
     }
 

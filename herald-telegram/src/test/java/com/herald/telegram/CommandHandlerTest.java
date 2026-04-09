@@ -5,7 +5,6 @@ import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
 import com.herald.cron.CronJob;
 import com.herald.cron.CronService;
-import com.herald.memory.MemoryTools;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -25,7 +24,6 @@ import static org.mockito.Mockito.*;
 
 class CommandHandlerTest {
 
-    private MemoryTools memoryTools;
     private CronService cronService;
     private ChatMemory chatMemory;
     private TelegramSender sender;
@@ -39,7 +37,6 @@ class CommandHandlerTest {
 
     @BeforeEach
     void setUp() {
-        memoryTools = mock(MemoryTools.class);
         cronService = mock(CronService.class);
         chatMemory = mock(ChatMemory.class);
         sender = mock(TelegramSender.class);
@@ -50,7 +47,7 @@ class CommandHandlerTest {
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
         reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
-        handler = new CommandHandler(memoryTools, cronService, chatMemory, sender, usageTracker, modelSwitcher,
+        handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
                 reloadableSkillsTool, 200_000);
     }
@@ -102,10 +99,9 @@ class CommandHandlerTest {
 
     @Test
     void statusShowsUptimeModelAndToolCount() {
-        when(memoryTools.count()).thenReturn(3);
         handler.handle("/status");
         verify(sender).sendMessage(argThat(msg ->
-                msg.contains("anthropic/claude-sonnet-4-5") && msg.contains("3")
+                msg.contains("anthropic/claude-sonnet-4-5")
                         && msg.contains("Uptime") && msg.contains("Active tools: 9")));
     }
 
@@ -122,8 +118,7 @@ class CommandHandlerTest {
     // --- /debug ---
 
     @Test
-    void debugShowsContextSizeMemoryCountAndTools() {
-        when(memoryTools.count()).thenReturn(7);
+    void debugShowsContextSizeAndTools() {
         Message mockMsg = mock(Message.class);
         when(mockMsg.getText()).thenReturn("Hello world test message");
         when(chatMemory.get("default"))
@@ -133,104 +128,21 @@ class CommandHandlerTest {
                 msg.contains("Context messages: 3")
                         && msg.contains("Context size:")
                         && msg.contains("tokens")
-                        && msg.contains("7") && msg.contains("Active tools")));
+                        && msg.contains("Active tools")));
     }
 
-    // --- /memory list ---
+    // --- /memory ---
 
     @Test
-    void memoryListDisplaysEntries() {
-        when(memoryTools.memory_list()).thenReturn("- **name**: Dan\n- **role**: engineer");
+    void memoryCommandShowsAgentManagedMessage() {
         handler.handle("/memory list");
-        verify(memoryTools).memory_list();
-        verify(sender).sendMessage("- **name**: Dan\n- **role**: engineer");
-    }
-
-    // --- /memory set ---
-
-    @Test
-    void memorySetStoresValue() {
-        when(memoryTools.memory_set("name", "Dan")).thenReturn("Stored memory: name = Dan");
-        handler.handle("/memory set name Dan");
-        verify(memoryTools).memory_set("name", "Dan");
-        verify(sender).sendMessage("Stored memory: name = Dan");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") || msg.contains("agent")));
     }
 
     @Test
-    void memorySetWithMultiWordValue() {
-        when(memoryTools.memory_set("project", "herald bot")).thenReturn("Stored memory: project = herald bot");
-        handler.handle("/memory set project herald bot");
-        verify(memoryTools).memory_set("project", "herald bot");
-    }
-
-    @Test
-    void memorySetWithMissingValueShowsUsage() {
-        handler.handle("/memory set name");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
-        verify(memoryTools, never()).memory_set(any(), any());
-    }
-
-    // --- /memory clear (two-step confirmation) ---
-
-    @Test
-    void memoryClearWithoutConfirmShowsPrompt() {
-        handler.handle("/memory clear");
-        verify(memoryTools, never()).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Are you sure")));
-    }
-
-    @Test
-    void memoryClearConfirmDeletesAllEntries() {
-        // Must go through two-step flow: first /memory clear, then confirm
-        handler.handle("/memory clear");
-        handler.handle("/memory clear confirm");
-        verify(memoryTools).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
-    }
-
-    @Test
-    void memoryClearConfirmWithoutPendingShowsError() {
-        handler.handle("/memory clear confirm");
-        verify(memoryTools, never()).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("No pending confirmation")));
-    }
-
-    @Test
-    void memoryClearTwoStepFlow() {
-        // First call: prompts for confirmation
-        handler.handle("/memory clear");
-        verify(memoryTools, never()).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Are you sure")));
-
-        // Second call with confirm: clears
-        handler.handle("/memory clear confirm");
-        verify(memoryTools).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("cleared")));
-    }
-
-    @Test
-    void memoryClearDoubleCallShowsAlreadyPending() {
-        handler.handle("/memory clear");
-        reset(sender);
-        handler.handle("/memory clear");
-        verify(memoryTools, never()).clearAll();
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Confirmation already pending")));
-    }
-
-    // --- /memory (no subcommand) ---
-
-    @Test
-    void memoryWithNoSubcommandShowsUsage() {
+    void memoryWithNoSubcommandShowsAgentMessage() {
         handler.handle("/memory");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
-    }
-
-    // --- /memory unknown ---
-
-    @Test
-    void memoryUnknownSubcommandShowsUsage() {
-        handler.handle("/memory foo");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown memory subcommand")));
+        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") || msg.contains("agent")));
     }
 
     // --- /model status ---

@@ -28,6 +28,8 @@ spring:
 herald:
   memory:
     db-path: ~/.herald/herald.db
+  long-term-memory:
+    memories-dir: ${HERALD_MEMORIES_DIR:~/.herald/memories}
   providers:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}

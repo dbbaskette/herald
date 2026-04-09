@@ -1,7 +1,6 @@
 package com.herald.cron;
 
 import com.herald.config.HeraldConfig;
-import com.herald.memory.MemoryRepository;
 import com.herald.tools.GwsAvailabilityChecker;
 import org.junit.jupiter.api.Test;
 
@@ -15,16 +14,11 @@ import static org.mockito.Mockito.*;
 
 class BriefingJobTest {
 
-    private final HeraldConfig defaultConfig = new HeraldConfig(null, null, null, null, null, null, null, null, null);
+    private final HeraldConfig defaultConfig = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
 
     private BriefingJob createJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
-                                  MemoryRepository memRepo, boolean webSearch,
-                                  BriefingJob.WeatherFetcher fetcher) {
-        return new BriefingJob(config, gwsChecker, memRepo, webSearch, fetcher);
-    }
-
-    private MemoryRepository mockMemoryRepository() {
-        return mock(MemoryRepository.class);
+                                  boolean webSearch, BriefingJob.WeatherFetcher fetcher) {
+        return new BriefingJob(config, gwsChecker, webSearch, fetcher);
     }
 
     // --- buildMorningPrompt tests ---
@@ -34,8 +28,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -50,12 +43,11 @@ class BriefingJobTest {
     @Test
     void morningPromptIncludesWeatherViaWebSearchWhenAvailable() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null, null, null);
+                new HeraldConfig.Weather("London"), null, null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
-        MemoryRepository memRepo = mockMemoryRepository();
 
-        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> {
+        BriefingJob job = createJob(config, gwsChecker, true, url -> {
             throw new AssertionError("Should not pre-fetch weather when web search is available");
         });
 
@@ -68,12 +60,11 @@ class BriefingJobTest {
     @Test
     void morningPromptFallsBackToWttrWhenNoWebSearch() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null, null, null);
+                new HeraldConfig.Weather("London"), null, null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
-        MemoryRepository memRepo = mockMemoryRepository();
 
-        BriefingJob job = createJob(config, gwsChecker, memRepo, false, url -> {
+        BriefingJob job = createJob(config, gwsChecker, false, url -> {
             assertThat(url).contains("London");
             return "London: +15°C";
         });
@@ -87,11 +78,11 @@ class BriefingJobTest {
     @Test
     void morningPromptOmitsWeatherOnFetchFailure() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null, null, null);
+                new HeraldConfig.Weather("London"), null, null, null, null);
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(config, gwsChecker, mockMemoryRepository(), false,
+        BriefingJob job = createJob(config, gwsChecker, false,
                 url -> { throw new RuntimeException("network error"); });
 
         String result = job.buildMorningPrompt();
@@ -104,8 +95,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -118,8 +108,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -132,8 +121,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -146,8 +134,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -159,8 +146,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -175,8 +161,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildWeeklyPrompt();
 
@@ -192,8 +177,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(true);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildWeeklyPrompt();
 
@@ -206,8 +190,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildWeeklyPrompt();
 
@@ -219,8 +202,7 @@ class BriefingJobTest {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
         when(gwsChecker.isAvailable()).thenReturn(false);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, mockMemoryRepository(),
-                false, url -> "");
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
 
         String result = job.buildWeeklyPrompt();
 
@@ -233,32 +215,14 @@ class BriefingJobTest {
     // --- resolveCity tests ---
 
     @Test
-    void resolveCityUsesMemoryFirst() {
+    void resolveCityUsesConfigLocation() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
-        MemoryRepository memRepo = mockMemoryRepository();
-        when(memRepo.get("user.city")).thenReturn("San Francisco");
+        when(gwsChecker.isAvailable()).thenReturn(true);
 
         HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null, null, null);
+                new HeraldConfig.Weather("London"), null, null, null, null);
 
-        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
-
-        String result = job.buildMorningPrompt();
-
-        assertThat(result).contains("San Francisco");
-        assertThat(result).doesNotContain("London");
-    }
-
-    @Test
-    void resolveCityFallsBackToConfig() {
-        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
-        MemoryRepository memRepo = mockMemoryRepository();
-        when(memRepo.get("user.city")).thenReturn(null);
-
-        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
-                new HeraldConfig.Weather("London"), null, null, null);
-
-        BriefingJob job = createJob(config, gwsChecker, memRepo, true, url -> "");
+        BriefingJob job = createJob(config, gwsChecker, true, url -> "");
 
         String result = job.buildMorningPrompt();
 
@@ -268,10 +232,8 @@ class BriefingJobTest {
     @Test
     void resolveCityNoLocationSkipsWeatherSection() {
         GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
-        MemoryRepository memRepo = mockMemoryRepository();
-        when(memRepo.get("user.city")).thenReturn(null);
 
-        BriefingJob job = createJob(defaultConfig, gwsChecker, memRepo, true,
+        BriefingJob job = createJob(defaultConfig, gwsChecker, true,
                 url -> { throw new AssertionError("Should not fetch weather without city"); });
 
         String result = job.buildMorningPrompt();

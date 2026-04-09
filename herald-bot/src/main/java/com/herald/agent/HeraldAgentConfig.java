@@ -2,10 +2,9 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
-import com.herald.memory.MemoryTools;
-import com.herald.memory.VaultSearchTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
+import org.springaicommunity.agent.tools.AutoMemoryTools;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -34,7 +33,6 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -89,19 +87,17 @@ public class HeraldAgentConfig {
     @Bean
     @Qualifier("activeToolNames")
     public List<String> activeToolNames(
-            Optional<MemoryTools> memoryTools,
             Optional<CronTools> cronTools,
             Optional<TelegramSendTool> telegramSendTool,
-            Optional<GwsTools> gwsTools,
-            Optional<VaultSearchTools> vaultSearchTools) {
+            Optional<GwsTools> gwsTools) {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
-                "task", "taskOutput", "skills", "web"));
-        memoryTools.ifPresent(t -> names.add("memory"));
+                "task", "taskOutput", "skills", "web",
+                "MemoryView", "MemoryCreate", "MemoryStrReplace",
+                "MemoryInsert", "MemoryDelete", "MemoryRename"));
         cronTools.ifPresent(t -> names.add("cron"));
         telegramSendTool.ifPresent(t -> names.add("telegram_send"));
         gwsTools.ifPresent(t -> names.add("gws"));
-        vaultSearchTools.ifPresent(t -> names.addAll(List.of("vault_search", "vault_reindex")));
         return List.copyOf(names);
     }
 
@@ -132,7 +128,6 @@ public class HeraldAgentConfig {
             HeraldConfig config,
             @Value("${herald.agent.prompt-dump:false}") boolean promptDump,
             Optional<ChatMemory> chatMemoryOpt,
-            Optional<MemoryTools> memoryToolsOpt,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             ApplicationEventPublisher eventPublisher,
@@ -141,10 +136,9 @@ public class HeraldAgentConfig {
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
             Optional<CronTools> cronToolsOpt,
-            Optional<VaultSearchTools> vaultSearchToolsOpt,
-            Optional<SimpleVectorStore> vectorStoreOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
+            @Value("classpath:prompts/AUTO_MEMORY_SYSTEM_PROMPT.md") Resource memoryPromptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             ReloadableSkillsTool reloadableSkillsTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
@@ -161,8 +155,28 @@ public class HeraldAgentConfig {
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
             @Qualifier("activeToolNames") List<String> activeToolNames) {
 
+        // Set up long-term memory (AutoMemoryTools)
+        Path memoriesDir = resolveTildePath(config.memoriesDir());
+        try {
+            Files.createDirectories(memoriesDir);
+            Path memoryMdPath = memoriesDir.resolve("MEMORY.md");
+            if (!Files.exists(memoryMdPath)) {
+                Files.writeString(memoryMdPath, "# Memory Index\n\n");
+                log.info("Created starter MEMORY.md at {}", memoryMdPath);
+            }
+        } catch (IOException e) {
+            log.warn("Failed to bootstrap memories directory at {}: {}", memoriesDir, e.getMessage());
+        }
+
+        AutoMemoryTools autoMemoryTools = AutoMemoryTools.builder()
+                .memoriesDir(memoriesDir)
+                .build();
+
+        // Resolve system prompt with memory instructions
+        String memoryInstructions = loadPromptTemplate(memoryPromptResource)
+                .replace("{MEMORIES_ROOT_DIRECTORY}", memoriesDir.toString());
         String promptTemplate = loadPromptTemplate(promptResource);
-        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
+        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel, memoryInstructions);
 
         // Set up CONTEXT.md advisor — reads standing brief from disk each turn
         Path contextFilePath = resolveTildePath(config.contextFile());
@@ -233,12 +247,11 @@ public class HeraldAgentConfig {
                 .build();
 
         // Build advisor chain and tool list dynamically based on available beans
-        var advisorChain = buildAdvisorChain(memoryToolsOpt, chatMemoryOpt,
-                vectorStoreOpt, contextMdAdvisor, chatModel, config, promptDump);
+        var advisorChain = buildAdvisorChain(chatMemoryOpt,
+                contextMdAdvisor, memoriesDir, chatModel, config, promptDump);
 
-        var toolList = buildToolList(memoryToolsOpt, shellDecorator, fsTools,
-                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt,
-                vaultSearchToolsOpt);
+        var toolList = buildToolList(autoMemoryTools, shellDecorator, fsTools,
+                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
@@ -292,10 +305,9 @@ public class HeraldAgentConfig {
 
 
     List<Advisor> buildAdvisorChain(
-            Optional<MemoryTools> memoryToolsOpt,
             Optional<ChatMemory> chatMemoryOpt,
-            Optional<SimpleVectorStore> vectorStoreOpt,
             ContextMdAdvisor contextMdAdvisor,
+            Path memoriesDir,
             ChatModel chatModel,
             HeraldConfig config,
             boolean promptDump) {
@@ -306,16 +318,13 @@ public class HeraldAgentConfig {
         advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
         advisors.add(contextMdAdvisor);
 
-        // Persistence-dependent
-        memoryToolsOpt.ifPresent(mt -> advisors.add(new MemoryBlockAdvisor(mt)));
-        vectorStoreOpt.ifPresent(vs -> advisors.add(new VaultSearchAdvisor(vs, config)));
+        // Long-term memory — injects MEMORY.md index each turn
+        advisors.add(new MemoryMdAdvisor(memoriesDir));
 
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
-            if (memoryToolsOpt.isPresent()) {
-                advisors.add(new ContextCompactionAdvisor(
-                        chatMemory, memoryToolsOpt.get(), chatModel, config.maxContextTokens()));
-            }
+            advisors.add(new ContextCompactionAdvisor(
+                    chatMemory, chatModel, config.maxContextTokens()));
             advisors.add(new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES));
         }
 
@@ -334,7 +343,7 @@ public class HeraldAgentConfig {
     }
 
     List<Object> buildToolList(
-            Optional<MemoryTools> memoryToolsOpt,
+            AutoMemoryTools autoMemoryTools,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             org.springaicommunity.agent.tools.TodoWriteTool todoTool,
@@ -342,21 +351,19 @@ public class HeraldAgentConfig {
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
-            Optional<CronTools> cronToolsOpt,
-            Optional<VaultSearchTools> vaultSearchToolsOpt) {
+            Optional<CronTools> cronToolsOpt) {
 
         List<Object> tools = new ArrayList<>();
         tools.add(shellDecorator);
         tools.add(fsTools);
+        tools.add(autoMemoryTools);
         tools.add(todoTool);
         tools.add(askTool);
         tools.add(webTools);
 
-        memoryToolsOpt.ifPresent(tools::add);
         telegramSendToolOpt.ifPresent(tools::add);
         gwsToolsOpt.ifPresent(tools::add);
         cronToolsOpt.ifPresent(tools::add);
-        vaultSearchToolsOpt.ifPresent(tools::add);
 
         return tools;
     }
@@ -366,7 +373,7 @@ public class HeraldAgentConfig {
                 .defaultOptions(chatOptionsForModel(chatModel, modelId));
     }
 
-    static org.springframework.ai.chat.prompt.ChatOptions chatOptionsForModel(ChatModel chatModel, String modelId) {
+    static org.springframework.ai.chat.prompt.ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
         return ModelSwitcher.chatOptionsForModel(chatModel, modelId);
     }
 
@@ -375,10 +382,11 @@ public class HeraldAgentConfig {
      * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
      * here and handled per-turn by {@link DateTimePromptAdvisor}.
      */
-    String resolvePrompt(String template, HeraldConfig config, String modelId) {
+    String resolvePrompt(String template, HeraldConfig config, String modelId, String memoryInstructions) {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{model_id}", modelId)
+                .replace("{long_term_memory_instructions}", memoryInstructions)
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 

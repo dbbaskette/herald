@@ -4,9 +4,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
-                           Weather weather, Obsidian obsidian, Vault vault, Archival archival) {
+                           Weather weather, Obsidian obsidian, Vault vault, Archival archival,
+                           LongTermMemory longTermMemory) {
 
     public record Memory(String dbPath) {
+    }
+
+    public record LongTermMemory(String memoriesDir) {
     }
 
     public record Telegram(String botToken, String allowedChatId) {
@@ -176,6 +180,14 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public int archivalKeepRecentMessages() {
         return archival != null && archival.keepRecentMessages() != null
             ? archival.keepRecentMessages() : 5;
+    }
+
+    public String memoriesDir() {
+        if (longTermMemory != null && longTermMemory.memoriesDir() != null
+                && !longTermMemory.memoriesDir().isBlank()) {
+            return longTermMemory.memoriesDir();
+        }
+        return "~/.herald/memories";
     }
 
     public String dbPath() {

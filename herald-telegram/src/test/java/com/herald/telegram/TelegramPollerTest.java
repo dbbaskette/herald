@@ -35,7 +35,7 @@ class TelegramPollerTest {
         HeraldConfig config = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler, agentService);
     }
 
@@ -151,7 +151,7 @@ class TelegramPollerTest {
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
                 new HeraldConfig.Telegram("test-token", ""),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock, agentMock);
 
         assertThatThrownBy(blankPoller::validateConfig)

@@ -2,9 +2,7 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
-import com.herald.memory.MemoryTools;
-import com.herald.memory.VaultSearchTools;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springaicommunity.agent.tools.AutoMemoryTools;
 import org.springframework.beans.factory.ObjectProvider;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -61,7 +59,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
@@ -69,16 +67,17 @@ class HeraldAgentConfigIntegrationTest {
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false, Optional.of(chatMemory),
-                Optional.of(mock(MemoryTools.class)), mock(HeraldShellDecorator.class),
+                mock(HeraldShellDecorator.class),
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
-                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
 
         assertThat(switcher).isNotNull();
@@ -103,7 +102,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -114,16 +113,17 @@ class HeraldAgentConfigIntegrationTest {
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false, Optional.of(chatMemory),
-                Optional.of(mock(MemoryTools.class)), mock(HeraldShellDecorator.class),
+                mock(HeraldShellDecorator.class),
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
-                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
-                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
 
         assertThat(switcher).isNotNull();
@@ -139,7 +139,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -150,13 +150,13 @@ class HeraldAgentConfigIntegrationTest {
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockAnthropicModel, config, false, Optional.of(chatMemory),
-                Optional.of(mock(MemoryTools.class)), mock(HeraldShellDecorator.class),
+                mock(HeraldShellDecorator.class),
                 new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
-                Optional.<VaultSearchTools>empty(), Optional.<SimpleVectorStore>empty(),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
@@ -211,12 +211,11 @@ class HeraldAgentConfigIntegrationTest {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false,
                 Optional.empty(),  // chatMemory
-                Optional.empty(),  // memoryTools
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
                 mock(ApplicationEventPublisher.class),
@@ -225,10 +224,9 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(),  // gwsTools
                 new WebTools(""),
                 Optional.empty(),  // cronTools
-                Optional.<VaultSearchTools>empty(),  // vaultSearchTools
-                Optional.<SimpleVectorStore>empty(),  // vectorStore
                 Optional.empty(),  // jdbcTemplate
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(),
                 new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -241,43 +239,44 @@ class HeraldAgentConfigIntegrationTest {
     }
 
     @Test
-    void buildAdvisorChainExcludesPersistenceAdvisorsWhenNoBeans() {
+    void buildAdvisorChainExcludesPersistenceAdvisorsWhenNoBeans(@TempDir Path tempDir) {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
 
         var advisors = agentConfig.buildAdvisorChain(
-                Optional.empty(), Optional.empty(), Optional.<SimpleVectorStore>empty(),
-                contextMdAdvisor, mockModel, config, false);
+                Optional.empty(), contextMdAdvisor, tempDir,
+                mockModel, config, false);
 
-        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, PromptDumpAdvisor, ToolCallAdvisor
-        assertThat(advisors).hasSize(4);
-        assertThat(advisors).noneMatch(a -> a instanceof MemoryBlockAdvisor);
+        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, MemoryMdAdvisor, PromptDumpAdvisor, ToolCallAdvisor
+        assertThat(advisors).hasSize(5);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
 
     @Test
-    void buildToolListContainsOnlyStatelessToolsWhenNoPersistenceBeans() {
+    void buildToolListContainsAutoMemoryToolsAndStatelessTools() {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
+        var autoMemoryTools = AutoMemoryTools.builder()
+                .memoriesDir(Path.of("/tmp/test-memories"))
+                .build();
         var todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder().build();
         var askTool = org.springaicommunity.agent.tools.AskUserQuestionTool.builder()
                 .questionHandler(q -> java.util.Map.of())
                 .build();
 
         var tools = agentConfig.buildToolList(
-                Optional.empty(),
+                autoMemoryTools,
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
                 todoTool, askTool,
                 Optional.empty(), Optional.empty(),
                 new WebTools(""),
-                Optional.empty(),
-                Optional.<VaultSearchTools>empty());
+                Optional.empty());
 
-        // shellDecorator, fsTools, todoTool, askTool, webTools = 5
-        assertThat(tools).hasSize(5);
+        // shellDecorator, fsTools, autoMemoryTools, todoTool, askTool, webTools = 6
+        assertThat(tools).hasSize(6);
     }
 }
