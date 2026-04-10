@@ -377,7 +377,7 @@ herald/
 │   └── src/main/java/com/herald/
 │       ├── agent/                   # AgentFactory, AgentService, ModelSwitcher
 │       │   ├── profile/             # AgentProfile record, AgentProfileParser
-│       │   └── subagent/            # HeraldSubagentFactory, HeraldSubagentReferences
+│       │   └── subagent/            # HeraldSubagentReferences
 │       ├── tools/                   # FileSystemTools, WebTools, ShellSecurityConfig
 │       └── config/                  # HeraldConfig, ModelProviderConfig
 ├── herald-persistence/              # SQLite, cron, persistence advisors

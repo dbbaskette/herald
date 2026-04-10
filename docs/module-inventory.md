@@ -82,7 +82,6 @@ Categorization of all `herald-bot` classes by dependency type for the dual-mode 
 
 | Class | Package | Category | Notes |
 |-------|---------|----------|-------|
-| HeraldSubagentFactory | com.herald.agent.subagent | Core | Model-agnostic builder wrapping ClaudeSubagentType; no DB dependency |
 | HeraldSubagentReferences | com.herald.agent.subagent | Core | Loads subagent definitions from markdown files; no DB dependency |
 
 ## UI Controllers
