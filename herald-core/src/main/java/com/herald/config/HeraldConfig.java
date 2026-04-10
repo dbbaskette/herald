@@ -220,10 +220,10 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     /**
      * Returns the configured A2A agents, or an empty list if none are configured.
      */
-    public java.util.List<A2aAgent> a2aAgents() {
+    public List<A2aAgent> a2aAgents() {
         if (a2a != null && a2a.agents() != null) {
             return a2a.agents();
         }
-        return java.util.List.of();
+        return List.of();
     }
 }
