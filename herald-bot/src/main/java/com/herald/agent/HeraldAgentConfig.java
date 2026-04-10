@@ -157,7 +157,7 @@ public class HeraldAgentConfig {
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
             @Qualifier("activeToolNames") List<String> activeToolNames) {
 
-        // Set up long-term memory (AutoMemoryTools)
+        // Set up long-term memory (AutoMemoryToolsAdvisor owns the tools)
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         try {
             Files.createDirectories(memoriesDir);
