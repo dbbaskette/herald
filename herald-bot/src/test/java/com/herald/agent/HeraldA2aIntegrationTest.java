@@ -103,7 +103,6 @@ class HeraldA2aIntegrationTest {
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,

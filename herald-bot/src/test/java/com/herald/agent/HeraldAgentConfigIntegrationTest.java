@@ -2,7 +2,6 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
-import org.springaicommunity.agent.tools.AutoMemoryTools;
 import org.springframework.beans.factory.ObjectProvider;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -72,7 +71,6 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
@@ -118,7 +116,6 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
@@ -155,7 +152,6 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
@@ -225,7 +221,6 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(),  // cronTools
                 Optional.empty(),  // jdbcTemplate
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
-                new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"),
                 tempDir.toString(),
                 new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
@@ -249,25 +244,21 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), contextMdAdvisor, tempDir,
                 mockModel, config, false);
 
-        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, MemoryMdAdvisor, PromptDumpAdvisor, ToolCallAdvisor
+        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, AutoMemoryToolsAdvisor, PromptDumpAdvisor, ToolCallAdvisor
         assertThat(advisors).hasSize(5);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
 
     @Test
-    void buildToolListContainsAutoMemoryToolsAndStatelessTools() {
+    void buildToolListContainsStatelessTools() {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
-        var autoMemoryTools = AutoMemoryTools.builder()
-                .memoriesDir(Path.of("/tmp/test-memories"))
-                .build();
         var todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder().build();
         var askTool = org.springaicommunity.agent.tools.AskUserQuestionTool.builder()
                 .questionHandler(q -> java.util.Map.of())
                 .build();
 
         var tools = agentConfig.buildToolList(
-                autoMemoryTools,
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
                 todoTool, askTool,
@@ -275,7 +266,8 @@ class HeraldAgentConfigIntegrationTest {
                 new WebTools(""),
                 Optional.empty());
 
-        // shellDecorator, fsTools, autoMemoryTools, todoTool, askTool, webTools = 6
-        assertThat(tools).hasSize(6);
+        // shellDecorator, fsTools, todoTool, askTool, webTools = 5
+        // (AutoMemoryTools is now registered by AutoMemoryToolsAdvisor, not in the tool list)
+        assertThat(tools).hasSize(5);
     }
 }
