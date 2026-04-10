@@ -448,7 +448,7 @@ flowchart TB
 | **AskUserQuestion** | [Part 2: Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as Telegram inline keyboard buttons; multi-select and free-text use text messaging. Blocks on `CompletableFuture` with 5-minute timeout. |
 | **TodoWrite** | [Part 3: Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite) | ✅ | Upstream `TodoWriteTool` with structured states (`pending` → `in_progress` → `completed`). A `todoEventHandler` dispatches formatted progress directly to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
 | **Subagent Orchestration** | [Part 4: Subagent Orchestration](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus one custom **research** agent (Opus, deep analysis with web search) in `.claude/agents/`. |
-| **A2A Protocol** | [Part 5: Agent2Agent Interoperability](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ⏳ | Planned for cross-agent communication. |
+| **A2A Protocol** | [Part 5: Agent2Agent Interoperability](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Configure remote A2A agents under `herald.a2a.agents` in `herald.yaml`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — the agent card is fetched on first delegation. See the A2A agents section below for config shape. |
 | **AutoMemoryTools** | [Part 6: Persistent Agent Memory](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools) | ✅ | Upstream `AutoMemoryTools` (Option B — manual setup) with `MemoryMdAdvisor` injecting the `MEMORY.md` index each turn. Six sandboxed operations (View/Create/StrReplace/Insert/Delete/Rename) manage typed Markdown files with YAML frontmatter. Replaces the former SQLite hot memory + Obsidian cold memory with a single file-based system. |
 
 **Legend:** ✅ Adopted — ↗ Herald extension beyond upstream — ⏳ Planned
@@ -557,6 +557,26 @@ erDiagram
 | **Dual-Mode Phase 3** | Maven Module Split (5 modules) | Done |
 | **Dual-Mode Phase 4** | agents.md Specification | Done |
 | 6 | Polish | Voice, vision, Docker sandbox, dark mode |
+
+## A2A agents (remote subagents)
+
+Herald can delegate to remote A2A-compliant agents alongside its local subagents. Declare each remote agent under `herald.a2a.agents` in `herald.yaml`:
+
+```yaml
+herald:
+  a2a:
+    agents:
+      - name: airbnb-agent
+        url: http://localhost:10001/airbnb
+        metadata:
+          authorization: "Bearer some-token"
+      - name: weather-agent
+        url: http://localhost:10002/weather
+```
+
+- `name` is a local label used in startup logs. The real display name comes from the resolved `AgentCard`.
+- `metadata` is an optional map passed verbatim to the underlying `SubagentReference`.
+- Resolution is **lazy**: Herald does not fetch `/.well-known/agent-card.json` at startup. A misconfigured or unreachable URL surfaces only on the first delegation to that agent.
 
 ## Contributing
 
