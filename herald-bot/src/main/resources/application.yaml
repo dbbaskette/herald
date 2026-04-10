@@ -9,6 +9,8 @@ spring:
     init:
       mode: never  # Schema managed explicitly by DataSourceInitializer bean
   ai:
+    tools:
+      throw-exception-on-error: org.springaicommunity.agent.tools.AskUserQuestionTool$InvalidUserAnswerException
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
       chat:
