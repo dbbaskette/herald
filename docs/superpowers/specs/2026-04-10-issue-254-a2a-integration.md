@@ -5,7 +5,7 @@
 
 ## Background
 
-Herald currently delegates only to local Claude subagents via `ClaudeSubagentType` and `.claude/agents/*.md` markdown definitions. The blog 5 pattern introduces remote subagents via `spring-ai-agent-utils-a2a`, which lets the main agent delegate to other A2A-compliant agents over JSON-RPC.
+Herald currently delegates only to local in-process subagents via the library's `ClaudeSubagentType` (a misnomer from the upstream library — the class actually accepts any Spring AI `ChatClient.Builder`, and Herald already wires Anthropic, OpenAI, Ollama, Gemini, and LM Studio models into it). Local subagent definitions live in `.claude/agents/*.md`. The blog 5 pattern introduces remote subagents via `spring-ai-agent-utils-a2a`, which lets the main agent delegate to other A2A-compliant agents over JSON-RPC.
 
 The library provides three classes under `org.springaicommunity.agent.subagent.a2a`:
 
@@ -18,7 +18,7 @@ The library provides three classes under `org.springaicommunity.agent.subagent.a
 ## Goal
 
 Register one or more remote A2A agents declared in `herald.yaml` as additional
-`SubagentReference` entries at startup, alongside the existing local Claude
+`SubagentReference` entries at startup, alongside the existing local in-process
 subagents. A single `TaskTool` dispatches to either transport transparently.
 
 ## Non-goals
@@ -102,12 +102,12 @@ HeraldConfig.A2a   ──────────►  HeraldConfig.a2aAgents() :
                                  ▼
 HeraldAgentConfig.modelSwitcher
   │
-  ├─ existing ClaudeSubagentType build  (unchanged)
+  ├─ existing local SubagentType build (ClaudeSubagentType — unchanged)
   ├─ existing loadSubagentReferences(agentsDirectory)  (unchanged)
   │
   └─ if (!a2aAgents.isEmpty())
        ├─ a2aType = new SubagentType(new A2ASubagentResolver(), new A2ASubagentExecutor())
-       ├─ register (claudeSubagentType, a2aType) via .subagentTypes(...)
+       ├─ register (local subagentType, a2aType) via .subagentTypes(...)
        └─ for each A2aAgent → new SubagentReference(url, A2ASubagentDefinition.KIND, metadata)
              └─ append to the combined references list passed to .subagentReferences(...)
 ```
@@ -265,9 +265,9 @@ with this expanded block:
         }
 ```
 
-The existing `subagentType` local (the Claude one) is renamed to stay — no
-rename needed. The new variable is `a2aType`. The `log` field already exists
-on `HeraldAgentConfig`.
+The existing `subagentType` local (the local in-process subagent type) keeps
+its name — no rename needed. The new variable is `a2aType`. The `log` field
+already exists on `HeraldAgentConfig`.
 
 ## Tests
 
@@ -405,3 +405,23 @@ valid when A2A config is present.
   agent in `herald.yaml`, start herald-bot, delegate a task via
   `Task(subagent_type="<remote-name>", prompt="...")`, confirm the remote
   agent is invoked.
+
+## Follow-up issues (out of scope for #254)
+
+Captured here for the audit trail — these are intentionally **not** part of
+this spec:
+
+- **Claude Code CLI provider (`claude -p`).** Add a new `ChatModel`
+  implementation that shells out to the `claude` CLI in headless mode.
+  Distinct from the existing Anthropic API provider.
+- **Multi-provider env/docs audit.** Ensure every provider has documented
+  env vars for key + default model and consistent precedence/fallback
+  behavior. Today's `ModelSwitcher` already supports anthropic, openai,
+  ollama, gemini, and lmstudio via `herald.agent.default-provider`, but the
+  documentation and env surface could be tighter.
+- **Cloud Foundry / Tanzu GenAI service binding.** Parse `VCAP_SERVICES` at
+  startup to pull GenAI credentials and endpoints from a bound service
+  (via `cf bind-service` or manifest), so the same jar works locally (env
+  vars) and on TAS (service binding).
+
+Each of these deserves its own issue and its own spec → plan → execute cycle.
