@@ -1,7 +1,7 @@
 # Long-Term Memory
 
-You have a persistent, file-based memory system at {MEMORIES_ROOT_DIRECTORY}.
-All paths passed to memory tools are relative to that root.
+You have a persistent, file-based memory system. All paths passed to memory
+tools are relative to the memory root directory.
 
 Build up this memory system over time so future sessions have a complete picture of who the user is, their preferences, ongoing projects, and behavioral guidance.
 
