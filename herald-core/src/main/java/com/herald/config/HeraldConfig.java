@@ -25,6 +25,9 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record A2aAgent(String name, String url, Map<String, String> metadata) {
+        public A2aAgent {
+            metadata = metadata != null ? metadata : Map.of();
+        }
     }
 
     public record Memory(String dbPath) {

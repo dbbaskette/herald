@@ -224,8 +224,7 @@ public class HeraldAgentConfig {
 
             var combinedRefs = new ArrayList<>(subagentRefs);
             for (var agent : a2aAgents) {
-                Map<String, String> metadata = agent.metadata() != null ? agent.metadata() : Map.of();
-                combinedRefs.add(new SubagentReference(agent.url(), A2ASubagentDefinition.KIND, metadata));
+                combinedRefs.add(new SubagentReference(agent.url(), A2ASubagentDefinition.KIND, agent.metadata()));
             }
             taskToolBuilder.subagentReferences(combinedRefs);
             log.info("Registered {} A2A agent(s) alongside {} local subagent(s)",

@@ -21,7 +21,7 @@ class HeraldConfigA2aTest {
         assertThat(config.a2aAgents().get(0).name()).isEqualTo("airbnb");
         assertThat(config.a2aAgents().get(0).url()).isEqualTo("http://localhost:10001/airbnb");
         assertThat(config.a2aAgents().get(0).metadata()).containsEntry("authorization", "Bearer token");
-        assertThat(config.a2aAgents().get(1).metadata()).isNull();
+        assertThat(config.a2aAgents().get(1).metadata()).isEmpty();
     }
 
     @Test
