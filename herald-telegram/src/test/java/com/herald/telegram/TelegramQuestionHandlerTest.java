@@ -1,9 +1,10 @@
 package com.herald.telegram;
 
-import com.herald.telegram.TelegramQuestionHandler.Question;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
+import org.springaicommunity.agent.tools.AskUserQuestionTool.Question;
+import org.springaicommunity.agent.tools.AskUserQuestionTool.Question.Option;
 
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,6 +31,24 @@ class TelegramQuestionHandlerTest {
     void setUp() {
         sender = mock(TelegramSender.class);
         handler = new TelegramQuestionHandler(sender);
+    }
+
+    private static Question freeText(String text) {
+        return new Question(text, text, List.of(), false);
+    }
+
+    private static Question singleSelect(String text, String... labels) {
+        List<Option> opts = java.util.Arrays.stream(labels)
+                .map(l -> new Option(l, l))
+                .toList();
+        return new Question(text, text, opts, false);
+    }
+
+    private static Question multiSelect(String text, String... labels) {
+        List<Option> opts = java.util.Arrays.stream(labels)
+                .map(l -> new Option(l, l))
+                .toList();
+        return new Question(text, text, opts, true);
     }
 
     @Test
@@ -91,21 +110,21 @@ class TelegramQuestionHandlerTest {
         });
 
         List<Question> questions = List.of(
-                new Question("Which calendar?", List.of("Work", "Personal", "Family")),
-                new Question("What time?")
+                singleSelect("Which calendar?", "Work", "Personal", "Family"),
+                freeText("What time?")
         );
 
         Map<String, String> result = handler.handleInternal(questions);
 
         assertThat(result).hasSize(2);
-        assertThat(result).containsKeys("q1", "q2");
-        assertThat(result.get("q1")).isEqualTo("A");
+        assertThat(result).containsKeys("Which calendar?", "What time?");
+        assertThat(result.get("Which calendar?")).isEqualTo("A");
     }
 
     @Test
     void formatQuestionsIncludesOptionsAndSelectionHint() {
         List<Question> questions = List.of(
-                new Question("Which calendar?", List.of("Work", "Personal", "Family"))
+                singleSelect("Which calendar?", "Work", "Personal", "Family")
         );
 
         String formatted = handler.formatQuestions("abc123", questions);
@@ -122,8 +141,7 @@ class TelegramQuestionHandlerTest {
     @Test
     void formatQuestionsMultiSelectShowsHint() {
         List<Question> questions = List.of(
-                new Question("Select tags:", List.of("urgent", "work", "home"),
-                        Question.SelectionType.MULTI_SELECT)
+                multiSelect("Select tags:", "urgent", "work", "home")
         );
 
         String formatted = handler.formatQuestions("abc123", questions);
@@ -134,8 +152,8 @@ class TelegramQuestionHandlerTest {
     @Test
     void formatQuestionsNumbersMultipleQuestions() {
         List<Question> questions = List.of(
-                new Question("First question?"),
-                new Question("Second question?")
+                freeText("First question?"),
+                freeText("Second question?")
         );
 
         String formatted = handler.formatQuestions("abc123", questions);
@@ -147,39 +165,13 @@ class TelegramQuestionHandlerTest {
     @Test
     void formatQuestionsSingleQuestionNotNumbered() {
         List<Question> questions = List.of(
-                new Question("Only question?")
+                freeText("Only question?")
         );
 
         String formatted = handler.formatQuestions("abc123", questions);
 
         assertThat(formatted).doesNotContain("1.");
         assertThat(formatted).contains("Only question?");
-    }
-
-    @Test
-    void handleWithCustomQuestionIdsUsesThemAsKeys() {
-        CountDownLatch messageSent = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            messageSent.countDown();
-            return null;
-        }).when(sender).sendMessage(anyString());
-
-        CompletableFuture.runAsync(() -> {
-            try {
-                messageSent.await(5, TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {}
-            handler.resolveAnswer("Work");
-        });
-
-        List<Question> questions = List.of(
-                new Question("calendar-q", "Which calendar?", List.of("Work", "Personal"),
-                        Question.SelectionType.SINGLE_SELECT)
-        );
-
-        Map<String, String> result = handler.handleInternal(questions);
-
-        assertThat(result).containsKey("calendar-q");
-        assertThat(result.get("calendar-q")).isEqualTo("Work");
     }
 
     @Test
@@ -195,7 +187,6 @@ class TelegramQuestionHandlerTest {
             CompletableFuture<String> askFuture = CompletableFuture.supplyAsync(
                     () -> handler.askQuestion("test?"), executor);
 
-            // Wait for the question to be sent (message sent = future is registered)
             assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
 
             assertThat(handler.hasPendingQuestion()).isTrue();
@@ -205,7 +196,6 @@ class TelegramQuestionHandlerTest {
             String result = askFuture.get(5, TimeUnit.SECONDS);
             assertThat(result).isEqualTo("yes");
 
-            // After get() returns, the finally block has cleared the pending question
             assertThat(handler.hasPendingQuestion()).isFalse();
         } finally {
             executor.shutdown();
@@ -222,18 +212,15 @@ class TelegramQuestionHandlerTest {
         }).when(sender).sendMessage(anyString());
 
         try {
-            // Start first question in background
             CompletableFuture<String> firstQuestion = CompletableFuture.supplyAsync(
                     () -> handler.askQuestion("first?"), executor);
 
             assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
 
-            // Try to send a second question while the first is pending
-            assertThatThrownBy(() -> handler.handleInternal(List.of(new Question("second?"))))
+            assertThatThrownBy(() -> handler.handleInternal(List.of(freeText("second?"))))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("already pending");
 
-            // Clean up: resolve the first question
             handler.resolveAnswer("done");
             firstQuestion.get(5, TimeUnit.SECONDS);
         } finally {
@@ -243,11 +230,10 @@ class TelegramQuestionHandlerTest {
 
     @Test
     void handleReturnsEmptyMapOnTimeout() {
-        // Use a very short timeout to test the timeout path
         TelegramQuestionHandler shortTimeoutHandler = new TelegramQuestionHandler(sender, 0);
 
         Map<String, String> result = shortTimeoutHandler.handleInternal(
-                List.of(new Question("Will this timeout?")));
+                List.of(freeText("Will this timeout?")));
 
         assertThat(result).isEmpty();
         verify(sender).sendMessage(anyString());
