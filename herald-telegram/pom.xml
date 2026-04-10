@@ -15,7 +15,7 @@
     <description>Telegram transport — bot polling, message sending, and slash-command handling</description>
 
     <dependencies>
-        <!-- Herald Core (MessageSender, AgentService, HeraldConfig, TodoProgressEvent, etc.) -->
+        <!-- Herald Core (MessageSender, AgentService, HeraldConfig, etc.) -->
         <dependency>
             <groupId>com.herald</groupId>
             <artifactId>herald-core</artifactId>
