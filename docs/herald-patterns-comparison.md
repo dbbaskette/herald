@@ -134,7 +134,7 @@
 
 **Blog:** `TodoWriteTool` accepts a `todoEventHandler` callback. The blog shows publishing Spring `ApplicationEvent`s from this handler, allowing listeners to display progress in UIs.
 
-**Herald:** ✅ **Implemented.** Herald's `TodoProgressListener` listens for `TodoProgressEvent` via Spring's `ApplicationEventPublisher`. Each update is forwarded to Telegram, so the user sees live task progress (e.g., `[→] Analyzing repo structure  2/4 complete`) as the agent works.
+**Herald:** ✅ **Implemented.** Herald's `todoEventHandler` lambda formats each update and dispatches it directly to the `MessageSender` bean (normally `TelegramSender`), so the user sees live task progress (e.g., `[→] Analyzing repo structure  2/4 complete`) as the agent works. When no transport is configured the summary prints to stdout.
 
 ---
 

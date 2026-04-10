@@ -30,7 +30,6 @@ Categorization of all `herald-bot` classes by dependency type for the dual-mode 
 | FileSystemTools | com.herald.tools | Core | Reads/writes/lists files; no DB dependency |
 | WebTools | com.herald.tools | Core | HTTP fetch and Brave Search; no DB dependency |
 | ShellCommandExecutor | com.herald.tools | Core | Functional interface for shell execution; no DB dependency |
-| TodoProgressEvent | com.herald.tools | Core | Spring ApplicationEvent for todo list changes; no DB dependency |
 | GwsAvailabilityChecker | com.herald.tools | Core | Checks gws CLI presence via process call; no DB dependency |
 | ShellSecurityConfig | com.herald.tools | Core | Configuration properties for shell blocklist; no DB dependency |
 | ReloadableSkillsTool | com.herald.agent | Core | Hot-reloadable file-based skills; no DB dependency |
@@ -55,7 +54,6 @@ Categorization of all `herald-bot` classes by dependency type for the dual-mode 
 | ModelSwitcher | com.herald.agent | Persistence | Runtime model switching; persists overrides to model_overrides table via JdbcTemplate |
 | CommandHandler | com.herald.telegram | Telegram | Handles Telegram slash commands; depends on TelegramSender + MemoryTools + ChatMemory |
 | MessageFormatter | com.herald.telegram | Telegram | Splits and escapes text for Telegram's message length/format limits |
-| TodoProgressListener | com.herald.telegram | Telegram | Forwards TodoProgressEvent to Telegram via TelegramSender |
 | TelegramPoller | com.herald.telegram | Telegram | Polls Telegram for updates; depends on TelegramBot (pengrad) |
 | TelegramSender | com.herald.telegram | Telegram | Sends messages via TelegramBot (pengrad) |
 | TelegramQuestionHandler | com.herald.telegram | Telegram | Bridges agent questions to Telegram inline keyboard; depends on TelegramSender |
