@@ -10,7 +10,6 @@ import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
-import com.herald.tools.TodoProgressEvent;
 import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
@@ -36,7 +35,6 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -130,7 +128,7 @@ public class HeraldAgentConfig {
             Optional<ChatMemory> chatMemoryOpt,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
-            ApplicationEventPublisher eventPublisher,
+            Optional<MessageSender> messageSenderOpt,
             ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
@@ -230,7 +228,8 @@ public class HeraldAgentConfig {
                 .answersValidation(telegramHandler != null)
                 .build();
 
-        // Build upstream TodoWriteTool with event handler bridging to Telegram via TodoProgressEvent
+        // Build upstream TodoWriteTool with a handler that dispatches formatted
+        // progress directly to MessageSender (Telegram) or stdout as a fallback.
         org.springaicommunity.agent.tools.TodoWriteTool todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder()
                 .todoEventHandler(todos -> {
                     StringBuilder sb = new StringBuilder();
@@ -242,7 +241,10 @@ public class HeraldAgentConfig {
                         };
                         sb.append(symbol).append(" ").append(item.content()).append("\n");
                     }
-                    eventPublisher.publishEvent(new TodoProgressEvent(todos, sb.toString()));
+                    String summary = sb.toString();
+                    messageSenderOpt.ifPresentOrElse(
+                            s -> s.sendMessage(summary),
+                            () -> System.out.print(summary));
                 })
                 .build();
 
