@@ -12,6 +12,10 @@ import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
 import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
+import org.springaicommunity.agent.common.task.subagent.SubagentType;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentDefinition;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentExecutor;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentResolver;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
@@ -205,13 +209,27 @@ public class HeraldAgentConfig {
                 .build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
+        var a2aAgents = config.a2aAgents();
 
-        var taskToolBuilder = TaskTool.builder()
-                .subagentTypes(subagentType)
-                .taskRepository(taskRepository);
+        var taskToolBuilder = TaskTool.builder().taskRepository(taskRepository);
 
-        if (!subagentRefs.isEmpty()) {
-            taskToolBuilder.subagentReferences(subagentRefs);
+        if (a2aAgents.isEmpty()) {
+            taskToolBuilder.subagentTypes(subagentType);
+            if (!subagentRefs.isEmpty()) {
+                taskToolBuilder.subagentReferences(subagentRefs);
+            }
+        } else {
+            var a2aType = new SubagentType(new A2ASubagentResolver(), new A2ASubagentExecutor());
+            taskToolBuilder.subagentTypes(subagentType, a2aType);
+
+            var combinedRefs = new ArrayList<>(subagentRefs);
+            for (var agent : a2aAgents) {
+                Map<String, String> metadata = agent.metadata() != null ? agent.metadata() : Map.of();
+                combinedRefs.add(new SubagentReference(agent.url(), A2ASubagentDefinition.KIND, metadata));
+            }
+            taskToolBuilder.subagentReferences(combinedRefs);
+            log.info("Registered {} A2A agent(s) alongside {} local subagent(s)",
+                    a2aAgents.size(), subagentRefs.size());
         }
 
         ToolCallback taskTool = taskToolBuilder.build();
