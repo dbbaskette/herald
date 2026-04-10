@@ -4,7 +4,7 @@ import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
-import org.springaicommunity.agent.tools.AutoMemoryTools;
+import org.springaicommunity.agent.advisors.AutoMemoryToolsAdvisor;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -44,6 +44,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
@@ -140,7 +141,6 @@ public class HeraldAgentConfig {
             Optional<CronTools> cronToolsOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
-            @Value("classpath:prompts/AUTO_MEMORY_SYSTEM_PROMPT.md") Resource memoryPromptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             ReloadableSkillsTool reloadableSkillsTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
@@ -170,15 +170,9 @@ public class HeraldAgentConfig {
             log.warn("Failed to bootstrap memories directory at {}: {}", memoriesDir, e.getMessage());
         }
 
-        AutoMemoryTools autoMemoryTools = AutoMemoryTools.builder()
-                .memoriesDir(memoriesDir)
-                .build();
-
-        // Resolve system prompt with memory instructions
-        String memoryInstructions = loadPromptTemplate(memoryPromptResource)
-                .replace("{MEMORIES_ROOT_DIRECTORY}", memoriesDir.toString());
+        // Resolve system prompt (memory instructions are injected by AutoMemoryToolsAdvisor)
         String promptTemplate = loadPromptTemplate(promptResource);
-        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel, memoryInstructions);
+        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
 
         // Set up CONTEXT.md advisor — reads standing brief from disk each turn
         Path contextFilePath = resolveTildePath(config.contextFile());
@@ -271,7 +265,7 @@ public class HeraldAgentConfig {
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
                 contextMdAdvisor, memoriesDir, chatModel, config, promptDump);
 
-        var toolList = buildToolList(autoMemoryTools, shellDecorator, fsTools,
+        var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
@@ -339,8 +333,15 @@ public class HeraldAgentConfig {
         advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
         advisors.add(contextMdAdvisor);
 
-        // Long-term memory — injects MEMORY.md index each turn
-        advisors.add(new MemoryMdAdvisor(memoriesDir));
+        // Long-term memory — library advisor owns per-request memory tool registration
+        // and injects the memory system prompt each turn. The no-op consolidation trigger
+        // locks in current behavior against future library default changes.
+        advisors.add(AutoMemoryToolsAdvisor.builder()
+                .memoriesRootDirectory(memoriesDir.toString())
+                .memorySystemPrompt(new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"))
+                .order(Ordered.HIGHEST_PRECEDENCE + 100)
+                .memoryConsolidationTrigger((req, instant) -> false)
+                .build());
 
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
@@ -364,7 +365,6 @@ public class HeraldAgentConfig {
     }
 
     List<Object> buildToolList(
-            AutoMemoryTools autoMemoryTools,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             org.springaicommunity.agent.tools.TodoWriteTool todoTool,
@@ -377,7 +377,6 @@ public class HeraldAgentConfig {
         List<Object> tools = new ArrayList<>();
         tools.add(shellDecorator);
         tools.add(fsTools);
-        tools.add(autoMemoryTools);
         tools.add(todoTool);
         tools.add(askTool);
         tools.add(webTools);
@@ -403,11 +402,10 @@ public class HeraldAgentConfig {
      * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
      * here and handled per-turn by {@link DateTimePromptAdvisor}.
      */
-    String resolvePrompt(String template, HeraldConfig config, String modelId, String memoryInstructions) {
+    String resolvePrompt(String template, HeraldConfig config, String modelId) {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{model_id}", modelId)
-                .replace("{long_term_memory_instructions}", memoryInstructions)
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 
