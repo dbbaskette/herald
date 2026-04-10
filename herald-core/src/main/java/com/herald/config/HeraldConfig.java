@@ -1,11 +1,31 @@
 package com.herald.config;
 
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
                            Weather weather, Obsidian obsidian, Vault vault, Archival archival,
-                           LongTermMemory longTermMemory) {
+                           LongTermMemory longTermMemory, A2a a2a) {
+
+    /**
+     * Backwards-compatible constructor for callers that predate the A2A addition.
+     * Delegates to the canonical constructor with a null a2a value so existing
+     * test fixtures and wiring code keep working unchanged.
+     */
+    public HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
+                        Weather weather, Obsidian obsidian, Vault vault, Archival archival,
+                        LongTermMemory longTermMemory) {
+        this(memory, telegram, agent, providers, cron, weather, obsidian, vault, archival, longTermMemory, null);
+    }
+
+    public record A2a(List<A2aAgent> agents) {
+    }
+
+    public record A2aAgent(String name, String url, Map<String, String> metadata) {
+    }
 
     public record Memory(String dbPath) {
     }
@@ -195,5 +215,15 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return memory.dbPath();
         }
         return "~/.herald/herald.db";
+    }
+
+    /**
+     * Returns the configured A2A agents, or an empty list if none are configured.
+     */
+    public java.util.List<A2aAgent> a2aAgents() {
+        if (a2a != null && a2a.agents() != null) {
+            return a2a.agents();
+        }
+        return java.util.List.of();
     }
 }
