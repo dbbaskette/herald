@@ -108,7 +108,7 @@ class HeraldAgentConfigTest {
                         Optional.empty(),
                         mock(com.herald.tools.HeraldShellDecorator.class),
                         new com.herald.tools.FileSystemTools(),
-                        mock(org.springframework.context.ApplicationEventPublisher.class),
+                        Optional.empty(),
                         mock(org.springframework.beans.factory.ObjectProvider.class),
                         Optional.empty(), Optional.empty(),
                         new com.herald.tools.WebTools(""),

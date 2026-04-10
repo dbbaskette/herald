@@ -29,7 +29,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import org.springframework.context.ApplicationEventPublisher;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -68,7 +67,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false, Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
-                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
+                new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
@@ -114,7 +113,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false, Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
-                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
+                new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
@@ -151,7 +150,7 @@ class HeraldAgentConfigIntegrationTest {
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockAnthropicModel, config, false, Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
-                new FileSystemTools(), mock(ApplicationEventPublisher.class), mock(ObjectProvider.class),
+                new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
                 Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
@@ -218,7 +217,7 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(),  // chatMemory
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
-                mock(ApplicationEventPublisher.class),
+                Optional.empty(),
                 mock(ObjectProvider.class),
                 Optional.empty(),  // telegramSendTool
                 Optional.empty(),  // gwsTools
