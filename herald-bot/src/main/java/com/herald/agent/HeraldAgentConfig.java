@@ -14,7 +14,7 @@ import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
-import com.herald.agent.subagent.HeraldSubagentFactory;
+import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
 import com.herald.agent.subagent.HeraldSubagentReferences;
 import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
@@ -185,7 +185,7 @@ public class HeraldAgentConfig {
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
-        var subagentTypeBuilder = HeraldSubagentFactory.builder()
+        var subagentTypeBuilder = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
                 .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
@@ -200,7 +200,9 @@ public class HeraldAgentConfig {
         lmstudioChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("lmstudio", chatClientBuilderForModel(model, lmstudioModel)));
 
-        var subagentType = subagentTypeBuilder.build();
+        var subagentType = subagentTypeBuilder
+                .skillsDirectories(reloadableSkillsTool.getSkillsDirectory())
+                .build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
 
