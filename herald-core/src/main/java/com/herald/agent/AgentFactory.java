@@ -59,7 +59,7 @@ public final class AgentFactory {
         List<Object> tools = registry.resolve(profile.tools());
 
         var builder = ChatClient.builder(chatModel)
-                .defaultSystem(systemPrompt)
+                .defaultSystem(applyTaskManagementGuidance(profile, systemPrompt))
                 .defaultAdvisors(advisors);
 
         if (!tools.isEmpty()) {
@@ -106,7 +106,7 @@ public final class AgentFactory {
         List<Object> tools = registry.resolve(profile.tools());
 
         var builder = ChatClient.builder(chatModel)
-                .defaultSystem(systemPrompt)
+                .defaultSystem(applyTaskManagementGuidance(profile, systemPrompt))
                 .defaultAdvisors(advisors);
 
         if (model != null) {
@@ -118,6 +118,24 @@ public final class AgentFactory {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Prepend the shared task-management / tool-use guidance to the agents.md body
+     * unless the profile explicitly opts out via {@code task_management: off}.
+     * Prepending (rather than appending) keeps the guidance in front of any
+     * agent-specific persona or role statements, so task-decomposition discipline
+     * is established before the agent reads its specific instructions.
+     */
+    static String applyTaskManagementGuidance(AgentProfile profile, String systemPrompt) {
+        if (!profile.taskManagement()) {
+            return systemPrompt;
+        }
+        String guidance = TaskManagementGuidance.load();
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            return guidance;
+        }
+        return guidance + "\n\n" + systemPrompt;
     }
 
     private static List<Advisor> buildAdvisors(AgentProfile profile) {

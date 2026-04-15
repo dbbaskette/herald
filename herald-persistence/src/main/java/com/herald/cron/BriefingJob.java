@@ -25,6 +25,7 @@ public class BriefingJob {
     private static final Logger log = LoggerFactory.getLogger(BriefingJob.class);
     private static final int TIMEOUT_SECONDS = 10;
     static final String MORNING_BRIEFING_NAME = "morning-briefing";
+    static final String PARALLEL_MORNING_BRIEFING_NAME = "parallel-morning-briefing";
     static final String WEEKLY_REVIEW_NAME = "weekly-review";
 
     @FunctionalInterface
@@ -96,6 +97,69 @@ public class BriefingJob {
         sb.append("## Section 5 — Things You'd Want to Know Today\n");
         sb.append("Add an adaptive section with anything else relevant: upcoming deadlines, ")
                 .append("reminders, or notable context from recent conversations.\n\n");
+
+        appendFormattingInstructions(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Builds a morning briefing prompt that instructs the LLM to use parallel
+     * subagent dispatch via TaskTool's run_in_background capability.
+     * Independent research threads (weather, calendar, email) run concurrently
+     * as background subagents, then results are collected via taskOutput.
+     */
+    public String buildParallelMorningPrompt() {
+        var sb = new StringBuilder();
+
+        sb.append("You are running as a scheduled morning briefing with PARALLEL research. ");
+        sb.append("Use the `task` tool with `run_in_background: true` to dispatch ");
+        sb.append("independent research threads concurrently, then collect results ");
+        sb.append("with `taskOutput`.\n\n");
+
+        appendDateHeader(sb);
+
+        sb.append("## Parallel Dispatch Phase\n\n");
+        sb.append("Launch the following research subagents in parallel using the `task` tool ");
+        sb.append("with `run_in_background: true` for each. Use the `research` subagent type.\n\n");
+
+        int threadCount = 0;
+
+        String city = resolveCity();
+        if (webSearchAvailable && !city.isEmpty()) {
+            threadCount++;
+            sb.append("### Thread ").append(threadCount).append(": Weather\n");
+            sb.append("Dispatch: `task` with `run_in_background: true`, subagent: `research`\n");
+            sb.append("Prompt: \"Find the current weather and today's forecast for ")
+                    .append(city).append(". Return a concise summary.\"\n\n");
+        }
+
+        if (gwsChecker.isAvailable()) {
+            threadCount++;
+            sb.append("### Thread ").append(threadCount).append(": Calendar\n");
+            sb.append("Dispatch: `task` with `run_in_background: true`, subagent: `explore`\n");
+            sb.append("Prompt: \"Use calendar_events_list to list today's events and meetings ");
+            sb.append("with times. Return a formatted list.\"\n\n");
+
+            threadCount++;
+            sb.append("### Thread ").append(threadCount).append(": Email\n");
+            sb.append("Dispatch: `task` with `run_in_background: true`, subagent: `explore`\n");
+            sb.append("Prompt: \"Use gmail_search to check for flagged or important unread ");
+            sb.append("emails. Return a summary of each.\"\n\n");
+        }
+
+        sb.append("### Thread ").append(threadCount + 1).append(": Priorities\n");
+        sb.append("Dispatch: `task` with `run_in_background: true`, subagent: `explore`\n");
+        sb.append("Prompt: \"Use memory_list to surface the top 3 priorities or open items ");
+        sb.append("from memory. Return a bullet list.\"\n\n");
+
+        sb.append("## Collection Phase\n\n");
+        sb.append("After dispatching all threads, call `taskOutput` for each task ID to ");
+        sb.append("retrieve results. Wait for completion if needed.\n\n");
+
+        sb.append("## Assembly Phase\n\n");
+        sb.append("Compile all results into a single morning digest. Add an adaptive section ");
+        sb.append("with anything else relevant: upcoming deadlines, reminders, or notable ");
+        sb.append("context from recent conversations.\n\n");
 
         appendFormattingInstructions(sb);
         return sb.toString();

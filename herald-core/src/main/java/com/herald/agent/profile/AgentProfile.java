@@ -17,6 +17,8 @@ import java.util.List;
  * @param memory            whether to enable persistent memory
  * @param contextFile       path to CONTEXT.md file; nullable
  * @param maxTokens         maximum context window tokens; nullable
+ * @param taskManagement    whether to prepend the shared task-management / tool-use
+ *                          guidance snippet to the system prompt; defaults to true
  */
 public record AgentProfile(
         String name,
@@ -28,5 +30,6 @@ public record AgentProfile(
         String subagentsDirectory,
         boolean memory,
         String contextFile,
-        Integer maxTokens
+        Integer maxTokens,
+        boolean taskManagement
 ) {}

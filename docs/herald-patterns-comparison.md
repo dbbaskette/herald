@@ -1,8 +1,8 @@
 # Herald — Spring AI Agentic Patterns: Feature Comparison
 
-> How Herald adopts (and adapts) the five patterns from the spring-ai-agent-utils blog series
+> How Herald adopts (and adapts) the seven patterns from the spring-ai-agent-utils blog series
 
-**dbbaskette/herald  •  March 2026**
+**dbbaskette/herald  •  April 2026**
 
 ---
 
@@ -165,7 +165,7 @@
 
 **Blog:** The blog recommends `MAIN_AGENT_SYSTEM_PROMPT_V2` — a Claude Code-inspired system prompt template with explicit task management instructions — for best results with `TodoWriteTool`.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses a custom system prompt for Ultron (the main agent persona) that includes task management guidance, but does not directly adopt `MAIN_AGENT_SYSTEM_PROMPT_V2`. Herald's prompt is tuned for personal assistant behavior rather than code-agent behavior.
+**Herald:** ✅ **Implemented (adapted).** Herald keeps a persona-tuned Ultron prompt but now injects the mode-agnostic sections of V2 — Task Management, Professional Objectivity, parallel-tool-call guidance, Explore subagent preference, and `file_path:line_number` code references — via a shared `classpath:prompts/TASK_MANAGEMENT_GUIDANCE.md` snippet. The Ultron prompt references it through a `{task_management_guidance}` placeholder resolved at bean-build time. `agents.md` mode (generic agentic loop via `--agents=<path>`) auto-prepends the same snippet through `AgentFactory`, with opt-out via the `task_management: off` frontmatter field. Personal-assistant tone and Dan-specific context stay in the Ultron prompt only. (Issue #264)
 
 ---
 
@@ -217,7 +217,7 @@
 
 **Blog:** Multiple subagents can run concurrently. Background tasks execute asynchronously; the main agent can continue while subagents run. `TaskOutputTool` retrieves results when ready. `TaskRepository` supports persistent task storage across instances.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses `TaskTool` and `TaskOutputTool` (both wired) but has not yet exercised parallel or background subagent execution in practice. The library plumbing supports it. Parallel research flows are on the Phase 6 roadmap.
+**Herald:** ✅ **Implemented.** Herald exercises parallel subagent execution via the morning briefing flow. `BriefingJob.buildParallelMorningPrompt()` instructs the LLM to dispatch independent research threads (weather, calendar, email, priorities) as background subagents using `TaskTool` with `run_in_background: true`. Results are collected via `TaskOutputTool`. `ParallelBriefingService` provides a programmatic fan-out alternative using `DefaultTaskRepository` directly. Integration tests verify concurrent execution of 2+ subagents and measure wall-clock improvement over sequential dispatch.
 
 ---
 
@@ -293,6 +293,76 @@
 
 ---
 
+## Part 7 — Session API (Event-Sourced Short-Term Memory with Context Compaction)
+
+> A structured, event-sourced replacement for `ChatMemory`. Sessions are composed of immutable `SessionEvent`s grouped into turns (UserMessage + all following assistant/tool events up to the next user message). Compaction is pluggable (triggers + strategies), turn-safe, and multi-agent aware. Full event log is retained for keyword-searchable recall.
+>
+> **Status:** Incubating in `spring-ai-community`. Targets **Spring AI 2.1 (November 2026)**, at which point `ChatMemory` will be deprecated in favor of `SessionService` / `SessionMemoryAdvisor`. Herald currently runs on Spring AI 1.x-era `ChatMemory` APIs; the sub-sections below describe our gap and note interim approximations that can be built with existing tech.
+
+### Session / SessionEvent data model
+
+**Blog:** `Session` is an immutable metadata-only value object (id, userId, TTL, metadata). The event log lives separately. `SessionEvent` wraps a Spring AI `Message` and adds a UUID, sessionId, timestamp, optional branch label, and framework flags like `METADATA_SYNTHETIC`.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald stores history as a flat `List<Message>` via `MessageWindowChatMemory` backed by the custom `JsonChatMemoryRepository` (SQLite). There is no per-event UUID, branch label, or synthetic-event flag — messages are positional and untagged. **Interim mitigation:** none practical without adopting the new API; events identity can be approximated by storing `(conversationId, index, timestamp)` triples in SQLite, but this is throwaway work ahead of the 2.1 migration.
+
+---
+
+### Turns and turn-safe compaction boundaries
+
+**Blog:** A turn = one `UserMessage` plus every assistant/tool event up to the next `UserMessage`. All compaction strategies snap the cut point to the nearest turn boundary, guaranteeing the model never sees an orphaned tool result or a split exchange.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** `ContextCompactionAdvisor` evicts by token budget (80% of context window) with no turn awareness — it can cut between an assistant tool-call and its tool-result. **Interim mitigation:** add a turn-aware guard to `ContextCompactionAdvisor` that walks backwards from the prospective cut point to the previous `UserMessage` before eviction. Achievable with current `ChatMemory` APIs and would substantially reduce orphaned-tool-result risk until the Session API lands.
+
+---
+
+### Pluggable compaction triggers (TurnCount / TokenCount / Composite)
+
+**Blog:** Triggers are composable: `TurnCountTrigger(20)`, `TokenCountTrigger.builder().threshold(4000).build()`, and `CompositeCompactionTrigger.anyOf(...)`. Each returns a boolean on every advise call.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald has a single hard-coded token-ratio trigger (80% of `maxContextTokens`). No turn-count or composite variants. **Interim mitigation:** factor the trigger predicate out of `ContextCompactionAdvisor` behind a small `CompactionTrigger` interface with `TokenRatioTrigger` and `TurnCountTrigger` implementations — cheap to build today, directly maps onto the Session API surface when we migrate.
+
+---
+
+### Pluggable compaction strategies (SlidingWindow / TurnWindow / TokenCount / RecursiveSummarization)
+
+**Blog:** Four pluggable strategies. The first three keep a verbatim suffix (by message count, turn count, or token budget) and snap to turn boundaries. `RecursiveSummarizationCompactionStrategy` summarizes evicted events via an LLM and stores the summary as a synthetic user+assistant turn, with a configurable `overlapSize` feeding events from the active window into each summary prompt.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** `ContextCompactionAdvisor` hard-codes a single summarize-and-drop behavior: it asks `summaryModel` to summarize the evicted slice, logs the summary, and drops it from history. There is no sliding-window or turn-window variant, no overlap handling, and the summary is **not** retained as a synthetic turn — it's only logged. **Interim mitigation:** (a) persist summaries as synthetic `AssistantMessage`s with a metadata flag so they survive the next compaction pass (closest today-possible analog to `METADATA_SYNTHETIC`), and (b) add a `SlidingWindowStrategy` that simply trims the oldest N messages without summarization, selectable by config. Both are low-risk refactors that survive the 2.1 migration cleanly.
+
+---
+
+### SessionMemoryAdvisor ChatClient integration
+
+**Blog:** `SessionMemoryAdvisor` transparently loads history, prepends it to the prompt, appends the user/assistant messages, and runs compaction if a trigger fires — all without manual code. Session ID is passed per-call via the advisor context (`SESSION_ID_CONTEXT_KEY`); if missing, a new session is auto-created.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald uses two separate custom advisors: `ContextCompactionAdvisor` (runs first, evicts on token ceiling) and `OneShotMemoryAdvisor` (load-once/save-once per request, fixing the exponential-growth bug in Spring AI's `MessageChatMemoryAdvisor`). These together approximate what `SessionMemoryAdvisor` does in one bean, but the wiring is Herald-specific and cannot be directly replaced until the Session API is GA. **Interim mitigation:** none — keep the custom advisors and plan the `SessionMemoryAdvisor` swap as a single commit during the 2.1 upgrade.
+
+---
+
+### Multi-agent branch isolation
+
+**Blog:** `SessionEvent.branch` is a dot-separated path (`orch.researcher`, `orch.writer`, …) recording the producing agent's position in the hierarchy. `EventFilter.forBranch(...)` applies isolation automatically so each sub-agent sees only its own events + ancestors'. Root events (`branch == null`) are visible to all agents; synthetic summary events are always root-level.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Subagents spawned via `TaskTool` already run in isolated context windows (see Part 4), but that isolation is structural — each subagent gets its own fresh history. There is no shared session with per-branch filtering, which is the pattern needed when multiple agents must share some context but keep their working set separate. **Interim mitigation:** none worth the effort given the 2.1 migration — `TaskTool`'s hard isolation is adequate for today's Herald flows.
+
+---
+
+### Recall Storage (SessionEventTools / `conversation_search`)
+
+**Blog:** The full verbatim event log is retained even after compaction prunes events from the active prompt. `SessionEventTools` exposes a `conversation_search` tool, auto-discovered by Spring AI, that the model calls with a keyword + optional page index to retrieve prior exchanges (MemGPT Recall Storage pattern). Synthetic summary events are indexed too.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald's compaction *drops* evicted messages from history entirely — only the generated summary is kept (and only in the log, not as a searchable artifact). The LLM cannot recall a specific prior exchange. **Interim mitigation:** (a) change `ContextCompactionAdvisor` to archive evicted messages into a new `conversation_archive` table instead of dropping them, and (b) register a `conversationSearch` tool backed by SQLite FTS5 over that table. This is a genuinely useful interim capability since it gives Herald MemGPT-style recall today without waiting for 2.1.
+
+---
+
+### JDBC Persistence (spring-ai-session-jdbc)
+
+**Blog:** `spring-ai-session-jdbc` provides two-table persistence (`AI_SESSION` + append-only `AI_SESSION_EVENT`) with PostgreSQL / MySQL / MariaDB / H2 support, auto-configured by `spring-ai-starter-session-jdbc`. Optimistic CAS writes across all implementations.
+
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald uses its own `JsonChatMemoryRepository` storing messages as JSON blobs in SQLite under the `conversation_memory` table — a single-table layout without an append-only event log or optimistic CAS. Adequate for single-user operation but diverges from the 2.1 schema. **Interim mitigation:** none worth doing pre-GA; plan a schema migration (copy `conversation_memory` → `AI_SESSION_EVENT`) as part of the 2.1 upgrade.
+
+---
+
 ## Herald-Specific Additions — Beyond the Blog Series
 
 > Herald extends the blog series architecture with capabilities specific to a personal assistant context. These are not covered in the five-part series.
@@ -359,10 +429,11 @@
 |---|---|---|---|---|
 | Part 1: Agent Skills | 7 | 5 (format, discovery, matching, classpath, native Skills) | 4 (execution w/ guardrails, hot reload, self-teaching, HITL) | — |
 | Part 2: AskUserQuestion | 4 | 5 (core, handler, async bridge, Telegram handler, MCP Elicitation) | — | — |
-| Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | — | 1 (custom system prompt) |
-| Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |
+| Part 3: TodoWrite | 5 | 5 (decomp, lifecycle, events, memory, system-prompt guidance) | — | — |
+| Part 4: Subagents | 6 | 6 (provider, format, context, multi-model, built-in agents, parallel/background) | 1 (research subagent) | — |
 | Part 5: A2A Protocol | 4 | — | 2 (LLM-driven routing, A2A Client) | 2 (AgentCard format, A2A Server) |
 | Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) |
+| Part 7: Session API | 8 | — | — | 8 (data model, turn-safety, triggers, strategies, advisor, branch isolation, recall, JDBC) — **requires Spring AI 2.1** |
 | Herald-Only Extensions | N/A | — | 6 (advisor chain, cron, MCP, runtime model switch, console, shell guardrails) | — |
 
 ---

@@ -34,6 +34,7 @@ The frontmatter is optional. If omitted, all fields use their defaults. The mark
 | memory | boolean | no | `false` | Enable persistent memory across sessions |
 | context_file | string | no | — | Path to a `CONTEXT.md` file injected into the system prompt |
 | max_tokens | integer | no | — | Maximum context window size in tokens |
+| task_management | boolean | no | `true` | Prepend Herald's shared task-management / tool-use guidance (TodoWrite discipline, parallel tool calls, objectivity) to the system prompt. Set to `false` (or `off`) to opt out when your agent's prompt deliberately defines its own workflow rules. |
 
 ## Tool Categories
 
@@ -102,6 +103,7 @@ The `model` field accepts short aliases (e.g., `sonnet`, `opus`, `haiku`) which 
 - `memory` — Herald persistent memory toggle
 - `context_file` — injecting an external CONTEXT.md
 - `max_tokens` — explicit context window control
+- `task_management` — opt-out toggle for Herald's shared task-management / tool-use guidance
 
 A file valid as a `.claude/agents/*.md` subagent definition is also a valid `agents.md` for Herald's ephemeral mode, though Herald-specific features will be absent unless the additional fields are present.
 
@@ -159,6 +161,7 @@ subagents_directory: ./subagents
 memory: true
 context_file: ./CONTEXT.md
 max_tokens: 100000
+task_management: true
 ---
 You are a fully equipped agent with access to the filesystem, shell,
 web, skills, subagents, persistent memory, and user interaction tools.

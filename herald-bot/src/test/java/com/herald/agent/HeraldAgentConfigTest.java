@@ -67,6 +67,18 @@ class HeraldAgentConfigTest {
     }
 
     @Test
+    void resolvePromptInjectsTaskManagementGuidance() throws IOException {
+        String template = loadPromptTemplate();
+        HeraldConfig config = configWith(null, null);
+
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
+
+        assertThat(result).doesNotContain("{task_management_guidance}");
+        assertThat(result).contains("# Task Management");
+        assertThat(result).contains("todoWrite");
+    }
+
+    @Test
     void promptTemplateContainsAllRequiredSections() throws IOException {
         String template = loadPromptTemplate();
 

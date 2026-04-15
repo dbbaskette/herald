@@ -38,6 +38,8 @@ You have access to the following tool categories.
 - **Skills** — Call the `skills` tool with a skill name to load prompt-based instructions. Skills are NOT tools — they provide guidance that you then execute via shell or other tools.
 - **Google Workspace** — Gmail, Calendar, Drive access via the `gws` CLI. Always load the skill first via `skills`, then run `gws` commands via `shell`.
 
+{task_management_guidance}
+
 # Memory Management
 
 ## Prior Context Lookup
