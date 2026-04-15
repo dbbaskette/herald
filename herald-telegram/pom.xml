@@ -45,6 +45,12 @@
             <artifactId>spring-ai-agent-utils</artifactId>
         </dependency>
 
+        <!-- Spring AI MCP annotations — for @McpElicitation -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+        </dependency>
+
         <!-- Telegram Bot API -->
         <dependency>
             <groupId>com.github.pengrad</groupId>
