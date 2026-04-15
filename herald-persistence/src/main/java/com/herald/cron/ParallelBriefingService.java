@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springaicommunity.agent.tools.task.repository.BackgroundTask;
 import org.springaicommunity.agent.tools.task.repository.TaskRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -28,10 +29,20 @@ public class ParallelBriefingService {
     private final HeraldConfig config;
     private final boolean webSearchAvailable;
 
+    // Spring wiring constructor — reads web search API key and derives the boolean
     public ParallelBriefingService(TaskRepository taskRepository,
-                                    GwsAvailabilityChecker gwsChecker,
-                                    HeraldConfig config,
-                                    boolean webSearchAvailable) {
+                                   GwsAvailabilityChecker gwsChecker,
+                                   HeraldConfig config,
+                                   @Value("${herald.web.search-api-key:}") String webSearchApiKey) {
+        this(taskRepository, gwsChecker, config,
+             webSearchApiKey != null && !webSearchApiKey.isBlank());
+    }
+
+    // Package-private: used by tests only
+    ParallelBriefingService(TaskRepository taskRepository,
+                            GwsAvailabilityChecker gwsChecker,
+                            HeraldConfig config,
+                            boolean webSearchAvailable) {
         this.taskRepository = taskRepository;
         this.gwsChecker = gwsChecker;
         this.config = config;
@@ -93,7 +104,7 @@ public class ParallelBriefingService {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("Interrupted while waiting for task {}", id);
-                results.add("[Task " + id + " timed out]");
+                results.add("[Task " + id + " interrupted]");
             }
         }
         return results;

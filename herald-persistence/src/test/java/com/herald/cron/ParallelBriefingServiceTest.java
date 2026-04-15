@@ -68,6 +68,45 @@ class ParallelBriefingServiceTest {
         List<String> results = service.collectResults(taskIds, 5000);
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0)).isNotBlank();
+        assertThat(results.get(0)).isEqualTo(
+            "Use memory_list to surface the top 3 priorities or open items from memory. " +
+            "Return a bullet list.");
+    }
+
+    @Test
+    void collectResultsReturnsErrorSentinelWhenTaskFails() throws Exception {
+        var taskRepo = new DefaultTaskRepository();
+        var gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
+
+        var service = new ParallelBriefingService(taskRepo, gwsChecker, config, false);
+
+        // Manually register a task that throws, bypassing dispatchResearchThreads
+        String failId = "briefing-fail-test";
+        taskRepo.putTask(failId, () -> { throw new RuntimeException("simulated failure"); });
+
+        List<String> results = service.collectResults(List.of(failId), 5000);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0)).contains("failed");
+        assertThat(results.get(0)).contains(failId);
+    }
+
+    @Test
+    void collectResultsReturnsNotFoundSentinelForUnknownTaskId() {
+        var taskRepo = new DefaultTaskRepository();
+        var gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
+
+        var service = new ParallelBriefingService(taskRepo, gwsChecker, config, false);
+
+        List<String> results = service.collectResults(List.of("nonexistent-task-id"), 5000);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0)).contains("not found");
     }
 }
