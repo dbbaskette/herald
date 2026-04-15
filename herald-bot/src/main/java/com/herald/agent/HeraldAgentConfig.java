@@ -46,7 +46,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -122,8 +124,18 @@ public class HeraldAgentConfig {
 
     @Bean
     public ReloadableSkillsTool reloadableSkillsTool(
-            @Value("${herald.agent.skills-directory:skills}") String skillsDirectory) {
-        return new ReloadableSkillsTool(skillsDirectory);
+            @Value("${herald.agent.skills-directory:skills}") String skillsDirectory,
+            ResourcePatternResolver resourceResolver) throws IOException {
+        Resource[] skillMdFiles = resourceResolver.getResources("classpath:skills/*/SKILL.md");
+        List<Resource> classpathSkillDirs = new ArrayList<>();
+        for (Resource r : skillMdFiles) {
+            try {
+                classpathSkillDirs.add(new FileSystemResource(r.getFile().getParentFile()));
+            } catch (IOException e) {
+                log.warn("Could not resolve classpath skill resource to filesystem: {}", r, e);
+            }
+        }
+        return new ReloadableSkillsTool(skillsDirectory, classpathSkillDirs);
     }
 
     @Bean
