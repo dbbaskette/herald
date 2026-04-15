@@ -214,7 +214,7 @@
 
 **Blog:** `spring-ai-a2a-server-autoconfigure` auto-exposes: `POST /` (JSON-RPC sendMessage), `GET /.well-known/agent-card.json`, `GET /card`. `DefaultAgentExecutor` bridges A2A SDK and Spring AI `ChatClient`.
 
-**Herald:** ⏳ **Planned.** Herald does not currently expose an A2A server endpoint. It runs as a single-user Telegram bot with no inter-agent communication need today. A2A server exposure is planned for potential integration with other agents in the Tanzu demo ecosystem (e.g., Worldmind).
+**Herald:** ⏳ **Planned.** Herald does not currently expose an A2A server endpoint. It runs as a single-user Telegram bot. A2A server exposure is planned for potential integration with other agents in the Tanzu demo ecosystem.
 
 ---
 
@@ -222,7 +222,7 @@
 
 **Blog:** A2A clients fetch `AgentCard`s at startup from configured URLs, then register a `sendMessage` `@Tool` with the `ChatClient`. The LLM decides which remote agent to call based on `AgentCard` descriptions. Uses A2A Java SDK Client for HTTP communication.
 
-**Herald:** ⏳ **Planned.** Herald does not currently act as an A2A client. Remote agent delegation is performed via `TaskTool` (subagents in-process) rather than over A2A protocol. A2A client support is planned for cross-agent workflows.
+**Herald:** 〜 **Partial / Custom Variant.** Herald acts as an A2A client but integrates it into the existing `TaskTool` delegation flow rather than a standalone `sendMessage` tool. Configured A2A agents from `herald.yaml` are loaded as `SubagentReference` instances with `A2ASubagentDefinition.KIND`. The `A2ASubagentResolver` fetches their `AgentCard` lazily on first invocation, and `A2ASubagentExecutor` handles the cross-agent HTTP communication.
 
 ---
 
@@ -230,7 +230,7 @@
 
 **Blog:** `AgentCard` is a standardized JSON document declaring: name, description, URL, version, capabilities, skills (with examples), and protocol version. Exposed at `/.well-known/agent-card.json` per A2A spec.
 
-**Herald:** ⏳ **Planned.** No `AgentCard` defined for Herald yet. When A2A support is added, Herald's card would describe its personal assistant capabilities, Telegram interface, and available tools as A2A skills.
+**Herald:** 〜 **Partial / Custom Variant.** Herald consumes `AgentCard`s via `A2ASubagentResolver` but does not produce one itself since it lacks the A2A server component.
 
 ---
 
@@ -238,7 +238,43 @@
 
 **Blog:** With A2A, the host agent's LLM selects which remote agents to invoke based on their `AgentCard` descriptions — the same semantic matching pattern as Skills and Subagents. Enables routing across agents on different stacks (Python, Node, Java, etc.).
 
-**Herald:** ⏳ **Planned.** This pattern is architecturally consistent with Herald's existing delegation approach (Skills semantic match → Subagent dispatch → A2A remote dispatch). Adopting A2A would extend the same delegation chain to remote agents.
+**Herald:** ✅ **Implemented.** A2A agents are seamlessly blended with local subagents in `TaskTool`. The main agent evaluates both local subagent definitions and remote A2A `AgentCard` descriptions to decide where to route tasks.
+
+---
+
+## Part 6 — AutoMemoryTools (Persistent Agent Memory Across Sessions)
+
+> File-based long-term memory that persists across sessions, inspired by Claude Code. The agent writes only facts worth keeping (user preferences, project decisions) into a sandboxed directory with a `MEMORY.md` index.
+
+### Memory System Prompt
+
+**Blog:** Two variants ship in the jar: `AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md` (Options A & B) and `AUTO_MEMORY_FILESYSTEM_TOOLS_SYSTEM_PROMPT.md` (Option C). They instruct the model to read `MEMORY.md` at startup, apply 4 memory types, and use a two-step save process.
+
+**Herald:** ✅ **Implemented.** Uses `AUTO_MEMORY_SYSTEM_PROMPT.md` (equivalent variant) injected by the `AutoMemoryToolsAdvisor`.
+
+---
+
+### Memory Operations and Sandbox
+
+**Blog:** `AutoMemoryTools` provides six purpose-named, sandboxed operations (`MemoryView`, `MemoryCreate`, `MemoryStrReplace`, `MemoryInsert`, `MemoryDelete`, `MemoryRename`) scoped to a configured memory directory. Option C uses generic `FileSystemTools`.
+
+**Herald:** ✅ **Implemented.** Herald uses Options A (sandboxed `AutoMemoryTools`). The 6 tools are dynamically registered per-request by the advisor.
+
+---
+
+### Integration Approach (Options A, B, C)
+
+**Blog:** Option A: zero-boilerplate `AutoMemoryToolsAdvisor`. Option B: Manual setup wiring `AutoMemoryTools` and prompt. Option C: `FileSystemTools` and `ShellTools` with convention-based memory.
+
+**Herald:** ✅ **Implemented.** Herald uses **Option A** (`AutoMemoryToolsAdvisor`). It drops the advisor into the chain at `HIGHEST_PRECEDENCE + 100`, which handles injecting the prompt and registering the 6 tools. (Replaced Herald's previous custom `MemoryMdAdvisor` and SQLite implementation).
+
+---
+
+### Memory Consolidation
+
+**Blog:** `AutoMemoryToolsAdvisor` accepts a `memoryConsolidationTrigger` predicate. When `true`, it injects a consolidation reminder into the system prompt to merge duplicates and drop outdated facts.
+
+**Herald:** ↗ **Intentional Divergence.** Herald configures the trigger as `(req, instant) -> false`. It relies on manual or proactive (Cron) consolidation rather than injecting a silent automatic trigger on random user requests, keeping generation latency predictable.
 
 ---
 
@@ -256,17 +292,9 @@
 |---|---|
 | `DateTimePromptAdvisor` | Current date/time and timezone into system prompt placeholders |
 | `ContextMdAdvisor` | Standing brief from `~/.herald/CONTEXT.md`, re-read on every turn |
-| `MemoryBlockAdvisor` | All persistent key/value memories from SQLite |
+| `AutoMemoryToolsAdvisor` | All persistent file-based memories |
 | `ContextCompactionAdvisor` | Auto-compacts conversation history when approaching token limits |
 | `OneShotMemoryAdvisor` | JDBC-backed conversation history (windowed, 100 messages) — loads/saves once per request, not per tool-call iteration |
-
----
-
-### Persistent Memory (JDBC / SQLite)
-
-**Blog:** The blog series uses in-memory or session state. No persistent cross-session memory is discussed.
-
-**Herald:** ↗ **Herald Extension.** `MemoryTools` (`@Tool` beans) allow the agent to read, write, and delete key/value memory entries stored in SQLite. Memory survives restarts and is injected into every prompt via `MemoryBlockAdvisor`. Accessible via `/memory` Telegram commands.
 
 ---
 
@@ -318,9 +346,10 @@
 | Part 2: AskUserQuestion | 4 | 3 (core, handler, async bridge) | 1 (Telegram handler) | — | 1 (MCP Elicitation) |
 | Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | 1 (custom system prompt) | — | — |
 | Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | — | 1 (research subagent) | 1 (parallel/background) |
-| Part 5: A2A Protocol | 4 | — | — | — | 4 (all A2A features) |
-| Herald-Only Extensions | N/A | — | — | 7 (advisor chain, memory, cron, MCP, runtime model switch, console, shell guardrails) | — |
+| Part 5: A2A Protocol | 4 | 1 (LLM-driven routing) | 2 (A2A Client, AgentCard format) | — | 1 (A2A Server) |
+| Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) | — |
+| Herald-Only Extensions | N/A | — | — | 6 (advisor chain, cron, MCP, runtime model switch, console, shell guardrails) | — |
 
 ---
 
-*Document generated March 2026 • dbbaskette/herald*
+*Document generated April 2026 • dbbaskette/herald*
