@@ -26,6 +26,18 @@ spring:
         repository:
           jdbc:
             initialize-schema: never  # Schema managed by DataSourceInitializer via schema.sql
+    mcp:
+      client:
+        enabled: ${HERALD_MCP_CLIENT_ENABLED:false}
+        type: SYNC
+        toolcallback:
+          enabled: true
+        sse:
+          connections:
+            google-calendar:
+              url: ${GCAL_MCP_URL:}
+            gmail:
+              url: ${GMAIL_MCP_URL:}
 
 herald:
   memory:
