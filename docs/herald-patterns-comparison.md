@@ -8,9 +8,8 @@
 
 **Legend:**
 - ✅ **Implemented** — exact match to the blog pattern
-- 〜 **Partial / Custom Variant** — adopted but with meaningful differences
-- ⏳ **Planned** — on the roadmap, not yet done
-- ↗ **Intentional Divergence** — Herald went a different direction by design
+- ➕ **Enhanced** — improved or extended beyond the blog pattern
+- ➖ **Not Fully Implemented** — planned, partial, or diverges from full compliance
 
 ---
 
@@ -46,7 +45,7 @@
 
 **Blog:** On invocation, `SkillsTool` loads the full `SKILL.md` content. The LLM can then use `FileSystemTools` (Read) and `ShellTools` (Bash) to access referenced files or run bundled scripts.
 
-**Herald:** 〜 **Partial / Custom Variant.** Full `SKILL.md` content is loaded on invocation. `FileSystemTools` and `ShellTools` are registered and available. However, script execution is mediated through `HeraldShellDecorator`, which enforces security guardrails before any shell call.
+**Herald:** ➕ **Enhanced.** Full `SKILL.md` content is loaded on invocation. `FileSystemTools` and `ShellTools` are registered and available. However, script execution is mediated through `HeraldShellDecorator`, which enforces security guardrails before any shell call.
 
 ---
 
@@ -54,7 +53,7 @@
 
 **Blog:** The blog series does not describe hot reload. Skills are loaded at startup and re-read from disk on invocation, but no filesystem watch mechanism is specified.
 
-**Herald:** ↗ **Intentional Divergence.** Herald adds `ReloadableSkillsTool`, which wraps `SkillsTool` with a `WatchService` filesystem monitor. Changes to `skills/` trigger a 250ms debounced reload — no bot restart needed. Also accessible via `/skills reload` Telegram command.
+**Herald:** ➕ **Enhanced.** Herald adds `ReloadableSkillsTool`, which wraps `SkillsTool` with a `WatchService` filesystem monitor. Changes to `skills/` trigger a 250ms debounced reload — no bot restart needed. Also accessible via `/skills reload` Telegram command.
 
 ---
 
@@ -62,7 +61,7 @@
 
 **Blog:** `SkillsTool` supports `addSkillsResource()` using Spring's `Resource` abstraction for classpath loading, useful when distributing skills as part of a JAR/WAR deployment.
 
-**Herald:** ⏳ **Planned.** Herald loads skills from the filesystem only (`skills/`). Classpath loading is not currently implemented. Since Herald runs locally on macOS, this is a lower-priority gap.
+**Herald:** ➖ **Not Fully Implemented.** Herald loads skills from the filesystem only (`skills/`). Classpath loading is not currently implemented. Since Herald runs locally on macOS, this is a lower-priority gap.
 
 ---
 
@@ -70,7 +69,7 @@
 
 **Blog:** The blog distinguishes Generic Agent Skills (local, model-agnostic) from Anthropic's native Skills API (cloud-sandboxed, pre-built document generation, Anthropic-only). Both can coexist in the same application.
 
-**Herald:** ⏳ **Planned.** Herald uses Generic Agent Skills only. Anthropic's native Skills API (Excel/PowerPoint/Word generation in sandboxed containers) is not yet wired in.
+**Herald:** ➖ **Not Fully Implemented.** Herald uses Generic Agent Skills only. Anthropic's native Skills API (Excel/PowerPoint/Word generation in sandboxed containers) is not yet wired in.
 
 ---
 
@@ -78,7 +77,7 @@
 
 **Blog:** The blog treats skills as pre-authored files created by humans. It does not describe agents writing their own skills.
 
-**Herald:** ⏳ **Planned.** Since the agent has file system access and `ReloadableSkillsTool` instantly hot-reloads on file changes, the agent can be instructed to write its own `SKILL.md` files to the `skills/` directory (e.g., "save that workflow as a skill"). This allows the assistant to permanently "learn" new capabilities without human coding.
+**Herald:** ➖ **Not Fully Implemented.** Since the agent has file system access and `ReloadableSkillsTool` instantly hot-reloads on file changes, the agent can be instructed to write its own `SKILL.md` files to the `skills/` directory (e.g., "save that workflow as a skill"). This allows the assistant to permanently "learn" new capabilities without human coding.
 
 ---
 
@@ -86,7 +85,7 @@
 
 **Blog:** Explicitly notes the "No Human-in-the-Loop" limitation, stating there is no built-in mechanism to require human approval before executing skills or bundled scripts.
 
-**Herald:** ⏳ **Planned.** Introduce a `requires_approval: true` frontmatter field for skills. A `ToolCallback` wrapper will intercept the skill invocation, use the `TelegramQuestionHandler` to push an interactive "Approve / Deny" button to the user's Telegram, and block execution until explicitly approved.
+**Herald:** ➖ **Not Fully Implemented.** Introduce a `requires_approval: true` frontmatter field for skills. A `ToolCallback` wrapper will intercept the skill invocation, use the `TelegramQuestionHandler` to push an interactive "Approve / Deny" button to the user's Telegram, and block execution until explicitly approved.
 
 ---
 
@@ -122,7 +121,7 @@
 
 **Blog:** `AskUserQuestionTool` is the agent-local analog of MCP Elicitation. The blog notes Spring AI also supports `@McpElicitation` for server-driven scenarios. `AskUserQuestionTool` does not require an MCP server.
 
-**Herald:** ⏳ **Planned.** Herald uses the agent-local `AskUserQuestionTool` pattern. `@McpElicitation` / MCP server-driven elicitation is not yet implemented, but Herald's existing MCP client connections (Calendar, Gmail) could support it in future.
+**Herald:** ➖ **Not Fully Implemented.** Herald uses the agent-local `AskUserQuestionTool` pattern. `@McpElicitation` / MCP server-driven elicitation is not yet implemented, but Herald's existing MCP client connections (Calendar, Gmail) could support it in future.
 
 ---
 
@@ -166,7 +165,7 @@
 
 **Blog:** The blog recommends `MAIN_AGENT_SYSTEM_PROMPT_V2` — a Claude Code-inspired system prompt template with explicit task management instructions — for best results with `TodoWriteTool`.
 
-**Herald:** 〜 **Partial / Custom Variant.** Herald uses a custom system prompt for Ultron (the main agent persona) that includes task management guidance, but does not directly adopt `MAIN_AGENT_SYSTEM_PROMPT_V2`. Herald's prompt is tuned for personal assistant behavior rather than code-agent behavior.
+**Herald:** ➖ **Not Fully Implemented.** Herald uses a custom system prompt for Ultron (the main agent persona) that includes task management guidance, but does not directly adopt `MAIN_AGENT_SYSTEM_PROMPT_V2`. Herald's prompt is tuned for personal assistant behavior rather than code-agent behavior.
 
 ---
 
@@ -218,7 +217,7 @@
 
 **Blog:** Multiple subagents can run concurrently. Background tasks execute asynchronously; the main agent can continue while subagents run. `TaskOutputTool` retrieves results when ready. `TaskRepository` supports persistent task storage across instances.
 
-**Herald:** ⏳ **Planned.** Herald uses `TaskTool` and `TaskOutputTool` (both wired) but has not yet exercised parallel or background subagent execution in practice. The library plumbing supports it. Parallel research flows are on the Phase 6 roadmap.
+**Herald:** ➖ **Not Fully Implemented.** Herald uses `TaskTool` and `TaskOutputTool` (both wired) but has not yet exercised parallel or background subagent execution in practice. The library plumbing supports it. Parallel research flows are on the Phase 6 roadmap.
 
 ---
 
@@ -230,7 +229,7 @@
 
 **Blog:** `spring-ai-a2a-server-autoconfigure` auto-exposes: `POST /` (JSON-RPC sendMessage), `GET /.well-known/agent-card.json`, `GET /card`. `DefaultAgentExecutor` bridges A2A SDK and Spring AI `ChatClient`.
 
-**Herald:** ⏳ **Planned.** Herald does not currently expose an A2A server endpoint. It runs as a single-user Telegram bot. A2A server exposure is planned for potential integration with other agents in the Tanzu demo ecosystem.
+**Herald:** ➖ **Not Fully Implemented.** Herald does not currently expose an A2A server endpoint. It runs as a single-user Telegram bot. A2A server exposure is planned for potential integration with other agents in the Tanzu demo ecosystem.
 
 ---
 
@@ -238,7 +237,7 @@
 
 **Blog:** A2A clients fetch `AgentCard`s at startup from configured URLs, then register a `sendMessage` `@Tool` with the `ChatClient`. The LLM decides which remote agent to call based on `AgentCard` descriptions. Uses A2A Java SDK Client for HTTP communication.
 
-**Herald:** 〜 **Partial / Custom Variant.** Herald acts as an A2A client but integrates it into the existing `TaskTool` delegation flow rather than a standalone `sendMessage` tool. Configured A2A agents from `herald.yaml` are loaded as `SubagentReference` instances with `A2ASubagentDefinition.KIND`. The `A2ASubagentResolver` fetches their `AgentCard` lazily on first invocation, and `A2ASubagentExecutor` handles the cross-agent HTTP communication.
+**Herald:** ➕ **Enhanced.** Herald acts as an A2A client but integrates it into the existing `TaskTool` delegation flow rather than a standalone `sendMessage` tool. Configured A2A agents from `herald.yaml` are loaded as `SubagentReference` instances with `A2ASubagentDefinition.KIND`. The `A2ASubagentResolver` fetches their `AgentCard` lazily on first invocation, and `A2ASubagentExecutor` handles the cross-agent HTTP communication.
 
 ---
 
@@ -246,7 +245,7 @@
 
 **Blog:** `AgentCard` is a standardized JSON document declaring: name, description, URL, version, capabilities, skills (with examples), and protocol version. Exposed at `/.well-known/agent-card.json` per A2A spec.
 
-**Herald:** 〜 **Partial / Custom Variant.** Herald consumes `AgentCard`s via `A2ASubagentResolver` but does not produce one itself since it lacks the A2A server component.
+**Herald:** ➖ **Not Fully Implemented.** Herald consumes `AgentCard`s via `A2ASubagentResolver` but does not produce one itself since it lacks the A2A server component.
 
 ---
 
@@ -254,7 +253,7 @@
 
 **Blog:** With A2A, the host agent's LLM selects which remote agents to invoke based on their `AgentCard` descriptions — the same semantic matching pattern as Skills and Subagents. Enables routing across agents on different stacks (Python, Node, Java, etc.).
 
-**Herald:** ✅ **Implemented.** A2A agents are seamlessly blended with local subagents in `TaskTool`. The main agent evaluates both local subagent definitions and remote A2A `AgentCard` descriptions to decide where to route tasks.
+**Herald:** ➕ **Enhanced.** A2A agents are seamlessly blended with local subagents in `TaskTool`. The main agent evaluates both local subagent definitions and remote A2A `AgentCard` descriptions to decide where to route tasks.
 
 ---
 
@@ -290,7 +289,7 @@
 
 **Blog:** `AutoMemoryToolsAdvisor` accepts a `memoryConsolidationTrigger` predicate. When `true`, it injects a consolidation reminder into the system prompt to merge duplicates and drop outdated facts.
 
-**Herald:** ↗ **Intentional Divergence.** Herald configures the trigger as `(req, instant) -> false`. It relies on manual or proactive (Cron) consolidation rather than injecting a silent automatic trigger on random user requests, keeping generation latency predictable.
+**Herald:** ➖ **Not Fully Implemented.** Herald configures the trigger as `(req, instant) -> false`. It relies on manual or proactive (Cron) consolidation rather than injecting a silent automatic trigger on random user requests, keeping generation latency predictable.
 
 ---
 
@@ -302,7 +301,7 @@
 
 **Blog:** The blog series mentions `AgentEnvironment` for runtime context injection but does not prescribe a multi-advisor chain pattern.
 
-**Herald:** ↗ **Herald Extension.** A 5-layer `CallAdvisor` chain enriches every prompt:
+**Herald:** ➕ **Enhanced.** A 5-layer `CallAdvisor` chain enriches every prompt:
 
 | Advisor | What It Injects |
 |---|---|
@@ -318,7 +317,7 @@
 
 **Blog:** The blog series covers reactive agent patterns only — agents respond to user input.
 
-**Herald:** ↗ **Herald Extension.** A `CronService` runs agent prompts on schedules. Morning briefings, reminders, and other proactive outreach are defined as cron jobs in SQLite, manageable via `/cron` commands or the Vue 3 console. The agent initiates Telegram messages without user input.
+**Herald:** ➕ **Enhanced.** A `CronService` runs agent prompts on schedules. Morning briefings, reminders, and other proactive outreach are defined as cron jobs in SQLite, manageable via `/cron` commands or the Vue 3 console. The agent initiates Telegram messages without user input.
 
 ---
 
@@ -326,7 +325,7 @@
 
 **Blog:** The blog series notes that Agent Skills work well with Spring AI MCP features, but does not implement MCP client connections as part of the pattern set.
 
-**Herald:** ↗ **Herald Extension.** Herald connects to Google Calendar and Gmail as MCP servers via `GCAL_MCP_URL` and `GMAIL_MCP_URL` configuration. Tools from these servers are available for reading/writing calendar events and email. `GwsTools` also provides an alternative path via the `gws` CLI.
+**Herald:** ➕ **Enhanced.** Herald connects to Google Calendar and Gmail as MCP servers via `GCAL_MCP_URL` and `GMAIL_MCP_URL` configuration. Tools from these servers are available for reading/writing calendar events and email. `GwsTools` also provides an alternative path via the `gws` CLI.
 
 ---
 
@@ -334,7 +333,7 @@
 
 **Blog:** The blog series covers model routing for subagents (via multi-model `TaskToolCallbackProvider`). The main agent model is fixed at configuration time.
 
-**Herald:** ↗ **Herald Extension.** The main agent's model can be switched at runtime via `/model <provider> <model>`. The override is persisted in SQLite and survives restarts. Supports switching between Anthropic, OpenAI, Ollama, and Gemini without redeployment.
+**Herald:** ➕ **Enhanced.** The main agent's model can be switched at runtime via `/model <provider> <model>`. The override is persisted in SQLite and survives restarts. Supports switching between Anthropic, OpenAI, Ollama, and Gemini without redeployment.
 
 ---
 
@@ -342,7 +341,7 @@
 
 **Blog:** The blog series does not address operational tooling or management interfaces.
 
-**Herald:** ↗ **Herald Extension.** A separate `herald-ui` service (Spring Boot + Vue 3 + Tailwind) exposes a management console at port 8080. Features: skills editor, memory viewer/editor, cron job manager, conversation history viewer, SSE-driven live status. Shares the same SQLite database as `herald-bot`.
+**Herald:** ➕ **Enhanced.** A separate `herald-ui` service (Spring Boot + Vue 3 + Tailwind) exposes a management console at port 8080. Features: skills editor, memory viewer/editor, cron job manager, conversation history viewer, SSE-driven live status. Shares the same SQLite database as `herald-bot`.
 
 ---
 
@@ -350,21 +349,21 @@
 
 **Blog:** The blog series notes script execution runs without sandboxing, recommending containerization for safety. No built-in guardrails are described.
 
-**Herald:** ↗ **Herald Extension.** All shell execution is wrapped in `HeraldShellDecorator`, which enforces an allowlist/denylist of commands, rate limits, and command logging before passing to `ShellTools`. Herald's alternative to full containerization, appropriate for a single-user personal assistant.
+**Herald:** ➕ **Enhanced.** All shell execution is wrapped in `HeraldShellDecorator`, which enforces an allowlist/denylist of commands, rate limits, and command logging before passing to `ShellTools`. Herald's alternative to full containerization, appropriate for a single-user personal assistant.
 
 ---
 
 ## Summary — Pattern Coverage at a Glance
 
-| Pattern | Blog Features | ✅ Adopted | 〜 Custom Variant | ↗ Herald-Only | ⏳ Planned |
-|---|---|---|---|---|---|
-| Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 1 (execution w/ guardrails) | 1 (hot reload) | 4 (classpath, native Skills, self-teaching, HITL) |
-| Part 2: AskUserQuestion | 4 | 3 (core, handler, async bridge) | 1 (Telegram handler) | — | 1 (MCP Elicitation) |
-| Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | 1 (custom system prompt) | — | — |
-| Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | — | 1 (research subagent) | 1 (parallel/background) |
-| Part 5: A2A Protocol | 4 | 1 (LLM-driven routing) | 2 (A2A Client, AgentCard format) | — | 1 (A2A Server) |
-| Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) | — |
-| Herald-Only Extensions | N/A | — | — | 6 (advisor chain, cron, MCP, runtime model switch, console, shell guardrails) | — |
+| Pattern | Blog Features | ✅ Adopted | ➕ Enhanced | ➖ Not Fully Implemented |
+|---|---|---|---|---|
+| Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 2 (execution w/ guardrails, hot reload) | 4 (classpath, native Skills, self-teaching, HITL) |
+| Part 2: AskUserQuestion | 4 | 4 (core, handler, async bridge, Telegram handler) | — | 1 (MCP Elicitation) |
+| Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | — | 1 (custom system prompt) |
+| Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |
+| Part 5: A2A Protocol | 4 | — | 2 (LLM-driven routing, A2A Client) | 2 (AgentCard format, A2A Server) |
+| Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) |
+| Herald-Only Extensions | N/A | — | 6 (advisor chain, cron, MCP, runtime model switch, console, shell guardrails) | — |
 
 ---
 
