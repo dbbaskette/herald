@@ -25,7 +25,8 @@ class AgentProfileParserTest {
                 null,   // subagentsDirectory
                 false,  // memory
                 "./CONTEXT.md",
-                200_000
+                200_000,
+                true    // taskManagement
         );
 
         assertThat(profile.name()).isEqualTo("cf-analyzer");
@@ -159,6 +160,53 @@ class AgentProfileParserTest {
         assertThat(result.profile().name()).isEqualTo("file-agent");
         assertThat(result.profile().memory()).isTrue();
         assertThat(result.systemPrompt()).isEqualTo("You are loaded from a file.");
+    }
+
+    @Test
+    void taskManagementDefaultsToTrue() {
+        String content = """
+                ---
+                name: test
+                description: test
+                ---
+
+                prompt
+                """;
+
+        AgentProfileParser.Result result = AgentProfileParser.parse(content);
+        assertThat(result.profile().taskManagement()).isTrue();
+    }
+
+    @Test
+    void taskManagementHonorsExplicitFalse() {
+        String content = """
+                ---
+                name: test
+                description: test
+                task_management: false
+                ---
+
+                prompt
+                """;
+
+        AgentProfileParser.Result result = AgentProfileParser.parse(content);
+        assertThat(result.profile().taskManagement()).isFalse();
+    }
+
+    @Test
+    void taskManagementHonorsOffToken() {
+        String content = """
+                ---
+                name: test
+                description: test
+                task_management: off
+                ---
+
+                prompt
+                """;
+
+        AgentProfileParser.Result result = AgentProfileParser.parse(content);
+        assertThat(result.profile().taskManagement()).isFalse();
     }
 
     @Test

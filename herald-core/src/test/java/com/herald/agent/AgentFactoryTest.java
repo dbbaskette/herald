@@ -18,7 +18,7 @@ class AgentFactoryTest {
     @Test
     void buildsClientFromMinimalProfile() {
         var profile = new AgentProfile("test", "A test agent", "sonnet", null,
-                List.of("filesystem", "web"), null, null, false, null, null);
+                List.of("filesystem", "web"), null, null, false, null, null, true);
 
         ChatClient client = AgentFactory.fromProfile(profile, "You are a test agent.",
                 mock(ChatModel.class));
@@ -51,7 +51,7 @@ class AgentFactoryTest {
     @Test
     void buildsClientWithNoTools() {
         var profile = new AgentProfile("bare", "Bare agent", null, null,
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
 
         ChatClient client = AgentFactory.fromProfile(profile, "You are bare.",
                 mock(ChatModel.class));
@@ -62,7 +62,7 @@ class AgentFactoryTest {
     @Test
     void includesDateTimeAdvisorAlways() {
         var profile = new AgentProfile("test", "test", null, null,
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
 
         // If this builds without error, the advisor chain is valid
         ChatClient client = AgentFactory.fromProfile(profile, "prompt",
@@ -74,7 +74,7 @@ class AgentFactoryTest {
     @Test
     void includesContextMdAdvisorWhenContextFileSet() {
         var profile = new AgentProfile("test", "test", null, null,
-                List.of(), null, null, false, "/tmp/test-context.md", null);
+                List.of(), null, null, false, "/tmp/test-context.md", null, true);
 
         ChatClient client = AgentFactory.fromProfile(profile, "prompt",
                 mock(ChatModel.class));
@@ -87,7 +87,7 @@ class AgentFactoryTest {
     @Test
     void resolvesProviderFromProfile() {
         var profile = new AgentProfile("test", "test", "sonnet", "anthropic",
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
         ChatModel mockModel = mock(ChatModel.class);
 
         Map<String, ChatModel> providers = Map.of("anthropic", mockModel);
@@ -101,7 +101,7 @@ class AgentFactoryTest {
     @Test
     void throwsForMissingProvider() {
         var profile = new AgentProfile("test", "test", null, "openai",
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
 
         Map<String, ChatModel> providers = Map.of("anthropic", mock(ChatModel.class));
 
@@ -115,7 +115,7 @@ class AgentFactoryTest {
     @Test
     void cliOverrideTakesPrecedenceOverProfile() {
         var profile = new AgentProfile("test", "test", "sonnet", "anthropic",
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
         ChatModel openaiModel = mock(ChatModel.class);
 
         Map<String, ChatModel> providers = Map.of(
@@ -128,10 +128,45 @@ class AgentFactoryTest {
         assertThat(client).isNotNull();
     }
 
+    // --- Task-management guidance injection ---
+
+    @Test
+    void prependsTaskManagementGuidanceByDefault() {
+        var profile = new AgentProfile("test", "test", null, null,
+                List.of(), null, null, false, null, null, true);
+
+        String result = AgentFactory.applyTaskManagementGuidance(profile, "You are a widget counter.");
+
+        assertThat(result).contains("Task Management");
+        assertThat(result).contains("todoWrite");
+        assertThat(result).endsWith("You are a widget counter.");
+    }
+
+    @Test
+    void skipsTaskManagementGuidanceWhenOptedOut() {
+        var profile = new AgentProfile("test", "test", null, null,
+                List.of(), null, null, false, null, null, false);
+
+        String result = AgentFactory.applyTaskManagementGuidance(profile, "You are a widget counter.");
+
+        assertThat(result).isEqualTo("You are a widget counter.");
+        assertThat(result).doesNotContain("Task Management");
+    }
+
+    @Test
+    void returnsOnlyGuidanceWhenBodyIsBlank() {
+        var profile = new AgentProfile("test", "test", null, null,
+                List.of(), null, null, false, null, null, true);
+
+        String result = AgentFactory.applyTaskManagementGuidance(profile, "");
+
+        assertThat(result).contains("Task Management");
+    }
+
     @Test
     void defaultsToAnthropicWhenNoProviderSpecified() {
         var profile = new AgentProfile("test", "test", null, null,
-                List.of(), null, null, false, null, null);
+                List.of(), null, null, false, null, null, true);
         ChatModel anthropicModel = mock(ChatModel.class);
 
         Map<String, ChatModel> providers = Map.of(

@@ -61,7 +61,8 @@ public final class AgentProfileParser {
                 stringField(frontmatter, "subagents_directory"),
                 booleanField(frontmatter, "memory", false),
                 stringField(frontmatter, "context_file"),
-                integerField(frontmatter, "max_tokens")
+                integerField(frontmatter, "max_tokens"),
+                taskManagementField(frontmatter)
         );
 
         return new Result(profile, body);
@@ -70,6 +71,19 @@ public final class AgentProfileParser {
     private static String stringField(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString().strip() : null;
+    }
+
+    /**
+     * Parse the {@code task_management} frontmatter field, defaulting to {@code true}
+     * so every agent gets TodoWrite discipline unless the author opts out
+     * (e.g. {@code task_management: off} or {@code task_management: false}).
+     */
+    private static boolean taskManagementField(Map<String, Object> map) {
+        Object value = map.get("task_management");
+        if (value == null) return true;
+        if (value instanceof Boolean b) return b;
+        String token = value.toString().strip().toLowerCase();
+        return !(token.equals("off") || token.equals("false") || token.equals("no"));
     }
 
     private static boolean booleanField(Map<String, Object> map, String key, boolean defaultValue) {

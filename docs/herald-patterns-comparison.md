@@ -165,7 +165,7 @@
 
 **Blog:** The blog recommends `MAIN_AGENT_SYSTEM_PROMPT_V2` — a Claude Code-inspired system prompt template with explicit task management instructions — for best results with `TodoWriteTool`.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses a custom system prompt for Ultron (the main agent persona) that includes task management guidance, but does not directly adopt `MAIN_AGENT_SYSTEM_PROMPT_V2`. Herald's prompt is tuned for personal assistant behavior rather than code-agent behavior.
+**Herald:** ✅ **Implemented (adapted).** Herald keeps a persona-tuned Ultron prompt but now injects the mode-agnostic sections of V2 — Task Management, Professional Objectivity, parallel-tool-call guidance, Explore subagent preference, and `file_path:line_number` code references — via a shared `classpath:prompts/TASK_MANAGEMENT_GUIDANCE.md` snippet. The Ultron prompt references it through a `{task_management_guidance}` placeholder resolved at bean-build time. `agents.md` mode (generic agentic loop via `--agents=<path>`) auto-prepends the same snippet through `AgentFactory`, with opt-out via the `task_management: off` frontmatter field. Personal-assistant tone and Dan-specific context stay in the Ultron prompt only. (Issue #264)
 
 ---
 
@@ -429,7 +429,7 @@
 |---|---|---|---|---|
 | Part 1: Agent Skills | 7 | 5 (format, discovery, matching, classpath, native Skills) | 4 (execution w/ guardrails, hot reload, self-teaching, HITL) | — |
 | Part 2: AskUserQuestion | 4 | 5 (core, handler, async bridge, Telegram handler, MCP Elicitation) | — | — |
-| Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | — | 1 (custom system prompt) |
+| Part 3: TodoWrite | 5 | 5 (decomp, lifecycle, events, memory, system-prompt guidance) | — | — |
 | Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |
 | Part 5: A2A Protocol | 4 | — | 2 (LLM-driven routing, A2A Client) | 2 (AgentCard format, A2A Server) |
 | Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) |

@@ -430,7 +430,8 @@ public class HeraldAgentConfig {
                 .replace("{persona}", config.persona())
                 .replace("{model_id}", modelId)
                 .replace("{system_prompt_extra}", config.systemPromptExtra())
-                .replace("{skills_directory}", skillsDirectory);
+                .replace("{skills_directory}", skillsDirectory)
+                .replace("{task_management_guidance}", TaskManagementGuidance.load());
     }
 
     List<SubagentReference> loadSubagentReferences(String agentsDirectory) {
