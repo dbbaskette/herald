@@ -25,6 +25,7 @@ public class BriefingJob {
     private static final Logger log = LoggerFactory.getLogger(BriefingJob.class);
     private static final int TIMEOUT_SECONDS = 10;
     static final String MORNING_BRIEFING_NAME = "morning-briefing";
+    static final String PARALLEL_MORNING_BRIEFING_NAME = "parallel-morning-briefing";
     static final String WEEKLY_REVIEW_NAME = "weekly-review";
 
     @FunctionalInterface

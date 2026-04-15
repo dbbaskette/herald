@@ -173,6 +173,8 @@ public class CronService {
             String prompt;
             if (BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())) {
                 prompt = briefingJob.buildMorningPrompt();
+            } else if (BriefingJob.PARALLEL_MORNING_BRIEFING_NAME.equals(job.name())) {
+                prompt = briefingJob.buildParallelMorningPrompt();
             } else if (BriefingJob.WEEKLY_REVIEW_NAME.equals(job.name())) {
                 prompt = briefingJob.buildWeeklyPrompt();
             } else {

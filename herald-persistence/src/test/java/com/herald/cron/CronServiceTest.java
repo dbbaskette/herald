@@ -216,6 +216,19 @@ class CronServiceTest {
     }
 
     @Test
+    void executeJobUsesParallelPromptForParallelBriefingName() {
+        CronJob job = new CronJob(3, "parallel-morning-briefing", "0 0 7 * * MON-FRI", "base prompt", null, true, true);
+        when(briefingJob.buildParallelMorningPrompt()).thenReturn("parallel prompt");
+        when(agentService.chat("parallel prompt", "cron-parallel-morning-briefing")).thenReturn("parallel result");
+
+        cronService.executeJob(job);
+
+        verify(briefingJob).buildParallelMorningPrompt();
+        verify(agentService).chat("parallel prompt", "cron-parallel-morning-briefing");
+        verify(messageSender).sendMessage("parallel result");
+    }
+
+    @Test
     void rescheduleJobUpdatesScheduleAndReschedules() {
         CronJob existing = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         CronJob updated = new CronJob(1, "test-job", "0 0 8 * * *", "hello", null, true, false);
