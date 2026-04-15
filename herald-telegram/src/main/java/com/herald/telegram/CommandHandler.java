@@ -1,6 +1,7 @@
 package com.herald.telegram;
 
 import com.herald.agent.AgentService;
+import com.herald.agent.ApprovalGate;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.UsageTracker;
 import com.herald.cron.CronJob;
@@ -36,12 +37,14 @@ public class CommandHandler {
     private final ReloadableSkillsTool reloadableSkillsTool;
     private final int activeToolsCount;
     private final int maxContextTokens;
+    private final ApprovalGate approvalGate;
 
     public CommandHandler(CronService cronService, ChatMemory chatMemory,
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                           @Qualifier("activeToolNames") List<String> activeToolNames,
                           ReloadableSkillsTool reloadableSkillsTool,
-                          @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens) {
+                          @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens,
+                          ApprovalGate approvalGate) {
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -50,6 +53,7 @@ public class CommandHandler {
         this.reloadableSkillsTool = reloadableSkillsTool;
         this.activeToolsCount = activeToolNames.size();
         this.maxContextTokens = maxContextTokens;
+        this.approvalGate = approvalGate;
     }
 
     boolean handle(String text) {
@@ -69,6 +73,7 @@ public class CommandHandler {
             case "/model" -> handleModel(parts);
             case "/skills" -> handleSkills(parts);
             case "/cron" -> handleCron(parts);
+            case "/confirm" -> handleConfirm(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -92,6 +97,7 @@ public class CommandHandler {
                 /model <provider> <model> — Switch to a different model
                 /skills list — List all loaded skills
                 /skills reload — Reload skills from disk
+                /confirm <id> yes|no — Approve or deny a pending action
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
@@ -282,6 +288,19 @@ public class CommandHandler {
             default -> sender.sendMessage(
                     "Unknown cron subcommand: " + subcommand
                             + "\nUsage: /cron list | enable | disable | edit <name> schedule <expr>");
+        }
+    }
+
+    private void handleConfirm(String[] parts) {
+        if (parts.length < 3) {
+            sender.sendMessage("Usage: /confirm <id> yes|no");
+            return;
+        }
+        String approvalId = parts[1];
+        boolean approved = "yes".equalsIgnoreCase(parts[2]);
+        boolean resolved = approvalGate.resolve(approvalId, approved);
+        if (!resolved) {
+            sender.sendMessage("No pending approval found for ID: " + approvalId);
         }
     }
 

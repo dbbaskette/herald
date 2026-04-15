@@ -6,14 +6,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.herald.agent.ApprovalGate;
 import com.herald.agent.MessageSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,13 +34,14 @@ public class HeraldShellDecorator {
     private final ShellCommandExecutor delegate;
     private final MessageSender telegramSender;
     private final JdbcTemplate jdbcTemplate;
-    private final ConcurrentHashMap<String, CompletableFuture<Boolean>> pendingConfirmations = new ConcurrentHashMap<>();
+    private final ApprovalGate approvalGate;
 
     @Autowired
     public HeraldShellDecorator(ShellSecurityConfig securityConfig,
                          Optional<ShellCommandExecutor> delegate,
                          Optional<MessageSender> messageSender,
-                         JdbcTemplate jdbcTemplate) {
+                         JdbcTemplate jdbcTemplate,
+                         ApprovalGate approvalGate) {
         this.securityConfig = securityConfig;
         this.jdbcTemplate = jdbcTemplate;
         this.blocklist = securityConfig.getShellBlocklist().stream()
@@ -51,11 +49,12 @@ public class HeraldShellDecorator {
                 .toList();
         this.delegate = delegate.orElse(command -> executeCommandInternal(command, securityConfig.getShellTimeoutSeconds()));
         this.telegramSender = messageSender.orElse(null);
+        this.approvalGate = approvalGate;
     }
 
-    // Package-private constructor for testing without Optional wrappers
     HeraldShellDecorator(ShellSecurityConfig securityConfig) {
-        this(securityConfig, Optional.empty(), Optional.empty(), null);
+        this(securityConfig, Optional.empty(), Optional.empty(), null,
+             new ApprovalGate(Optional.empty(), 60));
     }
 
     @Tool(description = "Execute a shell command on the host system. Destructive commands are blocked for safety. Commands requiring elevated privileges may need confirmation.")
@@ -75,7 +74,19 @@ public class HeraldShellDecorator {
 
         if (requiresConfirmation(command)) {
             log.info("Shell command requires confirmation: [{}]", redactForLog(command));
-            return handleConfirmation(command);
+            String approval = approvalGate.requestApproval("Shell command: " + redactForLog(command));
+            if ("APPROVED".equals(approval)) {
+                log.info("Command confirmed by user, executing: [{}]", redactForLog(command));
+                String result = delegate.execute(command);
+                log.info("Shell command completed: [{}]", redactForLog(command));
+                return result;
+            }
+            if ("TIMEOUT".equals(approval)) {
+                return "TIMEOUT: Confirmation timed out after "
+                        + securityConfig.getConfirmationTimeoutSeconds()
+                        + "s. Command was not executed: " + redactForLog(command);
+            }
+            return "DENIED: Command was rejected by user: " + redactForLog(command);
         }
 
         log.info("Executing shell command: [{}]", redactForLog(command));
@@ -108,57 +119,6 @@ public class HeraldShellDecorator {
             return true;
         }
         return false;
-    }
-
-    /**
-     * Called externally (e.g., by TelegramPoller) to approve or deny a pending command.
-     * TODO: Wire into TelegramPoller to handle user YES/NO responses.
-     */
-    public void confirmCommand(String confirmId, boolean approved) {
-        CompletableFuture<Boolean> future = pendingConfirmations.get(confirmId);
-        if (future != null) {
-            future.complete(approved);
-        }
-    }
-
-    private String handleConfirmation(String command) {
-        String confirmId = UUID.randomUUID().toString();
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        pendingConfirmations.put(confirmId, future);
-
-        if (telegramSender != null) {
-            telegramSender.sendMessage("Shell command requires confirmation:\n"
-                    + redactForLog(command) + "\n"
-                    + "Reply: /confirm " + confirmId + " yes  OR  /confirm " + confirmId + " no");
-        } else {
-            log.warn("TelegramSender not available; cannot send confirmation prompt for command: [{}]",
-                    redactForLog(command));
-            pendingConfirmations.remove(confirmId);
-            return "CONFIRMATION REQUIRED: This command requires user approval before execution. "
-                    + "Command: " + redactForLog(command) + " — TelegramSender is not configured.";
-        }
-
-        try {
-            Boolean approved = future.get(securityConfig.getConfirmationTimeoutSeconds(), TimeUnit.SECONDS);
-            if (Boolean.TRUE.equals(approved)) {
-                log.info("Command confirmed by user, executing: [{}]", redactForLog(command));
-                return delegate.execute(command);
-            }
-            log.info("Command denied by user: [{}]", redactForLog(command));
-            return "DENIED: Command was rejected by user: " + redactForLog(command);
-        } catch (TimeoutException e) {
-            log.warn("Confirmation timed out for command: [{}]", redactForLog(command));
-            return "TIMEOUT: Confirmation timed out after " + securityConfig.getConfirmationTimeoutSeconds()
-                    + "s. Command was not executed: " + redactForLog(command);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return "ERROR: Confirmation was interrupted.";
-        } catch (Exception e) {
-            log.error("Error during confirmation for command: [{}] — {}", redactForLog(command), e.getMessage());
-            return "ERROR: " + e.getMessage();
-        } finally {
-            pendingConfirmations.remove(confirmId);
-        }
     }
 
     private static final String OBSIDIAN_CLI_DIR = "/Applications/Obsidian.app/Contents/MacOS";

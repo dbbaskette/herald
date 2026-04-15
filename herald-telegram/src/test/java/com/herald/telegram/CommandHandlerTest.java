@@ -1,5 +1,6 @@
 package com.herald.telegram;
 
+import com.herald.agent.ApprovalGate;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
@@ -30,6 +31,7 @@ class CommandHandlerTest {
     private UsageTracker usageTracker;
     private ModelSwitcher modelSwitcher;
     private ReloadableSkillsTool reloadableSkillsTool;
+    private ApprovalGate approvalGate;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -47,9 +49,10 @@ class CommandHandlerTest {
         when(modelSwitcher.getAvailableProviders()).thenReturn(Set.of("anthropic", "openai", "ollama"));
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
         reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
+        approvalGate = mock(ApprovalGate.class);
         handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
-                reloadableSkillsTool, 200_000);
+                reloadableSkillsTool, 200_000, approvalGate);
     }
 
     // --- handle() routing ---
@@ -435,5 +438,40 @@ class CommandHandlerTest {
     @Test
     void formatUptimeDaysHoursMinutes() {
         assertThat(CommandHandler.formatUptime(90_300_000)).isEqualTo("1d 1h 5m");
+    }
+
+    // --- /confirm ---
+
+    @Test
+    void confirmApprovedResolvesApproval() {
+        when(approvalGate.resolve("abc-123", true)).thenReturn(true);
+        assertThat(handler.handle("/confirm abc-123 yes")).isTrue();
+        verify(approvalGate).resolve("abc-123", true);
+    }
+
+    @Test
+    void confirmDeniedResolvesApproval() {
+        when(approvalGate.resolve("abc-123", false)).thenReturn(true);
+        assertThat(handler.handle("/confirm abc-123 no")).isTrue();
+        verify(approvalGate).resolve("abc-123", false);
+    }
+
+    @Test
+    void confirmUnknownIdSendsError() {
+        when(approvalGate.resolve("unknown-id", true)).thenReturn(false);
+        handler.handle("/confirm unknown-id yes");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("No pending approval")));
+    }
+
+    @Test
+    void confirmWithNoArgsShowsUsage() {
+        handler.handle("/confirm");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void helpIncludesConfirmCommand() {
+        handler.handle("/help");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("/confirm")));
     }
 }

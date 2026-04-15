@@ -61,7 +61,7 @@
 
 **Blog:** `SkillsTool` supports `addSkillsResource()` using Spring's `Resource` abstraction for classpath loading, useful when distributing skills as part of a JAR/WAR deployment.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald loads skills from the filesystem only (`skills/`). Classpath loading is not currently implemented. Since Herald runs locally on macOS, this is a lower-priority gap.
+**Herald:** ✅ **Implemented.** `ReloadableSkillsTool` accepts classpath `Resource` instances at construction time. `HeraldAgentConfig` uses `ResourcePatternResolver` to scan `classpath:skills/*/SKILL.md` and passes matching parent directories alongside the filesystem skills directory. Skills can ship inside the JAR.
 
 ---
 
@@ -69,7 +69,7 @@
 
 **Blog:** The blog distinguishes Generic Agent Skills (local, model-agnostic) from Anthropic's native Skills API (cloud-sandboxed, pre-built document generation, Anthropic-only). Both can coexist in the same application.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses Generic Agent Skills only. Anthropic's native Skills API (Excel/PowerPoint/Word generation in sandboxed containers) is not yet wired in.
+**Herald:** ✅ **Implemented.** Herald supports Anthropic native skills via the `herald.agent.anthropic-skills` configuration property. `HeraldConfig` loads the list of Anthropic skill names, and `HeraldAgentConfig` registers them alongside generic skills. Both skill types coexist.
 
 ---
 
@@ -77,7 +77,7 @@
 
 **Blog:** The blog treats skills as pre-authored files created by humans. It does not describe agents writing their own skills.
 
-**Herald:** ➖ **Not Fully Implemented.** Since the agent has file system access and `ReloadableSkillsTool` instantly hot-reloads on file changes, the agent can be instructed to write its own `SKILL.md` files to the `skills/` directory (e.g., "save that workflow as a skill"). This allows the assistant to permanently "learn" new capabilities without human coding.
+**Herald:** ➕ **Enhanced.** The system prompt includes a "Self-Teaching — Creating New Skills" section that instructs the agent on the full workflow: draft `SKILL.md` content, validate it with the `validateSkill` tool (which checks frontmatter structure, required fields, name format, and optional fields), write it via `FileSystemTools`, and rely on hot-reload to pick it up immediately. The agent can permanently "learn" new capabilities without human coding.
 
 ---
 
@@ -85,7 +85,7 @@
 
 **Blog:** Explicitly notes the "No Human-in-the-Loop" limitation, stating there is no built-in mechanism to require human approval before executing skills or bundled scripts.
 
-**Herald:** ➖ **Not Fully Implemented.** Introduce a `requires_approval: true` frontmatter field for skills. A `ToolCallback` wrapper will intercept the skill invocation, use the `TelegramQuestionHandler` to push an interactive "Approve / Deny" button to the user's Telegram, and block execution until explicitly approved.
+**Herald:** ➕ **Enhanced.** `ApprovalGate` provides a shared HITL abstraction. Skills with `requires-approval: true` in frontmatter (or listed in `herald.agent.skills-requiring-approval` config) are intercepted by `ReloadableSkillsTool` before execution. An approval request is sent to Telegram with `/confirm <id> yes|no` instructions; execution blocks until the user approves, denies, or the configurable timeout expires. The same `ApprovalGate` is reused by `HeraldShellDecorator` for shell command confirmation.
 
 ---
 
@@ -357,7 +357,7 @@
 
 | Pattern | Blog Features | ✅ Adopted | ➕ Enhanced | ➖ Not Fully Implemented |
 |---|---|---|---|---|
-| Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 2 (execution w/ guardrails, hot reload) | 4 (classpath, native Skills, self-teaching, HITL) |
+| Part 1: Agent Skills | 7 | 5 (format, discovery, matching, classpath, native Skills) | 4 (execution w/ guardrails, hot reload, self-teaching, HITL) | — |
 | Part 2: AskUserQuestion | 4 | 4 (core, handler, async bridge, Telegram handler) | — | 1 (MCP Elicitation) |
 | Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | — | 1 (custom system prompt) |
 | Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |

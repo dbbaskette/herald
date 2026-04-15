@@ -87,7 +87,7 @@ class HeraldA2aIntegrationTest {
                 "test-agent", baseUrl + "/testagent", Map.of());
         HeraldConfig config = new HeraldConfig(
                 null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null),
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null),
                 null, null, null, null, null, null, null,
                 new HeraldConfig.A2a(List.of(a2aAgent)));
 
@@ -104,6 +104,7 @@ class HeraldA2aIntegrationTest {
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
