@@ -75,7 +75,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -120,7 +120,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -156,7 +156,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -226,7 +226,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();

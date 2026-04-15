@@ -96,7 +96,7 @@ public class HeraldAgentConfig {
             Optional<GwsTools> gwsTools) {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
-                "task", "taskOutput", "skills", "web",
+                "task", "taskOutput", "skills", "web", "toolSearchTool",
                 "MemoryView", "MemoryCreate", "MemoryStrReplace",
                 "MemoryInsert", "MemoryDelete", "MemoryRename"));
         cronTools.ifPresent(t -> names.add("cron"));
@@ -354,10 +354,9 @@ public class HeraldAgentConfig {
         // Conditional on property (not persistence)
         advisors.add(new PromptDumpAdvisor(promptDump));
 
-        // Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
-        // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
-        // OneShotMemoryAdvisor, causing memory to load/save on every
-        // tool-call iteration and duplicating messages.
+        // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — indexes all registered
+        // tools via LuceneToolSearcher and exposes a toolSearchTool for on-demand
+        // discovery. Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
         advisors.add(ToolSearchToolCallAdvisor.builder()
                 .toolSearcher(new LuceneToolSearcher())
                 .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
