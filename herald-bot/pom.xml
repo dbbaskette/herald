@@ -59,6 +59,11 @@
             <groupId>org.springaicommunity</groupId>
             <artifactId>tool-searcher-lucene</artifactId>
         </dependency>
+        <!-- MCP Client — connects to external MCP servers (Calendar, Gmail, etc.) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
+        </dependency>
 
         <!-- Test -->
         <dependency>
