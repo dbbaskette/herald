@@ -212,6 +212,71 @@ class BriefingJobTest {
         assertThat(result).contains("memory_list");
     }
 
+    // --- buildParallelMorningPrompt tests ---
+
+    @Test
+    void parallelMorningPromptInstructsBackgroundSubagents() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("London"), null, null, null, null);
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(true);
+
+        BriefingJob job = createJob(config, gwsChecker, true, url -> "");
+
+        String result = job.buildParallelMorningPrompt();
+
+        assertThat(result).contains("run_in_background");
+        assertThat(result).contains("task");
+        assertThat(result).contains("taskOutput");
+        assertThat(result).contains("London");
+        assertThat(result).contains("parallel");
+    }
+
+    @Test
+    void parallelMorningPromptOmitsWeatherThreadWhenNoCity() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, true, url -> "");
+
+        String result = job.buildParallelMorningPrompt();
+
+        assertThat(result).doesNotContain("Weather");
+        assertThat(result).contains("Priorities");
+        assertThat(result).contains("run_in_background");
+    }
+
+    @Test
+    void parallelMorningPromptOmitsGwsThreadsWhenUnavailable() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null,
+                new HeraldConfig.Weather("London"), null, null, null, null);
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(config, gwsChecker, true, url -> "");
+
+        String result = job.buildParallelMorningPrompt();
+
+        assertThat(result).doesNotContain("Calendar");
+        assertThat(result).doesNotContain("Email");
+        assertThat(result).contains("Weather");
+        assertThat(result).contains("Priorities");
+    }
+
+    @Test
+    void parallelMorningPromptIncludesCollectionPhase() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(true);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, true, url -> "");
+
+        String result = job.buildParallelMorningPrompt();
+
+        assertThat(result).contains("Collection Phase");
+        assertThat(result).contains("taskOutput");
+        assertThat(result).contains("Assembly Phase");
+    }
+
     // --- resolveCity tests ---
 
     @Test
