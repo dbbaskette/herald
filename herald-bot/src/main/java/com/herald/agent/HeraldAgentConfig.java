@@ -24,8 +24,9 @@ import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 // MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
-// re-loading/re-saving memory on each ToolCallAdvisor iteration
-import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
+// re-loading/re-saving memory on each ToolSearchToolCallAdvisor iteration
+import org.springaicommunity.tool.search.ToolSearchToolCallAdvisor;
+import org.springaicommunity.tool.searcher.LuceneToolSearcher;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -357,7 +358,8 @@ public class HeraldAgentConfig {
         // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
         // OneShotMemoryAdvisor, causing memory to load/save on every
         // tool-call iteration and duplicating messages.
-        advisors.add(ToolCallAdvisor.builder()
+        advisors.add(ToolSearchToolCallAdvisor.builder()
+                .toolSearcher(new LuceneToolSearcher())
                 .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
                 .build());
 

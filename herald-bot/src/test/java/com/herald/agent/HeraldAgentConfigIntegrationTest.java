@@ -251,6 +251,27 @@ class HeraldAgentConfigIntegrationTest {
     }
 
     @Test
+    void advisorChainUsesToolSearchToolCallAdvisor(@TempDir Path tempDir) {
+        HeraldAgentConfig agentConfig = new HeraldAgentConfig();
+        ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
+        ChatModel mockModel = mock(ChatModel.class);
+        HeraldConfig config = new HeraldConfig(null, null,
+                new HeraldConfig.Agent("TestBot", null, null, null, null), null, null, null, null, null, null, null);
+
+        var advisors = agentConfig.buildAdvisorChain(
+                Optional.empty(), contextMdAdvisor, tempDir,
+                mockModel, config, false);
+
+        assertThat(advisors)
+                .filteredOn(a -> a instanceof org.springaicommunity.tool.search.ToolSearchToolCallAdvisor)
+                .hasSize(1);
+        // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — none of the base type should remain
+        assertThat(advisors)
+                .filteredOn(a -> a.getClass().equals(org.springframework.ai.chat.client.advisor.ToolCallAdvisor.class))
+                .isEmpty();
+    }
+
+    @Test
     void buildToolListContainsStatelessTools() {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         var todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder().build();
