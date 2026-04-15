@@ -430,7 +430,7 @@
 | Part 1: Agent Skills | 7 | 5 (format, discovery, matching, classpath, native Skills) | 4 (execution w/ guardrails, hot reload, self-teaching, HITL) | — |
 | Part 2: AskUserQuestion | 4 | 5 (core, handler, async bridge, Telegram handler, MCP Elicitation) | — | — |
 | Part 3: TodoWrite | 5 | 5 (decomp, lifecycle, events, memory, system-prompt guidance) | — | — |
-| Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |
+| Part 4: Subagents | 6 | 6 (provider, format, context, multi-model, built-in agents, parallel/background) | 1 (research subagent) | — |
 | Part 5: A2A Protocol | 4 | — | 2 (LLM-driven routing, A2A Client) | 2 (AgentCard format, A2A Server) |
 | Part 6: AutoMemoryTools | 4 | 3 (Prompt, Sandbox, Integration) | — | 1 (Consolidation trigger) |
 | Part 7: Session API | 8 | — | — | 8 (data model, turn-safety, triggers, strategies, advisor, branch isolation, recall, JDBC) — **requires Spring AI 2.1** |
