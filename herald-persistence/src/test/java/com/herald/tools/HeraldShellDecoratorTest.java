@@ -7,14 +7,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.herald.agent.ApprovalGate;
 import com.herald.agent.MessageSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -55,7 +58,7 @@ class HeraldShellDecoratorTest {
         String result = decorator.shell_exec("ls -la /tmp");
         assertThat(result).isNotEmpty();
         assertThat(result).doesNotStartWith("BLOCKED");
-        assertThat(result).doesNotStartWith("CONFIRMATION REQUIRED");
+        assertThat(result).doesNotStartWith("DENIED");
     }
 
     @Test
@@ -73,7 +76,7 @@ class HeraldShellDecoratorTest {
     @Test
     void redirectToUserPathDoesNotRequireConfirmation() {
         String result = decorator.shell_exec("echo test > /tmp/myfile.txt 2>&1; echo done");
-        assertThat(result).doesNotStartWith("CONFIRMATION REQUIRED");
+        assertThat(result).doesNotStartWith("DENIED");
     }
 
     // --- Null / blank input ---
@@ -217,7 +220,7 @@ class HeraldShellDecoratorTest {
 
         assertThat(limited.requiresConfirmation("sudo apt install vim")).isTrue();
         String result = limited.shell_exec("sudo apt install vim");
-        assertThat(result).contains("CONFIRMATION REQUIRED");
+        assertThat(result).startsWith("DENIED:");
         assertThat(result).contains("sudo apt install vim");
     }
 
@@ -229,7 +232,7 @@ class HeraldShellDecoratorTest {
 
         assertThat(limited.requiresConfirmation("cat script.txt | bash")).isTrue();
         String result = limited.shell_exec("cat script.txt | bash");
-        assertThat(result).contains("CONFIRMATION REQUIRED");
+        assertThat(result).startsWith("DENIED:");
     }
 
     @Test
@@ -240,7 +243,7 @@ class HeraldShellDecoratorTest {
 
         assertThat(limited.requiresConfirmation("echo test > /etc/passwd")).isTrue();
         String result = limited.shell_exec("echo test > /etc/passwd");
-        assertThat(result).contains("CONFIRMATION REQUIRED");
+        assertThat(result).startsWith("DENIED:");
     }
 
     @Test
@@ -267,11 +270,12 @@ class HeraldShellDecoratorTest {
     void confirmationSendsTelegramMessageAndTimesOut() {
         ShellSecurityConfig config = new ShellSecurityConfig();
         config.setShellBlocklist(List.of());
-        config.setConfirmationTimeoutSeconds(1); // 1s timeout for fast test
+        config.setConfirmationTimeoutSeconds(1);
 
         MessageSender mockSender = mock(MessageSender.class);
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 1);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender), null);
+                config, Optional.empty(), Optional.of(mockSender), null, approvalGate);
 
         String result = dec.shell_exec("sudo apt update");
 
@@ -295,15 +299,16 @@ class HeraldShellDecoratorTest {
         }).when(mockSender).sendMessage(anyString());
 
         ShellCommandExecutor mockExecutor = command -> "executed: " + command;
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 5);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null, approvalGate);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo confirmed"));
 
         assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
         String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
-        dec.confirmCommand(confirmId, true);
+        approvalGate.resolve(confirmId, true);
 
         String result = resultFuture.get(5, TimeUnit.SECONDS);
         assertThat(result).isEqualTo("executed: sudo echo confirmed");
@@ -325,15 +330,16 @@ class HeraldShellDecoratorTest {
         }).when(mockSender).sendMessage(anyString());
 
         ShellCommandExecutor mockExecutor = command -> "should not run";
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 5);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null, approvalGate);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo echo nope"));
 
         assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
         String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
-        dec.confirmCommand(confirmId, false);
+        approvalGate.resolve(confirmId, false);
 
         String result = resultFuture.get(5, TimeUnit.SECONDS);
         assertThat(result).startsWith("DENIED:");
@@ -357,15 +363,16 @@ class HeraldShellDecoratorTest {
         }).when(mockSender).sendMessage(anyString());
 
         ShellCommandExecutor mockExecutor = command -> "should not run";
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 5);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.of(mockSender), null);
+                config, Optional.of(mockExecutor), Optional.of(mockSender), null, approvalGate);
 
         CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(
                 () -> dec.shell_exec("sudo curl --password=secret123 http://example.com"));
 
         assertThat(messageSent.await(5, TimeUnit.SECONDS)).isTrue();
         String confirmId = capturedMessage.get().split("/confirm ")[1].split(" ")[0];
-        dec.confirmCommand(confirmId, false);
+        approvalGate.resolve(confirmId, false);
 
         String result = resultFuture.get(5, TimeUnit.SECONDS);
         assertThat(result).startsWith("DENIED:");
@@ -380,8 +387,9 @@ class HeraldShellDecoratorTest {
         config.setConfirmationTimeoutSeconds(1);
 
         MessageSender mockSender = mock(MessageSender.class);
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 1);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender), null);
+                config, Optional.empty(), Optional.of(mockSender), null, approvalGate);
 
         String result = dec.shell_exec("sudo curl --password=secret123 http://example.com");
 
@@ -397,15 +405,20 @@ class HeraldShellDecoratorTest {
         config.setConfirmationTimeoutSeconds(1);
 
         MessageSender mockSender = mock(MessageSender.class);
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 1);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender), null);
+                config, Optional.empty(), Optional.of(mockSender), null, approvalGate);
 
         dec.shell_exec("sudo curl --password=secret123 http://example.com");
 
-        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(mockSender).sendMessage(captor.capture());
-        assertThat(captor.getValue()).contains("[REDACTED]");
-        assertThat(captor.getValue()).doesNotContain("secret123");
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(mockSender, atLeastOnce()).sendMessage(captor.capture());
+        String approvalMessage = captor.getAllValues().stream()
+                .filter(msg -> msg.contains("Approval required"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No approval message found"));
+        assertThat(approvalMessage).contains("[REDACTED]");
+        assertThat(approvalMessage).doesNotContain("secret123");
     }
 
     // --- Delegate pattern ---
@@ -415,8 +428,9 @@ class HeraldShellDecoratorTest {
         ShellSecurityConfig config = new ShellSecurityConfig();
         config.setShellBlocklist(List.of());
         ShellCommandExecutor mockExecutor = command -> "delegated: " + command;
+        ApprovalGate approvalGate = new ApprovalGate(Optional.empty(), 60);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.of(mockExecutor), Optional.empty(), null);
+                config, Optional.of(mockExecutor), Optional.empty(), null, approvalGate);
 
         String result = dec.shell_exec("echo hello");
         assertThat(result).isEqualTo("delegated: echo hello");
@@ -445,7 +459,7 @@ class HeraldShellDecoratorTest {
         HeraldShellDecorator dec = new HeraldShellDecorator(config);
 
         String result = dec.shell_exec("sudo curl --password=topsecret http://example.com");
-        assertThat(result).contains("CONFIRMATION REQUIRED");
+        assertThat(result).startsWith("DENIED:");
         assertThat(result).doesNotContain("topsecret");
         assertThat(result).contains("[REDACTED]");
     }
@@ -467,8 +481,9 @@ class HeraldShellDecoratorTest {
             return null;
         }).when(mockSender).sendMessage(anyString());
 
+        ApprovalGate approvalGate = new ApprovalGate(Optional.of(mockSender), 5);
         HeraldShellDecorator dec = new HeraldShellDecorator(
-                config, Optional.empty(), Optional.of(mockSender), null);
+                config, Optional.empty(), Optional.of(mockSender), null, approvalGate);
 
         CompletableFuture.supplyAsync(() -> dec.shell_exec("sudo echo test"));
 
