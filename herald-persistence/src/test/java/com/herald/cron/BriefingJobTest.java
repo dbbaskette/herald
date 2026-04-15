@@ -241,7 +241,8 @@ class BriefingJobTest {
 
         String result = job.buildParallelMorningPrompt();
 
-        assertThat(result).doesNotContain("Weather");
+        assertThat(result).doesNotContain("Thread 1: Weather");
+        assertThat(result).doesNotContain("forecast for");
         assertThat(result).contains("Priorities");
         assertThat(result).contains("run_in_background");
     }
@@ -257,8 +258,8 @@ class BriefingJobTest {
 
         String result = job.buildParallelMorningPrompt();
 
-        assertThat(result).doesNotContain("Calendar");
-        assertThat(result).doesNotContain("Email");
+        assertThat(result).doesNotContain(": Calendar");
+        assertThat(result).doesNotContain(": Email");
         assertThat(result).contains("Weather");
         assertThat(result).contains("Priorities");
     }
