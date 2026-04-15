@@ -24,6 +24,11 @@ agent:
   system_prompt_extra: |
     # Additional Instructions
     # Add any extra instructions here that will be appended to the base system prompt.
+  # Anthropic Native Skills — cloud-sandboxed document generation
+  # Available: xlsx, docx, pptx, pdf
+  # anthropic_skills:
+  #   - xlsx
+  #   - docx
 
 subagents:
   dir: .claude/agents
