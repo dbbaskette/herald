@@ -217,7 +217,7 @@
 
 **Blog:** Multiple subagents can run concurrently. Background tasks execute asynchronously; the main agent can continue while subagents run. `TaskOutputTool` retrieves results when ready. `TaskRepository` supports persistent task storage across instances.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses `TaskTool` and `TaskOutputTool` (both wired) but has not yet exercised parallel or background subagent execution in practice. The library plumbing supports it. Parallel research flows are on the Phase 6 roadmap.
+**Herald:** ✅ **Implemented.** Herald exercises parallel subagent execution via the morning briefing flow. `BriefingJob.buildParallelMorningPrompt()` instructs the LLM to dispatch independent research threads (weather, calendar, email, priorities) as background subagents using `TaskTool` with `run_in_background: true`. Results are collected via `TaskOutputTool`. `ParallelBriefingService` provides a programmatic fan-out alternative using `DefaultTaskRepository` directly. Integration tests verify concurrent execution of 2+ subagents and measure wall-clock improvement over sequential dispatch.
 
 ---
 
