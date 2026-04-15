@@ -32,24 +32,35 @@
 
 ## About
 
-Herald is one app that becomes two different agents depending on how you configure it.
+Herald is an AI Agent framework that becomes two different tools depending on how you configure it. It solves the problem of needing separate codebases for persistent, context-aware personal assistants vs single-shot automation agents.
 
 **Personal assistant mode** — set a Telegram bot token and a database path, and Herald becomes an always-on AI assistant that runs 24/7 on your Mac. It connects through Telegram, builds long-term memory of who you are via typed Markdown files, manages your calendar and email, runs scheduled briefings, and delegates complex research to specialized subagents.
 
 **Task agent mode** — pass `--agents=my-agent.md` and Herald becomes a focused task agent. An `agents.md` file defines the agent's personality, tools, and model in a single file. Give it a prompt, get a result, done. No database, no Telegram, no long-running process.
 
-```bash
-# Personal assistant — always-on with Telegram and memory
-./run.sh bot
-
-# Task agent — one-shot execution from agents.md
-java -jar herald-bot.jar --agents=cf-agent.md --prompt="List all CF spaces"
-
-# Task agent — interactive REPL
-java -jar herald-bot.jar --agents=code-reviewer.md
-```
-
 The personality switch is just configuration. The same JAR, the same advisor chain, the same tool system, the same multi-provider model routing. What changes is what you plug in.
+
+## Quick Start
+
+To run Herald as a single-shot task agent immediately (no Telegram or DB required):
+
+```bash
+# 1. Create a simple agent definition
+cat > hello-agent.md << 'EOF'
+---
+name: hello-agent
+description: A friendly assistant
+model: sonnet
+tools: [filesystem]
+---
+
+You are a helpful assistant with filesystem access.
+EOF
+
+# 2. Set your API key and run the agent interactively
+export ANTHROPIC_API_KEY=sk-ant-...
+java -jar herald-bot.jar --agents=hello-agent.md
+```
 
 ## Features
 

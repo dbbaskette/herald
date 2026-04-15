@@ -74,6 +74,22 @@
 
 ---
 
+### Dynamic "Self-Teaching" (Auto-Skill Generation)
+
+**Blog:** The blog treats skills as pre-authored files created by humans. It does not describe agents writing their own skills.
+
+**Herald:** ⏳ **Planned.** Since the agent has file system access and `ReloadableSkillsTool` instantly hot-reloads on file changes, the agent can be instructed to write its own `SKILL.md` files to the `skills/` directory (e.g., "save that workflow as a skill"). This allows the assistant to permanently "learn" new capabilities without human coding.
+
+---
+
+### Formal Human-in-the-Loop (HITL) for Skill Execution
+
+**Blog:** Explicitly notes the "No Human-in-the-Loop" limitation, stating there is no built-in mechanism to require human approval before executing skills or bundled scripts.
+
+**Herald:** ⏳ **Planned.** Introduce a `requires_approval: true` frontmatter field for skills. A `ToolCallback` wrapper will intercept the skill invocation, use the `TelegramQuestionHandler` to push an interactive "Approve / Deny" button to the user's Telegram, and block execution until explicitly approved.
+
+---
+
 ## Part 2 — AskUserQuestionTool (Agents That Clarify Before Acting)
 
 > Rather than making assumptions, the agent asks the user structured multiple-choice or free-text questions before producing a response, eliminating guesswork and rework.
@@ -342,7 +358,7 @@
 
 | Pattern | Blog Features | ✅ Adopted | 〜 Custom Variant | ↗ Herald-Only | ⏳ Planned |
 |---|---|---|---|---|---|
-| Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 1 (execution w/ guardrails) | 1 (hot reload) | 2 (classpath, native Skills) |
+| Part 1: Agent Skills | 7 | 3 (format, discovery, matching) | 1 (execution w/ guardrails) | 1 (hot reload) | 4 (classpath, native Skills, self-teaching, HITL) |
 | Part 2: AskUserQuestion | 4 | 3 (core, handler, async bridge) | 1 (Telegram handler) | — | 1 (MCP Elicitation) |
 | Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | 1 (custom system prompt) | — | — |
 | Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | — | 1 (research subagent) | 1 (parallel/background) |
