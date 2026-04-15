@@ -319,14 +319,14 @@ public class HeraldAgentConfig {
             initialModel = defaultModel;
         }
 
-        // Build the initial client from the resolved provider
+        // Build the initial client from the resolved provider (apply Anthropic skills for main agent)
         ChatModel initialChatModel = availableModels.get(initialProvider);
         ChatClient initialClient = clientBuilderFactory.apply(initialChatModel)
-                .defaultOptions(chatOptionsForModel(initialChatModel, initialModel))
+                .defaultOptions(ModelSwitcher.chatOptionsForModel(initialChatModel, initialModel, config.anthropicSkills()))
                 .build();
 
         var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplateOpt.orElse(null),
-                clientBuilderFactory, initialClient, initialProvider, initialModel);
+                clientBuilderFactory, initialClient, initialProvider, initialModel, config.anthropicSkills());
         switcher.loadPersistedOverride();
         return switcher;
     }
@@ -406,8 +406,9 @@ public class HeraldAgentConfig {
                 .defaultOptions(chatOptionsForModel(chatModel, modelId));
     }
 
+    // Used for subagent ChatClient builders — skills not needed for subagents
     static org.springframework.ai.chat.prompt.ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
-        return ModelSwitcher.chatOptionsForModel(chatModel, modelId);
+        return ModelSwitcher.chatOptionsForModel(chatModel, modelId, List.of());
     }
 
     /**

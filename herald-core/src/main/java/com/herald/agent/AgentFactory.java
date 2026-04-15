@@ -110,7 +110,7 @@ public final class AgentFactory {
                 .defaultAdvisors(advisors);
 
         if (model != null) {
-            builder.defaultOptions(ModelSwitcher.chatOptionsForModel(chatModel, model));
+            builder.defaultOptions(ModelSwitcher.chatOptionsForModel(chatModel, model, List.of()));
         }
 
         if (!tools.isEmpty()) {

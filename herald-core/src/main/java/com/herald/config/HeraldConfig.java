@@ -40,7 +40,8 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Agent(String persona, String systemPromptExtra, String contextFile,
-                        Integer maxContextTokens, String defaultProvider) {
+                        Integer maxContextTokens, String defaultProvider,
+                        List<String> anthropicSkills) {
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
@@ -88,6 +89,13 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.defaultProvider().toLowerCase();
         }
         return "anthropic";
+    }
+
+    public List<String> anthropicSkills() {
+        if (agent != null && agent.anthropicSkills() != null) {
+            return agent.anthropicSkills();
+        }
+        return List.of();
     }
 
     public record Cron(String timezone) {

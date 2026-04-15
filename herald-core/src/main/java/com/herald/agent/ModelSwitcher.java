@@ -1,6 +1,7 @@
 package com.herald.agent;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -26,6 +27,7 @@ public class ModelSwitcher {
     private final Map<String, String> providerDefaultModels;
     private final JdbcTemplate jdbcTemplate;
     private final Function<ChatModel, ChatClient.Builder> clientBuilderFactory;
+    private final List<String> anthropicSkills;
 
     private volatile ChatClient activeClient;
     private volatile String activeProvider;
@@ -37,7 +39,8 @@ public class ModelSwitcher {
                   Function<ChatModel, ChatClient.Builder> clientBuilderFactory,
                   ChatClient initialClient,
                   String defaultProvider,
-                  String defaultModel) {
+                  String defaultModel,
+                  List<String> anthropicSkills) {
         this.availableModels = new LinkedHashMap<>(availableModels);
         this.providerDefaultModels = new LinkedHashMap<>(providerDefaultModels);
         this.jdbcTemplate = jdbcTemplate;
@@ -45,6 +48,7 @@ public class ModelSwitcher {
         this.activeClient = initialClient;
         this.activeProvider = defaultProvider;
         this.activeModel = defaultModel;
+        this.anthropicSkills = anthropicSkills != null ? anthropicSkills : List.of();
     }
 
     /**
@@ -88,7 +92,7 @@ public class ModelSwitcher {
                     + "Available providers: " + availableModels.keySet());
         }
 
-        var options = chatOptionsForModel(chatModel, model);
+        var options = chatOptionsForModel(chatModel, model, anthropicSkills);
         ChatClient newClient = clientBuilderFactory.apply(chatModel)
                 .defaultOptions(options)
                 .build();
@@ -136,13 +140,18 @@ public class ModelSwitcher {
     /**
      * Build vendor-specific ChatOptions for the given model.
      * Extracted here so herald-core has no dependency on HeraldAgentConfig.
+     * Anthropic skills are applied when provided; pass {@code List.of()} for subagent builders.
      */
-    static ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
+    static ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId, List<String> anthropicSkills) {
         if (chatModel instanceof OpenAiChatModel) {
             return ChatOptions.builder().model(modelId);
         }
         // Default to Anthropic
-        return AnthropicChatOptions.builder().model(modelId);
+        var builder = AnthropicChatOptions.builder().model(modelId);
+        for (String skillId : anthropicSkills) {
+            builder.skill(skillId);
+        }
+        return builder;
     }
 
     private void persistOverride(String provider, String model) {

@@ -87,7 +87,7 @@ class HeraldA2aIntegrationTest {
                 "test-agent", baseUrl + "/testagent", Map.of());
         HeraldConfig config = new HeraldConfig(
                 null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null),
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null),
                 null, null, null, null, null, null, null,
                 new HeraldConfig.A2a(List.of(a2aAgent)));
 

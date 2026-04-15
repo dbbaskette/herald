@@ -1,6 +1,7 @@
 package com.herald.agent;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -50,7 +51,7 @@ class ModelSwitcherTest {
         Function<ChatModel, ChatClient.Builder> factory = cm -> mockBuilder;
 
         switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplate, factory,
-                initialClient, "anthropic", "claude-sonnet-4-5");
+                initialClient, "anthropic", "claude-sonnet-4-5", List.of());
     }
 
     @Test
