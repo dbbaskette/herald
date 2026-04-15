@@ -1,0 +1,1088 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - link "Skip to main content" [ref=e5] [cursor=pointer]:
+      - /url: "#main"
+    - navigation [ref=e7]:
+      - generic [ref=e8]:
+        - link "Home" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e40]:
+          - generic "navigation" [ref=e41]:
+            - generic [ref=e42]:
+              - button "Why Spring" [ref=e43]
+              - list:
+                - listitem:
+                  - link "Overview":
+                    - /url: /why-spring
+                - listitem:
+                  - generic: Trending
+                - listitem:
+                  - link "Generative AI":
+                    - /url: /ai
+                - listitem:
+                  - link "Cloud":
+                    - /url: /cloud
+                - listitem:
+                  - generic: Architecture Patterns
+                - listitem:
+                  - link "Microservices":
+                    - /url: /microservices
+                - listitem:
+                  - link "Reactive":
+                    - /url: /reactive
+                - listitem:
+                  - link "Event Driven":
+                    - /url: /event-driven
+                - listitem:
+                  - generic: Application Types
+                - listitem:
+                  - link "Web Applications":
+                    - /url: /web-applications
+                - listitem:
+                  - link "Serverless":
+                    - /url: /serverless
+                - listitem:
+                  - link "Batch":
+                    - /url: /batch
+            - generic [ref=e44]:
+              - button "Learn" [ref=e45]
+              - list:
+                - listitem:
+                  - generic: Getting Started
+                - listitem:
+                  - link "Quickstart":
+                    - /url: /quickstart
+                - listitem:
+                  - link "Guides":
+                    - /url: /guides
+                - listitem:
+                  - generic: Academy
+                - listitem:
+                  - link "Courses, Open in a new tab":
+                    - /url: https://spring.academy/courses
+                    - text: Courses
+                    - img
+                - listitem:
+                  - link "Get Certified, Open in a new tab":
+                    - /url: https://spring.academy/learning-path
+                    - text: Get Certified
+                    - img
+            - generic [ref=e46]:
+              - button "Projects" [ref=e47]
+              - list:
+                - listitem:
+                  - link "Overview":
+                    - /url: /projects
+                - listitem:
+                  - generic: Projects
+                - listitem:
+                  - link "Spring Boot":
+                    - /url: /projects/spring-boot
+                - listitem:
+                  - link "Spring Framework":
+                    - /url: /projects/spring-framework
+                - listitem:
+                  - link "Spring Cloud":
+                    - /url: /projects/spring-cloud
+                - listitem:
+                  - link "Spring AI":
+                    - /url: /projects/spring-ai
+                - listitem:
+                  - link "Spring Data":
+                    - /url: /projects/spring-data
+                - listitem:
+                  - link "Spring Integration":
+                    - /url: /projects/spring-integration
+                - listitem:
+                  - link "Spring Batch":
+                    - /url: /projects/spring-batch
+                - listitem:
+                  - link "Spring Security":
+                    - /url: /projects/spring-security
+                - listitem:
+                  - generic: Foundational Projects
+                - listitem:
+                  - link "Micrometer, Open in a new tab":
+                    - /url: https://micrometer.io
+                    - text: Micrometer
+                    - img
+                - listitem:
+                  - link "Reactor, Open in a new tab":
+                    - /url: https://projectreactor.io
+                    - text: Reactor
+                    - img
+                - listitem:
+                  - generic: Development Tools
+                - listitem:
+                  - link "Spring Tools":
+                    - /url: /tools
+                - listitem:
+                  - link "Spring Initializr, Open in a new tab":
+                    - /url: https://start.spring.io/
+                    - text: Spring Initializr
+                    - img
+            - generic [ref=e48]:
+              - button "Resources" [ref=e49]
+              - list:
+                - listitem:
+                  - link "Blog":
+                    - /url: /blog
+                - listitem:
+                  - link "Release Calendar":
+                    - /url: /projects#release-calendar
+                - listitem:
+                  - link "Version Mappings":
+                    - /url: /projects/generations
+                - listitem:
+                  - link "Release Highlights":
+                    - /url: /projects/release-highlights
+                - listitem:
+                  - link "Security Advisories":
+                    - /url: /security
+                - listitem:
+                  - generic: GitHub Orgs
+                - listitem:
+                  - link "Spring Projects on GitHub, Open in a new tab":
+                    - /url: https://github.com/spring-projects
+                    - text: Spring Projects
+                    - img
+                - listitem:
+                  - link "Spring Cloud on GitHub, Open in a new tab":
+                    - /url: https://github.com/spring-cloud
+                    - text: Spring Cloud
+                    - img
+            - generic [ref=e50]:
+              - button "Community" [ref=e51]
+              - list:
+                - listitem:
+                  - link "Overview":
+                    - /url: /community
+                - listitem:
+                  - link "Events":
+                    - /url: /events
+                - listitem:
+                  - link "Authors":
+                    - /url: /authors
+            - generic [ref=e52]:
+              - button "Enterprise" [ref=e53]
+              - list:
+                - listitem:
+                  - link "Overview":
+                    - /url: https://enterprise.spring.io/
+                - listitem:
+                  - link "Long-term Support":
+                    - /url: https://enterprise.spring.io/lts-releases
+                - listitem:
+                  - link "Automated Upgrades":
+                    - /url: https://enterprise.spring.io/spring-application-advisor
+                - listitem:
+                  - link "Governance and Compliance":
+                    - /url: https://enterprise.spring.io/enterprise-extensions
+                - listitem:
+                  - link "Modern App Development":
+                    - /url: https://enterprise.spring.io/enterprise-components
+          - menu "theme toggler" [ref=e54] [cursor=pointer]:
+            - checkbox [ref=e55]
+            - menuitem [ref=e57]
+            - generic "light" [ref=e59]
+    - main [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e63]:
+          - heading "Spring Blog" [level=1] [ref=e64]:
+            - link "Spring Blog" [ref=e65] [cursor=pointer]:
+              - /url: /blog
+          - button "RSS feeds" [ref=e69]:
+            - img [ref=e70]
+            - text: RSS feeds
+            - img [ref=e72]
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]:
+              - 'heading "Spring AI Agentic Patterns (Part 6): AutoMemoryTools — Persistent Agent Memory Across Sessions" [level=1] [ref=e77]'
+              - generic [ref=e78]:
+                - link "Engineering" [ref=e79] [cursor=pointer]:
+                  - /url: /blog/category/engineering
+                - text: "|"
+                - link "Christian Tzolov" [ref=e80] [cursor=pointer]:
+                  - /url: /authors/tzolov
+                - text: "| April 07, 2026 | 9 min read |"
+                - link "0 Comments" [ref=e81] [cursor=pointer]:
+                  - /url: /blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools#disqus_thread
+            - generic [ref=e82]:
+              - heading "file based long term memory for spring ai agents permalink File-Based Long-Term Memory for Spring AI Agents" [level=4] [ref=e83]:
+                - link "file based long term memory for spring ai agents permalink" [ref=e84] [cursor=pointer]:
+                  - /url: "#file-based-long-term-memory-for-spring-ai-agents"
+                - emphasis [ref=e85]: File-Based Long-Term Memory for Spring AI Agents
+              - paragraph [ref=e86]:
+                - text: Agents are only as useful as what they remember. Spring AI's
+                - link "Chat Memory" [ref=e87] [cursor=pointer]:
+                  - /url: https://docs.spring.io/spring-ai/reference/2.0-SNAPSHOT/api/chat-memory.html#page-title
+                - text: stores the full conversation and can persist it across restarts, but when the window fills, the oldest messages are evicted. The upcoming
+                - code [ref=e88]: Session API
+                - text: will add recursive summarization to soften this, but precise facts are still lost when details get compressed away.
+              - paragraph [ref=e89]:
+                - code [ref=e90]: AutoMemoryTools
+                - text: and
+                - code [ref=e91]: AutoMemoryToolsAdvisor
+                - text: ", part of the"
+                - link "spring-ai-agent-utils" [ref=e92] [cursor=pointer]:
+                  - /url: https://github.com/spring-ai-community/spring-ai-agent-utils
+                - text: toolkit, give your agents a
+                - strong [ref=e93]: durable, file-based long-term memory
+                - text: that persists across sessions. The design is inspired by
+                - link "Claude Code's auto-memory system" [ref=e94] [cursor=pointer]:
+                  - /url: https://code.claude.com/docs/en/memory#auto-memory
+                - text: and the
+                - link "Claude API Memory Tool spec" [ref=e95] [cursor=pointer]:
+                  - /url: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
+                - text: "- ported to Spring AI so it works with any LLM provider."
+              - paragraph [ref=e96]:
+                - strong [ref=e97]: Long-Term Memory vs. Conversation History
+              - paragraph [ref=e98]:
+                - code [ref=e99]: ChatMemory
+                - text: and
+                - code [ref=e100]: AutoMemoryTools
+                - text: are complementary—a well-configured agent uses both.
+                - code [ref=e101]: ChatMemory
+                - text: "keeps the full conversation window: every turn, automatically, bounded by a sliding window."
+                - code [ref=e102]: AutoMemoryTools
+                - text: "is the curated layer: the AI model writes only what is"
+                - emphasis [ref=e103]: worth keeping forever
+                - text: —a user preference, a project decision, a behavioral correction—to a typed Markdown file that survives indefinitely. Use
+                - code [ref=e104]: ChatMemory
+                - text: for the current task; use
+                - code [ref=e105]: AutoMemoryTools
+                - text: for facts that should still be available next week.
+              - paragraph [ref=e106]:
+                - strong [ref=e107]: This is Part 6 of our Spring AI Agentic Patterns series.
+                - text: We've covered
+                - link "Agent Skills" [ref=e108] [cursor=pointer]:
+                  - /url: https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills
+                - text: ","
+                - link "AskUserQuestionTool" [ref=e109] [cursor=pointer]:
+                  - /url: https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool
+                - text: ","
+                - link "TodoWriteTool" [ref=e110] [cursor=pointer]:
+                  - /url: https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/
+                - text: ","
+                - link "Subagent Orchestration" [ref=e111] [cursor=pointer]:
+                  - /url: https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents
+                - text: ", and"
+                - link "A2A Integration" [ref=e112] [cursor=pointer]:
+                  - /url: https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration
+                - text: . Now we add memory that outlives the session.
+              - paragraph [ref=e113]:
+                - text: 🚀
+                - strong [ref=e114]: Want to jump right in?
+                - text: Skip to the
+                - link "Quick Start" [ref=e115] [cursor=pointer]:
+                  - /url: "#quick-start"
+                - text: section.
+              - heading "how it works permalink How It Works" [level=2] [ref=e116]:
+                - link "how it works permalink" [ref=e117] [cursor=pointer]:
+                  - /url: "#how-it-works"
+                - text: How It Works
+              - paragraph [ref=e118]:
+                - text: The agent manages its own memory through six targeted tools in
+                - code [ref=e119]: AutoMemoryTools
+                - text: ", all scoped to a sandboxed memories directory. The diagram below shows the full request flow:"
+              - img "AutoMemoryTools execution flow" [ref=e120]
+              - paragraph [ref=e121]:
+                - strong [ref=e122]: ① User request
+                - text: — the request, combined with the memory system prompt, flows through the Spring AI advisor stack (
+                - code [ref=e123]: ToolCallAdvisor
+                - text: +
+                - code [ref=e124]: ChatMemoryAdvisor
+                - text: ) to the LLM. The LLM decides whether to load, create, or update memories before answering.
+              - paragraph [ref=e125]:
+                - strong [ref=e126]: ② Tool call
+                - text: — the LLM invokes
+                - code [ref=e127]: AutoMemoryTools
+                - text: . The tools read and write typed Markdown files in the configured memory directory —
+                - code [ref=e128]: MEMORY.md
+                - text: as the index, plus individual topic files such as
+                - code [ref=e129]: user_profile.md
+                - text: or
+                - code [ref=e130]: project_history.md
+                - text: .
+              - paragraph [ref=e131]:
+                - strong [ref=e132]: ③ Follow-up retrieve/update
+                - text: — the LLM may issue additional tool calls to load specific memory files or update existing ones; for example, loading a file after finding its pointer in
+                - code [ref=e133]: MEMORY.md
+                - text: ", or merging entries during consolidation."
+              - paragraph [ref=e134]:
+                - strong [ref=e135]: ④ Final response
+                - text: — once all memory operations are complete, the LLM produces its answer, which flows back through the advisor stack to the user.
+              - heading "memory system prompt permalink Memory System Prompt" [level=3] [ref=e136]:
+                - link "memory system prompt permalink" [ref=e137] [cursor=pointer]:
+                  - /url: "#memory-system-prompt"
+                - text: Memory System Prompt
+              - paragraph [ref=e138]: "The memory system prompt drives this behaviour. Two variants ship in the jar:"
+              - list [ref=e139]:
+                - listitem [ref=e140]:
+                  - code [ref=e141]: AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md
+                  - text: — used with
+                  - link "Options A" [ref=e142] [cursor=pointer]:
+                    - /url: "#option-a-automemorytoolsadvisor-zero-boilerplate"
+                  - text: "&"
+                  - link "Option B" [ref=e143] [cursor=pointer]:
+                    - /url: "#option-b-manual-setup-automemorytools-directly"
+                  - text: ; dedicated, sandboxed
+                  - code [ref=e144]: AutoMemoryTools
+                - listitem [ref=e145]:
+                  - code [ref=e146]: AUTO_MEMORY_FILESYSTEM_TOOLS_SYSTEM_PROMPT.md
+                  - text: — used with
+                  - link "Option C" [ref=e147] [cursor=pointer]:
+                    - /url: "#option-c-filesystemtools--shelltools"
+                  - text: ; generic
+                  - code [ref=e148]: Read
+                  - text: /
+                  - code [ref=e149]: Write
+                  - text: /
+                  - code [ref=e150]: Edit
+                  - text: via
+                  - code [ref=e151]: FileSystemTools
+              - paragraph [ref=e152]:
+                - text: Both memory system prompts encode the same memory model, differing only in which operations the model is told to call. They instruct the model to read
+                - code [ref=e153]: MEMORY.md
+                - text: at session start, save via the two-step workflow (
+                - code [ref=e154]: MemoryCreate
+                - text: →
+                - code [ref=e155]: MemoryInsert
+                - text: ), apply the four memory types, skip ephemeral content, verify recalled facts before acting on them, and keep the index in sync when deleting or renaming files.
+              - heading "memorymd the index file permalink MEMORY.md — The Index File" [level=3] [ref=e156]:
+                - link "memorymd the index file permalink" [ref=e157] [cursor=pointer]:
+                  - /url: "#memorymd--the-index-file"
+                - text: MEMORY.md — The Index File
+              - paragraph [ref=e158]:
+                - code [ref=e159]: MEMORY.md
+                - text: "is the always-loaded index. It's a flat list of one-line pointers to all memory files:"
+              - code [ref=e161]:
+                - button "Copy" [ref=e162] [cursor=pointer]
+                - text: "- [User Profile](user_profile.md) — Alice, backend engineer, prefers short answers - [Feedback Testing](feedback_testing.md) — always use real DB in integration tests - [Project Auth Rewrite](project_auth.md) — driven by legal compliance, not tech debt"
+              - paragraph [ref=e163]: The model reads this index at the start of each session, then selectively loads the files that look relevant—keeping the context window lean even as memory grows.
+              - heading "memory file format permalink Memory File Format" [level=3] [ref=e164]:
+                - link "memory file format permalink" [ref=e165] [cursor=pointer]:
+                  - /url: "#memory-file-format"
+                - text: Memory File Format
+              - paragraph [ref=e166]: "Each memory is a Markdown file with YAML frontmatter:"
+              - code [ref=e168]:
+                - button "Copy" [ref=e169] [cursor=pointer]
+                - text: "--- name: user profile description: Alice — backend engineer, prefers short answers type: user --- Backend engineer named Alice. Prefers concise, direct responses without trailing summaries."
+              - heading "memory types permalink Memory Types" [level=3] [ref=e170]:
+                - link "memory types permalink" [ref=e171] [cursor=pointer]:
+                  - /url: "#memory-types"
+                - text: Memory Types
+              - paragraph [ref=e172]: "Not everything is worth keeping. The memory model defines four types, each with clear guidance on what to save and when—so the agent accumulates signal, not noise:"
+              - list [ref=e173]:
+                - listitem [ref=e174]:
+                  - strong [ref=e175]:
+                    - code [ref=e176]: user
+                  - text: — role, goals, expertise, communication style
+                - listitem [ref=e177]:
+                  - strong [ref=e178]:
+                    - code [ref=e179]: feedback
+                  - text: — corrections and confirmed approaches ("stop summarizing", "yes, that was right")
+                - listitem [ref=e180]:
+                  - strong [ref=e181]:
+                    - code [ref=e182]: project
+                  - text: — decisions and deadlines not in code or git (migration targets, freeze dates)
+                - listitem [ref=e183]:
+                  - strong [ref=e184]:
+                    - code [ref=e185]: reference
+                  - text: — pointers to external systems (Linear boards, Grafana dashboards, Slack channels)
+              - heading "memory operations permalink Memory Operations" [level=3] [ref=e186]:
+                - link "memory operations permalink" [ref=e187] [cursor=pointer]:
+                  - /url: "#memory-operations"
+                - text: Memory Operations
+              - paragraph [ref=e188]:
+                - code [ref=e189]: AutoMemoryTools
+                - text: exposes six purpose-named, sandboxed operations. Option C achieves the same outcome through the general-purpose
+                - code [ref=e190]: FileSystemTools
+                - text: and
+                - code [ref=e191]: ShellTools
+                - text: operations.
+              - generic [ref=e192]:
+                - generic [ref=e193]:
+                  - heading "automemorytools permalink AutoMemoryTools" [level=4] [ref=e194]:
+                    - link "automemorytools permalink" [ref=e195] [cursor=pointer]:
+                      - /url: "#automemorytools"
+                    - text: AutoMemoryTools
+                  - paragraph [ref=e196]:
+                    - text: Options A and B use
+                    - code [ref=e197]: AutoMemoryTools
+                    - text: ", which implements the"
+                    - link "Claude API Memory Tool specification" [ref=e198] [cursor=pointer]:
+                      - /url: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
+                    - text: "one-to-one with purpose-named, sandboxed operations:"
+                  - table [ref=e199]:
+                    - rowgroup [ref=e200]:
+                      - row "Tool Purpose" [ref=e201]:
+                        - columnheader "Tool" [ref=e202]
+                        - columnheader "Purpose" [ref=e203]
+                    - rowgroup [ref=e204]:
+                      - row "MemoryView Read a file with line numbers, or list a directory two levels deep" [ref=e205]:
+                        - cell "MemoryView" [ref=e206]:
+                          - code [ref=e207]: MemoryView
+                        - cell "Read a file with line numbers, or list a directory two levels deep" [ref=e208]
+                      - row "MemoryCreate Create a new memory file (Step 1 of two-step save)" [ref=e209]:
+                        - cell "MemoryCreate" [ref=e210]:
+                          - code [ref=e211]: MemoryCreate
+                        - cell "Create a new memory file (Step 1 of two-step save)" [ref=e212]
+                      - row "MemoryStrReplace Replace an exact, unique string in an existing file" [ref=e213]:
+                        - cell "MemoryStrReplace" [ref=e214]:
+                          - code [ref=e215]: MemoryStrReplace
+                        - cell "Replace an exact, unique string in an existing file" [ref=e216]
+                      - 'row "MemoryInsert Insert text after a given line number—primary use: appending to MEMORY.md" [ref=e217]':
+                        - cell "MemoryInsert" [ref=e218]:
+                          - code [ref=e219]: MemoryInsert
+                        - 'cell "Insert text after a given line number—primary use: appending to MEMORY.md" [ref=e220]':
+                          - text: "Insert text after a given line number—primary use: appending to"
+                          - code [ref=e221]: MEMORY.md
+                      - row "MemoryDelete Delete a file or directory recursively" [ref=e222]:
+                        - cell "MemoryDelete" [ref=e223]:
+                          - code [ref=e224]: MemoryDelete
+                        - cell "Delete a file or directory recursively" [ref=e225]
+                      - row "MemoryRename Rename or move a file; updates MEMORY.md link separately" [ref=e226]:
+                        - cell "MemoryRename" [ref=e227]:
+                          - code [ref=e228]: MemoryRename
+                        - cell "Rename or move a file; updates MEMORY.md link separately" [ref=e229]:
+                          - text: Rename or move a file; updates
+                          - code [ref=e230]: MEMORY.md
+                          - text: link separately
+                - generic [ref=e231]:
+                  - heading "filesystemtools shelltools permalink FileSystemTools & ShellTools" [level=4] [ref=e232]:
+                    - link "filesystemtools shelltools permalink" [ref=e233] [cursor=pointer]:
+                      - /url: "#filesystemtools--shelltools"
+                    - text: FileSystemTools & ShellTools
+                  - paragraph [ref=e234]:
+                    - text: Option C uses the general-purpose
+                    - code [ref=e235]: FileSystemTools
+                    - text: and
+                    - code [ref=e236]: ShellTools
+                    - text: "instead, mapping to the same operations:"
+                  - table [ref=e237]:
+                    - rowgroup [ref=e238]:
+                      - row "Operation Equivalent to" [ref=e239]:
+                        - columnheader "Operation" [ref=e240]
+                        - columnheader "Equivalent to" [ref=e241]
+                    - rowgroup [ref=e242]:
+                      - row "Read MemoryView" [ref=e243]:
+                        - cell "Read" [ref=e244]:
+                          - code [ref=e245]: Read
+                        - cell "MemoryView" [ref=e246]:
+                          - code [ref=e247]: MemoryView
+                      - row "Write MemoryCreate" [ref=e248]:
+                        - cell "Write" [ref=e249]:
+                          - code [ref=e250]: Write
+                        - cell "MemoryCreate" [ref=e251]:
+                          - code [ref=e252]: MemoryCreate
+                      - row "Edit MemoryStrReplace / MemoryInsert" [ref=e253]:
+                        - cell "Edit" [ref=e254]:
+                          - code [ref=e255]: Edit
+                        - cell "MemoryStrReplace / MemoryInsert" [ref=e256]:
+                          - code [ref=e257]: MemoryStrReplace
+                          - text: /
+                          - code [ref=e258]: MemoryInsert
+                      - row "Bash (e.g. rm, mv) MemoryDelete / MemoryRename" [ref=e259]:
+                        - cell "Bash (e.g. rm, mv)" [ref=e260]:
+                          - code [ref=e261]: Bash
+                          - text: (e.g.
+                          - code [ref=e262]: rm
+                          - text: ","
+                          - code [ref=e263]: mv
+                          - text: )
+                        - cell "MemoryDelete / MemoryRename" [ref=e264]:
+                          - code [ref=e265]: MemoryDelete
+                          - text: /
+                          - code [ref=e266]: MemoryRename
+              - paragraph [ref=e267]: Options A and B sandbox all paths; Option C has no sandbox — the agent has full filesystem access.
+              - heading "integration approaches permalink Integration Approaches" [level=2] [ref=e268]:
+                - link "integration approaches permalink" [ref=e269] [cursor=pointer]:
+                  - /url: "#integration-approaches"
+                - text: Integration Approaches
+              - paragraph [ref=e270]: There are three ways to add long-term memory to a Spring AI agent, ranging from zero-boilerplate to fully manual. Choose based on how much control you need over the system prompt, the security concerns and whether your agent already uses general-purpose filesystem tools.
+              - 'heading "option a automemorytoolsadvisor zero boilerplate permalink Option A: AutoMemoryToolsAdvisor (zero-boilerplate)" [level=3] [ref=e271]':
+                - link "option a automemorytoolsadvisor zero boilerplate permalink" [ref=e272] [cursor=pointer]:
+                  - /url: "#option-a-automemorytoolsadvisor-zero-boilerplate"
+                - text: "Option A: AutoMemoryToolsAdvisor (zero-boilerplate)"
+              - paragraph [ref=e273]:
+                - text: Drop a single advisor into your
+                - code [ref=e274]: ChatClient
+                - text: "builder:"
+              - code [ref=e276]:
+                - button "Copy" [ref=e277] [cursor=pointer]
+                - text: ChatClient chatClient = ChatClient.builder(chatModel) .defaultAdvisors( // Long-term memory — facts that survive across sessions AutoMemoryToolsAdvisor.builder() .memoriesRootDirectory("/home/user/.agent/memories") .build(), // Conversation history — full message window for this session MessageChatMemoryAdvisor.builder( MessageWindowChatMemory.builder().maxMessages(100).build()) .build(), // Tool calling ToolCallAdvisor.builder().disableInternalConversationHistory().build()) .build();
+              - paragraph [ref=e278]:
+                - text: On every request the advisor automatically injects
+                - code [ref=e279]: AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md
+                - text: into the system message, registers all six
+                - code [ref=e280]: AutoMemoryTools
+                - text: (deduplicating any existing registrations), and optionally appends a consolidation reminder if the
+                - code [ref=e281]: memoryConsolidationTrigger
+                - text: fires.
+              - img "AutoMemoryTools Advisor" [ref=e282]
+              - paragraph [ref=e283]:
+                - code [ref=e284]: AutoMemoryToolsAdvisor
+                - text: runs first in the chain, augmenting the request context with the memory system prompt and the six tool definitions before handing off to
+                - code [ref=e285]: ToolCallAdvisor
+                - text: and
+                - code [ref=e286]: ChatMemoryAdvisor
+                - text: . By the time the enriched context reaches the LLM it already contains the conversation history, tool definitions, and memory instructions—everything the model needs to decide what to load, save, or update.
+              - 'heading "option b manual setup automemorytools directly permalink Option B: Manual Setup (AutoMemoryTools directly)" [level=3] [ref=e287]':
+                - link "option b manual setup automemorytools directly permalink" [ref=e288] [cursor=pointer]:
+                  - /url: "#option-b-manual-setup-automemorytools-directly"
+                - text: "Option B: Manual Setup (AutoMemoryTools directly)"
+              - paragraph [ref=e289]:
+                - text: Wire
+                - code [ref=e290]: AutoMemoryTools
+                - text: into your
+                - code [ref=e291]: ChatClient
+                - text: "alongside the companion system prompt:"
+              - code [ref=e293]:
+                - button "Copy" [ref=e294] [cursor=pointer]
+                - text: "@Value(\"classpath:/prompt/AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md\") Resource memorySystemPrompt; @Value(\"${agent.memory.dir}\") String memoryDir; ChatClient chatClient = chatClientBuilder .defaultSystem(p -> p .text(memorySystemPrompt) .param(\"MEMORIES_ROOT_DIERCTORY\", memoryDir)) .defaultTools( AutoMemoryTools.builder().memoriesDir(memoryDir).build(), TodoWriteTool.builder().build()) .defaultAdvisors(ToolCallAdvisor.builder().build()) .build();"
+              - paragraph [ref=e295]: Use this approach when you want full control over the system prompt structure—for example, combining memory with a custom main system prompt.
+              - 'heading "option c filesystemtools shelltools permalink Option C: FileSystemTools + ShellTools" [level=3] [ref=e296]':
+                - link "option c filesystemtools shelltools permalink" [ref=e297] [cursor=pointer]:
+                  - /url: "#option-c-filesystemtools--shelltools"
+                - text: "Option C: FileSystemTools + ShellTools"
+              - paragraph [ref=e298]:
+                - text: If the agent already has
+                - code [ref=e299]: FileSystemTools
+                - text: and
+                - code [ref=e300]: ShellTools
+                - text: for other tasks, you can implement the same memory pattern without adding
+                - code [ref=e301]: AutoMemoryTools
+                - text: at all. The agent uses the same
+                - code [ref=e302]: Read
+                - text: ","
+                - code [ref=e303]: Write
+                - text: ", and"
+                - code [ref=e304]: Edit
+                - text: operations it would use for any file work—memory is just another directory.
+              - code [ref=e306]:
+                - button "Copy" [ref=e307] [cursor=pointer]
+                - text: "@Value(\"classpath:/prompt/AUTO_MEMORY_FILESYSTEM_TOOLS_SYSTEM_PROMPT.md\") Resource memorySystemPrompt; @Value(\"${agent.memory.dir}\") String memoryDir; ChatClient chatClient = chatClientBuilder .defaultSystem(p -> p .text(memorySystemPrompt) .param(\"MEMORIES_ROOT_DIERCTORY\", memoryDir)) // tells the agent where to write .defaultTools( ShellTools.builder().build(), // Bash — mkdir, ls, etc. FileSystemTools.builder().build()) // Read, Write, Edit — memory file operations .defaultAdvisors(ToolCallAdvisor.builder().build()) .build();"
+              - paragraph [ref=e308]:
+                - text: The same memory conventions apply—typed files,
+                - code [ref=e309]: MEMORY.md
+                - text: index, two-step save—but there is
+                - strong [ref=e310]: no sandbox
+                - text: ": the agent has full filesystem access and stays in the configured directory by convention only."
+              - table [ref=e311]:
+                - rowgroup [ref=e312]:
+                  - row "AutoMemoryTools (Options A & B) FileSystemTools (Option C)" [ref=e313]:
+                    - columnheader [ref=e314]
+                    - columnheader "AutoMemoryTools (Options A & B)" [ref=e315]:
+                      - code [ref=e316]: AutoMemoryTools
+                      - text: (Options A & B)
+                    - columnheader "FileSystemTools (Option C)" [ref=e317]:
+                      - code [ref=e318]: FileSystemTools
+                      - text: (Option C)
+                - rowgroup [ref=e319]:
+                  - row "Path model Relative paths, sandboxed to memories root Absolute paths, full filesystem access" [ref=e320]:
+                    - cell "Path model" [ref=e321]:
+                      - strong [ref=e322]: Path model
+                    - cell "Relative paths, sandboxed to memories root" [ref=e323]
+                    - cell "Absolute paths, full filesystem access" [ref=e324]
+                  - row "Safety Built-in traversal guard No sandbox — agent follows prompt by convention" [ref=e325]:
+                    - cell "Safety" [ref=e326]:
+                      - strong [ref=e327]: Safety
+                    - cell "Built-in traversal guard" [ref=e328]
+                    - cell "No sandbox — agent follows prompt by convention" [ref=e329]
+                  - row "Tool names Purpose-named (MemoryCreate, MemoryView, …) Generic (Write, Read, Edit)" [ref=e330]:
+                    - cell "Tool names" [ref=e331]:
+                      - strong [ref=e332]: Tool names
+                    - cell "Purpose-named (MemoryCreate, MemoryView, …)" [ref=e333]:
+                      - text: Purpose-named (
+                      - code [ref=e334]: MemoryCreate
+                      - text: ","
+                      - code [ref=e335]: MemoryView
+                      - text: ", …)"
+                    - cell "Generic (Write, Read, Edit)" [ref=e336]:
+                      - text: Generic (
+                      - code [ref=e337]: Write
+                      - text: ","
+                      - code [ref=e338]: Read
+                      - text: ","
+                      - code [ref=e339]: Edit
+                      - text: )
+                  - row "Best for Memory-only agents, isolation required Agents already using filesystem tools for other tasks" [ref=e340]:
+                    - cell "Best for" [ref=e341]:
+                      - strong [ref=e342]: Best for
+                    - cell "Memory-only agents, isolation required" [ref=e343]
+                    - cell "Agents already using filesystem tools for other tasks" [ref=e344]
+              - paragraph [ref=e345]:
+                - text: This approach follows the
+                - link "Claude Code auto-memory pattern" [ref=e346] [cursor=pointer]:
+                  - /url: https://code.claude.com/docs/en/memory
+                - text: directly, where the same file tools serve both code editing and memory management.
+              - blockquote [ref=e347]:
+                - paragraph [ref=e348]:
+                  - text: ⚠️
+                  - strong [ref=e349]: "Security note:"
+                  - text: With
+                  - code [ref=e350]: FileSystemTools
+                  - text: ", the agent can read and write anywhere on the filesystem. Only use this approach in trusted, controlled environments."
+                - text: ”
+              - heading "keeping memory clean permalink Keeping Memory Clean" [level=2] [ref=e351]:
+                - link "keeping memory clean permalink" [ref=e352] [cursor=pointer]:
+                  - /url: "#keeping-memory-clean"
+                - text: Keeping Memory Clean
+              - paragraph [ref=e353]:
+                - text: Over time a memory store accumulates redundant, overlapping, or stale entries. Periodically asking the agent to consolidate—merge duplicates, drop outdated facts, tighten descriptions—keeps the store lean and the
+                - code [ref=e354]: MEMORY.md
+                - text: index readable.
+              - paragraph [ref=e355]:
+                - strong [ref=e356]: "Options B and C (explicit):"
+                - text: "just ask:"
+              - code [ref=e358]:
+                - button "Copy" [ref=e359] [cursor=pointer]
+                - text: USER> Please consolidate your memory — merge duplicates and remove anything outdated.
+              - paragraph [ref=e360]:
+                - strong [ref=e361]: "Option A (automatic trigger):"
+                - code [ref=e362]: AutoMemoryToolsAdvisor
+                - text: accepts a
+                - code [ref=e363]: memoryConsolidationTrigger
+                - text: predicate. When it returns
+                - code [ref=e364]: "true"
+                - text: ", a"
+                - code [ref=e365]: <system-reminder>
+                - text: "is injected into the next request's system message, prompting the model to consolidate without the user having to ask. The demo uses a dual-condition trigger—time elapsed or the user says \"bye\":"
+              - code [ref=e367]:
+                - button "Copy" [ref=e368] [cursor=pointer]
+                - text: "Instant lastInteraction = Instant.now(); AutoMemoryToolsAdvisor.builder() .memoriesRootDirectory(memoryDir) .memoryConsolidationTrigger((request, instant) -> { var previous = lastInteraction; lastInteraction = Instant.now(); // Consolidate when more than 60 seconds pass between turns if (instant.isAfter(previous.plusSeconds(60))) { return true; } // Also consolidate when the user says goodbye var msg = request.prompt().getLastUserOrToolResponseMessage().getText(); return msg != null && msg.toLowerCase().contains(\"bye\"); }) .build()"
+              - paragraph [ref=e369]: "Other useful strategies:"
+              - code [ref=e371]:
+                - button "Copy" [ref=e372] [cursor=pointer]
+                - text: "// Probabilistic: ~5% of requests .memoryConsolidationTrigger((req, now) -> Math.random() < 0.05) // Turn-count: every 50 calls AtomicInteger counter = new AtomicInteger(); .memoryConsolidationTrigger((req, now) -> counter.incrementAndGet() % 50 == 0)"
+              - heading "quick start permalink Quick Start" [level=2] [ref=e373]:
+                - link "quick start permalink" [ref=e374] [cursor=pointer]:
+                  - /url: "#quick-start"
+                - text: Quick Start
+              - heading "1 add the dependency permalink 1. Add the Dependency" [level=3] [ref=e375]:
+                - link "1 add the dependency permalink" [ref=e376] [cursor=pointer]:
+                  - /url: "#1-add-the-dependency"
+                - text: 1. Add the Dependency
+              - code [ref=e378]:
+                - button "Copy" [ref=e379] [cursor=pointer]
+                - generic [ref=e380]: <dependency>
+                - generic [ref=e381]: <groupId>
+                - text: org.springaicommunity
+                - generic [ref=e382]: </groupId>
+                - generic [ref=e383]: <artifactId>
+                - text: spring-ai-agent-utils
+                - generic [ref=e384]: </artifactId>
+                - generic [ref=e385]: <version>
+                - text: 0.7.0
+                - generic [ref=e386]: </version>
+                - generic [ref=e387]: </dependency>
+              - blockquote [ref=e388]:
+                - paragraph [ref=e389]:
+                  - strong [ref=e390]: "Note:"
+                  - text: For the latest stable release, check the
+                  - link "GitHub releases page" [ref=e391] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/releases
+                  - text: . Requires Spring AI
+                  - code [ref=e392]: 2.0.0-M4+
+                  - text: .
+                - text: ”
+              - heading "2 configure the memory directory permalink 2. Configure the Memory Directory" [level=3] [ref=e393]:
+                - link "2 configure the memory directory permalink" [ref=e394] [cursor=pointer]:
+                  - /url: "#2-configure-the-memory-directory"
+                - text: 2. Configure the Memory Directory
+              - code [ref=e396]:
+                - button "Copy" [ref=e397] [cursor=pointer]
+                - text: "# application.properties agent.memory.dir=${user.home}/.spring-ai-agent/my-app/memory"
+              - heading "3 wire it up permalink 3. Wire It Up" [level=3] [ref=e398]:
+                - link "3 wire it up permalink" [ref=e399] [cursor=pointer]:
+                  - /url: "#3-wire-it-up"
+                - text: 3. Wire It Up
+              - code [ref=e401]:
+                - button "Copy" [ref=e402] [cursor=pointer]
+                - text: "@Value(\"${agent.memory.dir}\") String memoryDir; ChatClient chatClient = chatClientBuilder .defaultAdvisors( // Long-term memory — facts that survive across sessions AutoMemoryToolsAdvisor.builder() .memoriesRootDirectory(memoryDir) .build(), // Conversation history — full message window for this session MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder().maxMessages(100).build()) .build(), // Tool calling ToolCallAdvisor.builder().disableInternalConversationHistory().build()) .build();"
+              - heading "4 see it in action permalink 4. See It in Action" [level=3] [ref=e403]:
+                - link "4 see it in action permalink" [ref=e404] [cursor=pointer]:
+                  - /url: "#4-see-it-in-action"
+                - text: 4. See It in Action
+              - paragraph [ref=e405]: "First session:"
+              - code [ref=e407]:
+                - button "Copy" [ref=e408] [cursor=pointer]
+                - text: "USER> My name is Alice. I'm a backend engineer and I prefer short answers. USER> Remember: we're migrating from PostgreSQL to CockroachDB this quarter."
+              - paragraph [ref=e409]: "Second session (new JVM process):"
+              - code [ref=e411]:
+                - button "Copy" [ref=e412] [cursor=pointer]
+                - text: USER> What do you know about me? ASSISTANT> You're Alice, a backend engineer. You prefer short answers. You're migrating from PostgreSQL to CockroachDB this quarter.
+              - heading "example projects permalink Example Projects" [level=2] [ref=e413]:
+                - link "example projects permalink" [ref=e414] [cursor=pointer]:
+                  - /url: "#example-projects"
+                - text: Example Projects
+              - paragraph [ref=e415]: "Three runnable examples are available in the repository:"
+              - paragraph [ref=e416]:
+                - strong [ref=e417]:
+                  - link "memory-tools-advisor-demo" [ref=e418] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-tools-advisor-demo
+                - text: (Option A) —
+                - code [ref=e419]: AutoMemoryToolsAdvisor
+                - text: +
+                - code [ref=e420]: ToolCallAdvisor
+                - text: +
+                - code [ref=e421]: MessageChatMemoryAdvisor
+                - text: + custom logging advisor, with a dual-condition consolidation trigger.
+              - paragraph [ref=e422]:
+                - strong [ref=e423]:
+                  - link "memory-tools-demo" [ref=e424] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-tools-demo
+                - text: (Option B) —
+                - code [ref=e425]: AutoMemoryTools
+                - text: wired manually alongside
+                - code [ref=e426]: TodoWriteTool
+                - text: ", showing explicit system prompt composition."
+              - paragraph [ref=e427]:
+                - strong [ref=e428]:
+                  - link "memory-filesystem-tools-demo" [ref=e429] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-filesystem-tools-demo
+                - text: (Option C) — same memory conventions implemented with
+                - code [ref=e430]: FileSystemTools
+                - text: +
+                - code [ref=e431]: ShellTools
+                - text: ", no dedicated memory tools required."
+              - paragraph [ref=e432]:
+                - text: All three support Anthropic Claude, Google Gemini, and OpenAI—uncomment the desired provider in
+                - code [ref=e433]: pom.xml
+                - text: and set the API key.
+              - heading "conclusion permalink Conclusion" [level=2] [ref=e434]:
+                - link "conclusion permalink" [ref=e435] [cursor=pointer]:
+                  - /url: "#conclusion"
+                - text: Conclusion
+              - paragraph [ref=e436]:
+                - code [ref=e437]: AutoMemoryTools
+                - text: is a Spring AI port of the memory patterns Anthropic pioneered in
+                - link "Claude Code" [ref=e438] [cursor=pointer]:
+                  - /url: https://code.claude.com/docs/en/memory
+                - text: and the
+                - link "Claude API Memory Tool specification" [ref=e439] [cursor=pointer]:
+                  - /url: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
+                - text: —the
+                - code [ref=e440]: MEMORY.md
+                - text: index, typed files, two-step save, and sandboxed six-operation API—available to any LLM provider via Spring AI.
+              - paragraph [ref=e441]:
+                - text: Long-term memory is the missing layer between stateless LLM calls and truly useful agents. Add
+                - code [ref=e442]: AutoMemoryToolsAdvisor
+                - text: and your agent starts accumulating knowledge that survives the session.
+              - paragraph [ref=e443]:
+                - strong [ref=e444]: "Series links:"
+              - list [ref=e445]:
+                - listitem [ref=e446]:
+                  - strong [ref=e447]: Part 1
+                  - text: ":"
+                  - link "Agent Skills" [ref=e448] [cursor=pointer]:
+                    - /url: https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills
+                  - text: — Modular, reusable capabilities
+                - listitem [ref=e449]:
+                  - strong [ref=e450]: Part 2
+                  - text: ":"
+                  - link "AskUserQuestionTool" [ref=e451] [cursor=pointer]:
+                    - /url: https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool
+                  - text: — Interactive workflows
+                - listitem [ref=e452]:
+                  - strong [ref=e453]: Part 3
+                  - text: ":"
+                  - link "TodoWriteTool" [ref=e454] [cursor=pointer]:
+                    - /url: https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/
+                  - text: — Structured planning
+                - listitem [ref=e455]:
+                  - strong [ref=e456]: Part 4
+                  - text: ":"
+                  - link "Subagent Orchestration" [ref=e457] [cursor=pointer]:
+                    - /url: https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents
+                  - text: — Hierarchical agent architectures
+                - listitem [ref=e458]:
+                  - strong [ref=e459]: Part 5
+                  - text: ":"
+                  - link "A2A Integration" [ref=e460] [cursor=pointer]:
+                    - /url: https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration
+                  - text: — Building interoperable agents
+                - listitem [ref=e461]:
+                  - strong [ref=e462]: Part 6
+                  - text: ": AutoMemoryTools (this post) — Long-term memory across sessions"
+              - heading "resources permalink Resources" [level=2] [ref=e463]:
+                - link "resources permalink" [ref=e464] [cursor=pointer]:
+                  - /url: "#resources"
+                - text: Resources
+              - heading "spring ai agent utils permalink Spring AI Agent Utils" [level=4] [ref=e465]:
+                - link "spring ai agent utils permalink" [ref=e466] [cursor=pointer]:
+                  - /url: "#spring-ai-agent-utils"
+                - text: Spring AI Agent Utils
+              - list [ref=e467]:
+                - listitem [ref=e468]:
+                  - strong [ref=e469]: GitHub
+                  - text: ":"
+                  - link "spring-ai-agent-utils" [ref=e470] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils
+                - listitem [ref=e471]:
+                  - strong [ref=e472]: AutoMemoryTools docs
+                  - text: ":"
+                  - link "AutoMemoryTools" [ref=e473] [cursor=pointer]:
+                    - /url: https://spring-ai-community.github.io/spring-ai-agent-utils/latest-snapshot/tools/AutoMemoryTools/
+                - listitem [ref=e474]:
+                  - strong [ref=e475]: AutoMemoryToolsAdvisor docs
+                  - text: ":"
+                  - link "AutoMemoryToolsAdvisor" [ref=e476] [cursor=pointer]:
+                    - /url: https://spring-ai-community.github.io/spring-ai-agent-utils/latest-snapshot/tools/AutoMemoryToolsAdvisor/
+                - listitem [ref=e477]:
+                  - strong [ref=e478]: Full documentation
+                  - text: ":"
+                  - link "spring-ai-community.github.io/spring-ai-agent-utils" [ref=e479] [cursor=pointer]:
+                    - /url: https://spring-ai-community.github.io/spring-ai-agent-utils/latest-snapshot/
+              - heading "example projects 1 permalink Example Projects" [level=4] [ref=e480]:
+                - link "example projects 1 permalink" [ref=e481] [cursor=pointer]:
+                  - /url: "#example-projects-1"
+                - text: Example Projects
+              - list [ref=e482]:
+                - listitem [ref=e483]:
+                  - link "memory-tools-advisor-demo" [ref=e484] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-tools-advisor-demo
+                  - text: — full advisor stack (Option A)
+                - listitem [ref=e485]:
+                  - link "memory-tools-demo" [ref=e486] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-tools-demo
+                  - text: — manual setup (Option B)
+                - listitem [ref=e487]:
+                  - link "memory-filesystem-tools-demo" [ref=e488] [cursor=pointer]:
+                    - /url: https://github.com/spring-ai-community/spring-ai-agent-utils/tree/main/examples/memory/memory-filesystem-tools-demo
+                  - text: — filesystem tools approach (Option C)
+            - iframe [ref=e656]:
+              - generic [active] [ref=f4e1]:
+                - status [ref=f4e2]
+                - generic [ref=f4e7]:
+                  - banner [ref=f4e8]:
+                    - navigation [ref=f4e10]:
+                      - list:
+                        - listitem [ref=f4e11]:
+                          - generic [ref=f4e13]: 0 comments
+                        - listitem [ref=f4e14]:
+                          - list:
+                            - listitem [ref=f4e15]:
+                              - link "1" [ref=f4e16] [cursor=pointer]:
+                                - /url: https://disqus.com/home/notifications/
+                                - generic [ref=f4e17]: 
+                                - generic [ref=f4e18]: "1"
+                            - listitem [ref=f4e19]:
+                              - button "Login" [ref=f4e20] [cursor=pointer]:
+                                - generic [ref=f4e21]: Login
+                  - generic [ref=f4e24]:
+                    - generic [ref=f4e27]:
+                      - alert
+                      - generic [ref=f4e28]:
+                        - generic [ref=f4e31]: G
+                        - generic [ref=f4e34]:
+                          - generic [ref=f4e35]: Start the discussion…
+                          - textbox [ref=f4e36]
+                      - generic [ref=f4e41]:
+                        - generic [ref=f4e42]:
+                          - heading "Log in with" [level=6] [ref=f4e43]
+                          - list [ref=f4e44]:
+                            - listitem [ref=f4e45]:
+                              - button "Login with Disqus" [ref=f4e46] [cursor=pointer]:
+                                - generic [ref=f4e47]: d
+                            - listitem [ref=f4e48]:
+                              - button "Login with Facebook" [ref=f4e49] [cursor=pointer]:
+                                - generic [ref=f4e50]: F
+                            - listitem [ref=f4e51]:
+                              - button "Login with X (Twitter)" [ref=f4e52] [cursor=pointer]:
+                                - generic [ref=f4e53]: 
+                            - listitem [ref=f4e54]:
+                              - button "Login with Google" [ref=f4e55] [cursor=pointer]:
+                                - generic [ref=f4e56]: G
+                            - listitem [ref=f4e57]:
+                              - button "Login with Microsoft" [ref=f4e58] [cursor=pointer]
+                            - listitem [ref=f4e59]:
+                              - button "Login with Apple" [ref=f4e60] [cursor=pointer]
+                        - generic [ref=f4e61]:
+                          - generic [ref=f4e62]:
+                            - heading "or sign up with Disqus" [level=6] [ref=f4e63]:
+                              - generic [ref=f4e64]: or sign up with Disqus
+                            - button "?" [ref=f4e65] [cursor=pointer]
+                          - paragraph [ref=f4e66]:
+                            - textbox "name" [ref=f4e67]:
+                              - /placeholder: Name
+                          - text: →
+                    - list [ref=f4e70]:
+                      - listitem [ref=f4e71]:
+                        - link "Favorite this discussion" [ref=f4e75] [cursor=pointer]:
+                          - /url: "#"
+                          - generic [ref=f4e77]: 
+                          - text: 
+                        - link "Share" [ref=f4e82] [cursor=pointer]:
+                          - /url: "#"
+                      - listitem [ref=f4e83]:
+                        - list [ref=f4e84]:
+                          - listitem [ref=f4e85]:
+                            - link "Best" [ref=f4e86] [cursor=pointer]:
+                              - /url: "#"
+                          - listitem [ref=f4e87]:
+                            - link "Newest" [ref=f4e88] [cursor=pointer]:
+                              - /url: "#"
+                          - listitem [ref=f4e89]:
+                            - link "Oldest" [ref=f4e90] [cursor=pointer]:
+                              - /url: "#"
+                    - generic [ref=f4e91]: Be the first to comment.
+                    - list
+                  - contentinfo [ref=f4e92]:
+                    - generic [ref=f4e94]:
+                      - list [ref=f4e95]:
+                        - listitem [ref=f4e96]:
+                          - link "Subscribe" [ref=f4e98] [cursor=pointer]:
+                            - /url: "#"
+                            - generic [ref=f4e101]: Subscribe
+                        - listitem [ref=f4e102]:
+                          - link "Privacy" [ref=f4e103] [cursor=pointer]:
+                            - /url: https://disqus.com/privacy-policy
+                            - generic [ref=f4e106]: Privacy
+                        - listitem [ref=f4e107]:
+                          - link "Do Not Sell My Data" [ref=f4e108] [cursor=pointer]:
+                            - /url: https://disqus.com/data-sharing-settings/
+                            - generic [ref=f4e111]: Do Not Sell My Data
+                      - link "Powered by Disqus" [ref=f4e113] [cursor=pointer]:
+                        - /url: https://disqus.com
+                - generic:
+                  - listbox
+          - generic [ref=e491]:
+            - heading "Get the Spring newsletter" [level=2] [ref=e492]
+            - paragraph [ref=e493]: Stay connected with the Spring newsletter
+            - paragraph [ref=e494]:
+              - link "Subscribe" [ref=e495] [cursor=pointer]:
+                - /url: https://go-vmware.broadcom.com/tnz-spring-newsletter-subscribe
+      - generic [ref=e501]:
+        - article [ref=e502]:
+          - heading "Get ahead" [level=2] [ref=e503]
+          - paragraph [ref=e504]: VMware offers training and certification to turbo-charge your progress.
+          - link "VMware offers training and certification to turbo-charge your progress." [ref=e505] [cursor=pointer]:
+            - /url: https://spring.academy/
+            - text: Learn more
+        - article [ref=e506]:
+          - heading "Get support" [level=2] [ref=e507]
+          - paragraph [ref=e508]: Tanzu Spring offers support and binaries for OpenJDK™, Spring, and Apache Tomcat® in one simple subscription.
+          - link "Tanzu Spring offers support and binaries for OpenJDK™, Spring, and Apache Tomcat® in one simple subscription." [ref=e509] [cursor=pointer]:
+            - /url: /support
+            - text: Learn more
+        - article [ref=e510]:
+          - heading "Upcoming events" [level=2] [ref=e511]
+          - paragraph [ref=e512]: Check out all the upcoming events in the Spring community.
+          - link "Upcoming events" [ref=e513] [cursor=pointer]:
+            - /url: /events
+            - text: View all
+    - contentinfo [ref=e514]:
+      - generic [ref=e515]:
+        - generic [ref=e519]:
+          - generic [ref=e520]:
+            - link "Why Spring" [ref=e522] [cursor=pointer]:
+              - /url: /why-spring
+            - link "Generative AI" [ref=e524] [cursor=pointer]:
+              - /url: /ai
+            - link "Microservices" [ref=e526] [cursor=pointer]:
+              - /url: /microservices
+            - link "Reactive" [ref=e528] [cursor=pointer]:
+              - /url: /reactive
+            - link "Event Driven" [ref=e530] [cursor=pointer]:
+              - /url: /event-driven
+            - link "Cloud" [ref=e532] [cursor=pointer]:
+              - /url: /cloud
+            - link "Web Applications" [ref=e534] [cursor=pointer]:
+              - /url: /web-applications
+            - link "Serverless" [ref=e536] [cursor=pointer]:
+              - /url: /serverless
+            - link "Batch" [ref=e538] [cursor=pointer]:
+              - /url: /batch
+          - generic [ref=e539]:
+            - link "Learn" [ref=e541] [cursor=pointer]:
+              - /url: /learn
+            - link "Quickstart" [ref=e543] [cursor=pointer]:
+              - /url: /quickstart
+            - link "Guides" [ref=e545] [cursor=pointer]:
+              - /url: /guides
+            - link "Courses" [ref=e547] [cursor=pointer]:
+              - /url: https://spring.academy/courses
+            - link "Get Certified" [ref=e549] [cursor=pointer]:
+              - /url: https://spring.academy/learning-path
+          - generic [ref=e550]:
+            - link "Projects" [ref=e552] [cursor=pointer]:
+              - /url: /projects
+            - generic [ref=e553]: Resources
+            - link "Blog" [ref=e555] [cursor=pointer]:
+              - /url: /blog
+            - link "Release Calendar" [ref=e557] [cursor=pointer]:
+              - /url: /projects#release-calendar
+            - link "Version Mappings" [ref=e559] [cursor=pointer]:
+              - /url: /projects/generations
+            - link "Release Highlights" [ref=e561] [cursor=pointer]:
+              - /url: /projects/release-highlights
+            - link "Security Advisories" [ref=e563] [cursor=pointer]:
+              - /url: /security
+          - generic [ref=e564]:
+            - link "Community" [ref=e566] [cursor=pointer]:
+              - /url: /community
+            - link "Events" [ref=e568] [cursor=pointer]:
+              - /url: /events
+            - link "Authors" [ref=e570] [cursor=pointer]:
+              - /url: /authors
+            - link "Enterprise" [ref=e572] [cursor=pointer]:
+              - /url: https://enterprise.spring.io/
+            - link "Long-term Support" [ref=e574] [cursor=pointer]:
+              - /url: https://enterprise.spring.io/lts-releases
+            - link "Automated Upgrades" [ref=e576] [cursor=pointer]:
+              - /url: https://enterprise.spring.io/spring-application-advisor
+            - link "Governance and Compliance" [ref=e578] [cursor=pointer]:
+              - /url: https://enterprise.spring.io/enterprise-extensions
+            - link "Modern App Development" [ref=e580] [cursor=pointer]:
+              - /url: https://enterprise.spring.io/enterprise-components
+            - link "Thank You" [ref=e582] [cursor=pointer]:
+              - /url: /thank-you
+        - generic [ref=e585]:
+          - generic [ref=e586]:
+            - paragraph [ref=e587]:
+              - img [ref=e588]
+            - paragraph [ref=e617]:
+              - text: Copyright © 2005 - 2026 Broadcom. All Rights Reserved. The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
+              - link "Terms of Use" [ref=e618] [cursor=pointer]:
+                - /url: https://www.broadcom.com/company/legal/terms-of-use
+              - text: •
+              - link "Privacy" [ref=e619] [cursor=pointer]:
+                - /url: https://www.broadcom.com/company/legal/privacy
+              - text: •
+              - link "Trademark Guidelines" [ref=e620] [cursor=pointer]:
+                - /url: /trademarks
+            - paragraph [ref=e621]: Apache®, Apache Tomcat®, Apache Kafka®, Apache Cassandra™, and Apache Geode™ are trademarks or registered trademarks of the Apache Software Foundation in the United States and/or other countries. Java™, Java™ SE, Java™ EE, and OpenJDK™ are trademarks of Oracle and/or its affiliates. Kubernetes® is a registered trademark of the Linux Foundation in the United States and other countries. Linux® is the registered trademark of Linus Torvalds in the United States and other countries. Windows® and Microsoft® Azure are registered trademarks of Microsoft Corporation. “AWS” and “Amazon Web Services” are trademarks or registered trademarks of Amazon.com Inc. or its affiliates. All other trademarks and copyrights are property of their respective owners and are only mentioned for informative purposes. Other names may be trademarks of their respective owners.
+          - generic [ref=e622]:
+            - link "Youtube" [ref=e623] [cursor=pointer]:
+              - /url: https://www.youtube.com/user/SpringSourceDev
+              - img [ref=e624]
+            - link "Github" [ref=e626] [cursor=pointer]:
+              - /url: https://github.com/spring-projects
+              - img [ref=e627]
+            - link "X" [ref=e629] [cursor=pointer]:
+              - /url: https://x.com/springcentral
+              - img [ref=e630]
+            - link "BlueSky" [ref=e632] [cursor=pointer]:
+              - /url: https://bsky.app/profile/spring.io
+              - img [ref=e633]
+    - link [ref=e636] [cursor=pointer]:
+      - /url: "#header"
+      - img [ref=e637]
+  - generic:
+    - dialog "Cookies" [ref=e641]:
+      - generic [ref=e642]:
+        - button "Close" [ref=e644] [cursor=pointer]
+        - generic [ref=e645]:
+          - generic [ref=e647]:
+            - heading "Cookies" [level=2] [ref=e648]
+            - generic [ref=e649]:
+              - text: Broadcom and our partners use technology, including cookies to, among other things, operate the site, analyze site usage, view and retain your site interactions, improve your experience and help us advertise. Click “Cookie Settings” to manage your privacy choices. By continuing to use our site, you agree to these data practices as described in our
+              - link "More information about your privacy, opens in a new tab" [active] [ref=e650] [cursor=pointer]:
+                - /url: https://www.broadcom.com/company/legal/cookie-policy
+                - text: Cookie Notice
+          - button "Cookies Settings, Opens the preference center dialog" [ref=e654] [cursor=pointer]: Cookies Settings
+    - text: Cookies Settings

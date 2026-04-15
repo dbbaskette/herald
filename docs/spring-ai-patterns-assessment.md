@@ -75,7 +75,7 @@ Externalized working memory for multi-step tasks — prevents "lost in the middl
 |---------|-------------|---------------|-------|
 | Task decomposition before execution | LLM creates ordered list for 3+ step tasks; self-governing via tool description | ✅ | Uses `TodoWriteTool` from spring-ai-agent-utils |
 | Todo lifecycle: pending → in_progress → completed | One-in-progress constraint enforced | ✅ | Library constraint inherited |
-| Real-time progress events | `todoEventHandler` callback → Spring `ApplicationEvent` | ✅ | `TodoProgressListener` forwards to Telegram (e.g. `[→] Analyzing... 2/4`) |
+| Real-time progress events | `todoEventHandler` callback → `MessageSender` | ✅ | Lambda dispatches formatted summary directly to Telegram (e.g. `[→] Analyzing... 2/4`) or stdout fallback |
 | Chat memory + ToolCallAdvisor requirement | TodoWriteTool requires chat memory; ToolCallAdvisor logs tool messages | ✅ | `OneShotMemoryAdvisor` + JDBC-backed SQLite + `ToolCallAdvisor` |
 | System prompt template (V2) | Blog recommends `MAIN_AGENT_SYSTEM_PROMPT_V2` (Claude Code-inspired) | 〜 | Herald uses custom personal assistant prompt instead |
 

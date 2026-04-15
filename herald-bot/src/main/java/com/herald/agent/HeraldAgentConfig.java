@@ -4,25 +4,29 @@ import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
-import org.springaicommunity.agent.tools.AutoMemoryTools;
+import org.springaicommunity.agent.advisors.AutoMemoryToolsAdvisor;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
-import com.herald.tools.TodoProgressEvent;
 import com.herald.tools.WebTools;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
+import org.springaicommunity.agent.common.task.subagent.SubagentType;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentDefinition;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentExecutor;
+import org.springaicommunity.agent.subagent.a2a.A2ASubagentResolver;
 import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
-import com.herald.agent.subagent.HeraldSubagentFactory;
+import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
 import com.herald.agent.subagent.HeraldSubagentReferences;
 import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 // MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
-// re-loading/re-saving memory on each ToolCallAdvisor iteration
-import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
+// re-loading/re-saving memory on each ToolSearchToolCallAdvisor iteration
+import org.springaicommunity.tool.search.ToolSearchToolCallAdvisor;
+import org.springaicommunity.tool.searcher.LuceneToolSearcher;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -36,13 +40,15 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -92,7 +98,7 @@ public class HeraldAgentConfig {
             Optional<GwsTools> gwsTools) {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
-                "task", "taskOutput", "skills", "web",
+                "task", "taskOutput", "skills", "web", "toolSearchTool",
                 "MemoryView", "MemoryCreate", "MemoryStrReplace",
                 "MemoryInsert", "MemoryDelete", "MemoryRename"));
         cronTools.ifPresent(t -> names.add("cron"));
@@ -118,8 +124,18 @@ public class HeraldAgentConfig {
 
     @Bean
     public ReloadableSkillsTool reloadableSkillsTool(
-            @Value("${herald.agent.skills-directory:skills}") String skillsDirectory) {
-        return new ReloadableSkillsTool(skillsDirectory);
+            @Value("${herald.agent.skills-directory:skills}") String skillsDirectory,
+            ResourcePatternResolver resourceResolver) throws IOException {
+        Resource[] skillMdFiles = resourceResolver.getResources("classpath:skills/*/SKILL.md");
+        List<Resource> classpathSkillDirs = new ArrayList<>();
+        for (Resource r : skillMdFiles) {
+            try {
+                classpathSkillDirs.add(new FileSystemResource(r.getFile().getParentFile()));
+            } catch (IOException e) {
+                log.warn("Could not resolve classpath skill resource to filesystem: {}", r, e);
+            }
+        }
+        return new ReloadableSkillsTool(skillsDirectory, classpathSkillDirs);
     }
 
     @Bean
@@ -130,7 +146,7 @@ public class HeraldAgentConfig {
             Optional<ChatMemory> chatMemoryOpt,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
-            ApplicationEventPublisher eventPublisher,
+            Optional<MessageSender> messageSenderOpt,
             ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
@@ -138,7 +154,6 @@ public class HeraldAgentConfig {
             Optional<CronTools> cronToolsOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
-            @Value("classpath:prompts/AUTO_MEMORY_SYSTEM_PROMPT.md") Resource memoryPromptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             ReloadableSkillsTool reloadableSkillsTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
@@ -155,7 +170,7 @@ public class HeraldAgentConfig {
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
             @Qualifier("activeToolNames") List<String> activeToolNames) {
 
-        // Set up long-term memory (AutoMemoryTools)
+        // Set up long-term memory (AutoMemoryToolsAdvisor owns the tools)
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         try {
             Files.createDirectories(memoriesDir);
@@ -168,15 +183,9 @@ public class HeraldAgentConfig {
             log.warn("Failed to bootstrap memories directory at {}: {}", memoriesDir, e.getMessage());
         }
 
-        AutoMemoryTools autoMemoryTools = AutoMemoryTools.builder()
-                .memoriesDir(memoriesDir)
-                .build();
-
-        // Resolve system prompt with memory instructions
-        String memoryInstructions = loadPromptTemplate(memoryPromptResource)
-                .replace("{MEMORIES_ROOT_DIRECTORY}", memoriesDir.toString());
+        // Resolve system prompt (memory instructions are injected by AutoMemoryToolsAdvisor)
         String promptTemplate = loadPromptTemplate(promptResource);
-        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel, memoryInstructions);
+        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
 
         // Set up CONTEXT.md advisor — reads standing brief from disk each turn
         Path contextFilePath = resolveTildePath(config.contextFile());
@@ -187,7 +196,7 @@ public class HeraldAgentConfig {
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();
 
-        var subagentTypeBuilder = HeraldSubagentFactory.builder()
+        var subagentTypeBuilder = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
                 .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
@@ -202,16 +211,31 @@ public class HeraldAgentConfig {
         lmstudioChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("lmstudio", chatClientBuilderForModel(model, lmstudioModel)));
 
-        var subagentType = subagentTypeBuilder.build();
+        var subagentType = subagentTypeBuilder
+                .skillsDirectories(reloadableSkillsTool.getSkillsDirectory())
+                .build();
 
         var subagentRefs = loadSubagentReferences(agentsDirectory);
+        var a2aAgents = config.a2aAgents();
 
-        var taskToolBuilder = TaskTool.builder()
-                .subagentTypes(subagentType)
-                .taskRepository(taskRepository);
+        var taskToolBuilder = TaskTool.builder().taskRepository(taskRepository);
 
-        if (!subagentRefs.isEmpty()) {
-            taskToolBuilder.subagentReferences(subagentRefs);
+        if (a2aAgents.isEmpty()) {
+            taskToolBuilder.subagentTypes(subagentType);
+            if (!subagentRefs.isEmpty()) {
+                taskToolBuilder.subagentReferences(subagentRefs);
+            }
+        } else {
+            var a2aType = new SubagentType(new A2ASubagentResolver(), new A2ASubagentExecutor());
+            taskToolBuilder.subagentTypes(subagentType, a2aType);
+
+            var combinedRefs = new ArrayList<>(subagentRefs);
+            for (var agent : a2aAgents) {
+                combinedRefs.add(new SubagentReference(agent.url(), A2ASubagentDefinition.KIND, agent.metadata()));
+            }
+            taskToolBuilder.subagentReferences(combinedRefs);
+            log.info("Registered {} A2A agent(s) alongside {} local subagent(s)",
+                    a2aAgents.size(), subagentRefs.size());
         }
 
         ToolCallback taskTool = taskToolBuilder.build();
@@ -230,7 +254,8 @@ public class HeraldAgentConfig {
                 .answersValidation(telegramHandler != null)
                 .build();
 
-        // Build upstream TodoWriteTool with event handler bridging to Telegram via TodoProgressEvent
+        // Build upstream TodoWriteTool with a handler that dispatches formatted
+        // progress directly to MessageSender (Telegram) or stdout as a fallback.
         org.springaicommunity.agent.tools.TodoWriteTool todoTool = org.springaicommunity.agent.tools.TodoWriteTool.builder()
                 .todoEventHandler(todos -> {
                     StringBuilder sb = new StringBuilder();
@@ -242,7 +267,10 @@ public class HeraldAgentConfig {
                         };
                         sb.append(symbol).append(" ").append(item.content()).append("\n");
                     }
-                    eventPublisher.publishEvent(new TodoProgressEvent(todos, sb.toString()));
+                    String summary = sb.toString();
+                    messageSenderOpt.ifPresentOrElse(
+                            s -> s.sendMessage(summary),
+                            () -> System.out.print(summary));
                 })
                 .build();
 
@@ -250,7 +278,7 @@ public class HeraldAgentConfig {
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
                 contextMdAdvisor, memoriesDir, chatModel, config, promptDump);
 
-        var toolList = buildToolList(autoMemoryTools, shellDecorator, fsTools,
+        var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
@@ -291,14 +319,14 @@ public class HeraldAgentConfig {
             initialModel = defaultModel;
         }
 
-        // Build the initial client from the resolved provider
+        // Build the initial client from the resolved provider (apply Anthropic skills for main agent)
         ChatModel initialChatModel = availableModels.get(initialProvider);
         ChatClient initialClient = clientBuilderFactory.apply(initialChatModel)
-                .defaultOptions(chatOptionsForModel(initialChatModel, initialModel))
+                .defaultOptions(ModelSwitcher.chatOptionsForModel(initialChatModel, initialModel, config.anthropicSkills()))
                 .build();
 
         var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplateOpt.orElse(null),
-                clientBuilderFactory, initialClient, initialProvider, initialModel);
+                clientBuilderFactory, initialClient, initialProvider, initialModel, config.anthropicSkills());
         switcher.loadPersistedOverride();
         return switcher;
     }
@@ -318,8 +346,15 @@ public class HeraldAgentConfig {
         advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
         advisors.add(contextMdAdvisor);
 
-        // Long-term memory — injects MEMORY.md index each turn
-        advisors.add(new MemoryMdAdvisor(memoriesDir));
+        // Long-term memory — library advisor owns per-request memory tool registration
+        // and injects the memory system prompt each turn. The no-op consolidation trigger
+        // locks in current behavior against future library default changes.
+        advisors.add(AutoMemoryToolsAdvisor.builder()
+                .memoriesRootDirectory(memoriesDir.toString())
+                .memorySystemPrompt(new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"))
+                .order(Ordered.HIGHEST_PRECEDENCE + 100)
+                .memoryConsolidationTrigger((req, instant) -> false)
+                .build());
 
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
@@ -331,11 +366,11 @@ public class HeraldAgentConfig {
         // Conditional on property (not persistence)
         advisors.add(new PromptDumpAdvisor(promptDump));
 
-        // Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
-        // Default order is HIGHEST_PRECEDENCE+300 which wraps AROUND
-        // OneShotMemoryAdvisor, causing memory to load/save on every
-        // tool-call iteration and duplicating messages.
-        advisors.add(ToolCallAdvisor.builder()
+        // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — indexes all registered
+        // tools via LuceneToolSearcher and exposes a toolSearchTool for on-demand
+        // discovery. Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
+        advisors.add(ToolSearchToolCallAdvisor.builder()
+                .toolSearcher(new LuceneToolSearcher())
                 .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
                 .build());
 
@@ -343,7 +378,6 @@ public class HeraldAgentConfig {
     }
 
     List<Object> buildToolList(
-            AutoMemoryTools autoMemoryTools,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
             org.springaicommunity.agent.tools.TodoWriteTool todoTool,
@@ -356,7 +390,6 @@ public class HeraldAgentConfig {
         List<Object> tools = new ArrayList<>();
         tools.add(shellDecorator);
         tools.add(fsTools);
-        tools.add(autoMemoryTools);
         tools.add(todoTool);
         tools.add(askTool);
         tools.add(webTools);
@@ -373,8 +406,9 @@ public class HeraldAgentConfig {
                 .defaultOptions(chatOptionsForModel(chatModel, modelId));
     }
 
+    // Used for subagent ChatClient builders — skills not needed for subagents
     static org.springframework.ai.chat.prompt.ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
-        return ModelSwitcher.chatOptionsForModel(chatModel, modelId);
+        return ModelSwitcher.chatOptionsForModel(chatModel, modelId, List.of());
     }
 
     /**
@@ -382,11 +416,10 @@ public class HeraldAgentConfig {
      * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
      * here and handled per-turn by {@link DateTimePromptAdvisor}.
      */
-    String resolvePrompt(String template, HeraldConfig config, String modelId, String memoryInstructions) {
+    String resolvePrompt(String template, HeraldConfig config, String modelId) {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{model_id}", modelId)
-                .replace("{long_term_memory_instructions}", memoryInstructions)
                 .replace("{system_prompt_extra}", config.systemPromptExtra());
     }
 

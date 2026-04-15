@@ -208,4 +208,58 @@ class ReloadableSkillsToolTest {
         assertThat(result).contains("<allowed-tools>");
         assertThat(result).contains("web_search");
     }
+
+    @Test
+    void loadsSkillFromClasspathResource() throws IOException {
+        Path skillDir = tempDir.resolve("classpath-skill");
+        Files.createDirectories(skillDir);
+        Files.writeString(skillDir.resolve("SKILL.md"), """
+                ---
+                name: classpath-skill
+                description: A skill loaded from classpath
+                ---
+                Classpath skill content.
+                """);
+
+        var resource = new org.springframework.core.io.FileSystemResource(skillDir.toFile());
+        var tool = new ReloadableSkillsTool(
+                tempDir.resolve("nonexistent-dir").toString(),
+                List.of(resource));
+        assertThat(tool.getSkills()).hasSize(1);
+        assertThat(tool.getSkills().get(0).name()).isEqualTo("classpath-skill");
+        assertThat(tool.hasSkills()).isTrue();
+    }
+
+    @Test
+    void combinesDirectoryAndClasspathSkills() throws IOException {
+        // dir-skills root — only dir-skill here, scanned by directory loader
+        Path dirSkillsRoot = tempDir.resolve("dir-skills");
+        Path dirSkill = dirSkillsRoot.resolve("dir-skill");
+        Files.createDirectories(dirSkill);
+        Files.writeString(dirSkill.resolve("SKILL.md"), """
+                ---
+                name: dir-skill
+                description: From directory
+                ---
+                Directory content.
+                """);
+
+        // cp-skill lives outside the scanned dir, loaded only via classpath resource
+        Path cpSkillsRoot = tempDir.resolve("cp-skills");
+        Path cpSkill = cpSkillsRoot.resolve("cp-skill");
+        Files.createDirectories(cpSkill);
+        Files.writeString(cpSkill.resolve("SKILL.md"), """
+                ---
+                name: cp-skill
+                description: From classpath
+                ---
+                Classpath content.
+                """);
+
+        var resource = new org.springframework.core.io.FileSystemResource(cpSkill.toFile());
+        var tool = new ReloadableSkillsTool(dirSkillsRoot.toString(), List.of(resource));
+        assertThat(tool.getSkills()).hasSize(2);
+        assertThat(tool.getSkills()).extracting(s -> s.name())
+                .containsExactlyInAnyOrder("dir-skill", "cp-skill");
+    }
 }

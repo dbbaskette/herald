@@ -1,0 +1,859 @@
+- generic [active] [ref=e1]:
+  - link "Sign in" [ref=e6] [cursor=pointer]:
+    - /url: https://accounts.google.com/ServiceLogin?passive=1209600&continue=https://gemini.google.com/share/62b9b5545ae6&followup=https://gemini.google.com/share/62b9b5545ae6&ec=GAZAkgU
+  - main [ref=e8]:
+    - button "New chat" [ref=e30] [cursor=pointer]:
+      - generic [ref=e32]: Gemini
+    - generic [ref=e12]:
+      - link "About Gemini Opens in a new window" [ref=e13] [cursor=pointer]:
+        - /url: https://gemini.google/about/?utm_source=gemini&utm_medium=web&utm_campaign=gemini_zero_state_link_to_marketing_microsite
+        - text: About Gemini
+        - generic [ref=e14]: Opens in a new window
+      - link "Gemini App Opens in a new window" [ref=e15] [cursor=pointer]:
+        - /url: https://gemini.google.com/app/download
+        - text: Gemini App
+        - generic [ref=e16]: Opens in a new window
+      - link "Subscriptions Opens in a new window" [ref=e17] [cursor=pointer]:
+        - /url: https://one.google.com/ai
+        - text: Subscriptions
+        - generic [ref=e18]: Opens in a new window
+      - link "For Business Opens in a new window" [ref=e19] [cursor=pointer]:
+        - /url: https://workspace.google.com/solutions/ai/?utm_source=geminiforbusiness&utm_medium=et&utm_campaign=gemini-page-crosslink&utm_term=-&utm_content=forbusiness-2025Q3
+        - text: For Business
+        - generic [ref=e20]: Opens in a new window
+    - generic [ref=e35]:
+      - generic [ref=e40]:
+        - 'heading "Engineering Autonomous Agentic Systems: A Technical Synthesis of the Spring AI Agentic Patterns Series" [level=1] [ref=e41]'
+        - paragraph [ref=e42]:
+          - text: The evolution of generative artificial intelligence from stateless request-response cycles toward autonomous, stateful, and goal-oriented agents represents the most significant architectural transition in modern software engineering. Within the Java ecosystem, the Spring AI framework has established a robust foundation for this transition, moving beyond simple model abstractions to provide a comprehensive toolkit for agentic behavior. This report provides a deep technical analysis of the six-part "Spring AI Agentic Patterns" series, which explores the
+          - code [ref=e43]: spring-ai-agent-utils
+          - text: library—a collection of capabilities inspired by Anthropic’s Claude Code and the broader movement toward autonomous software development lifecycles.
+        - paragraph [ref=e44]: This analysis is structured to provide the technical depth required for a coding assistant or systems architect to implement these patterns effectively. It examines modular skills, interactive user questioning, structured planning via task management, hierarchical subagent orchestration, interoperable agent protocols, and persistent long-term memory. Each section integrates the underlying rationale, specific implementation requirements, and the technical mechanisms that facilitate autonomous reasoning and execution.
+        - heading "The Architecture of Agentic Utility and the Spring AI Ecosystem" [level=2] [ref=e45]
+        - paragraph [ref=e46]:
+          - text: The transition toward agentic systems in Spring AI was precipitated by the release of version 1.1 and the subsequent milestones leading toward version 2.0.0-M4. As the ecosystem matured, it became clear that large language models (LLMs) required more than just prompts; they required an environment—a "body" to their "brain"—consisting of tools, memory, and specialized subagents.
+          - superscript [ref=e47]
+          - generic [ref=e48]:
+            - text: The
+            - code [ref=e49]: spring-ai-agent-utils
+            - text: library was introduced to provide these utilities in an LLM-agnostic and portable manner, ensuring that Java developers could build sophisticated agents that function across OpenAI, Anthropic, and Google Gemini.
+          - superscript [ref=e50]
+          - button "Learn More" [ref=e53] [cursor=pointer]:
+            - img [ref=e54]: expand_more
+        - table [ref=e56]:
+          - rowgroup [ref=e57]:
+            - row "Component Category Primary Tools and Classes Implementation Purpose" [ref=e58]:
+              - columnheader "Component Category" [ref=e59]
+              - columnheader "Primary Tools and Classes" [ref=e60]
+              - columnheader "Implementation Purpose" [ref=e61]
+          - rowgroup [ref=e62]:
+            - row "Core Environment AgentEnvironment Injects OS, git status, and runtime metadata into system prompts." [ref=e63]:
+              - cell "Core Environment" [ref=e64]
+              - cell "AgentEnvironment" [ref=e65]:
+                - code [ref=e67]: AgentEnvironment
+              - cell "Injects OS, git status, and runtime metadata into system prompts." [ref=e68]:
+                - paragraph [ref=e69]:
+                  - text: Injects OS, git status, and runtime metadata into system prompts.
+                  - superscript [ref=e70]
+            - row "File Operations FileSystemTools, GrepTool, GlobTool Provides precise read/write/edit and search capabilities." [ref=e71]:
+              - cell "File Operations" [ref=e72]
+              - cell "FileSystemTools, GrepTool, GlobTool" [ref=e73]:
+                - generic [ref=e74]:
+                  - code [ref=e75]: FileSystemTools
+                  - text: ","
+                  - code [ref=e76]: GrepTool
+                  - text: ","
+                  - code [ref=e77]: GlobTool
+              - cell "Provides precise read/write/edit and search capabilities." [ref=e78]:
+                - paragraph [ref=e79]:
+                  - text: Provides precise read/write/edit and search capabilities.
+                  - superscript [ref=e80]
+            - row "Interaction AskUserQuestionTool Enables asynchronous user clarification during agent execution." [ref=e81]:
+              - cell "Interaction" [ref=e82]
+              - cell "AskUserQuestionTool" [ref=e83]:
+                - code [ref=e85]: AskUserQuestionTool
+              - cell "Enables asynchronous user clarification during agent execution." [ref=e86]:
+                - paragraph [ref=e87]:
+                  - text: Enables asynchronous user clarification during agent execution.
+                  - superscript [ref=e88]
+            - row "Planning TodoWriteTool Manages sequential task lists to prevent context loss." [ref=e89]:
+              - cell "Planning" [ref=e90]
+              - cell "TodoWriteTool" [ref=e91]:
+                - code [ref=e93]: TodoWriteTool
+              - cell "Manages sequential task lists to prevent context loss." [ref=e94]:
+                - paragraph [ref=e95]:
+                  - text: Manages sequential task lists to prevent context loss.
+                  - superscript [ref=e96]
+            - row "Orchestration TaskTool, SubagentResolver Manages hierarchical delegation to specialized sub-agents." [ref=e97]:
+              - cell "Orchestration" [ref=e98]
+              - cell "TaskTool, SubagentResolver" [ref=e99]:
+                - generic [ref=e100]:
+                  - code [ref=e101]: TaskTool
+                  - text: ","
+                  - code [ref=e102]: SubagentResolver
+              - cell "Manages hierarchical delegation to specialized sub-agents." [ref=e103]:
+                - paragraph [ref=e104]:
+                  - text: Manages hierarchical delegation to specialized sub-agents.
+                  - superscript [ref=e105]
+            - row "Memory AutoMemoryTools, AutoMemoryToolsAdvisor Implements persistent, file-based fact retention across sessions." [ref=e106]:
+              - cell "Memory" [ref=e107]
+              - cell "AutoMemoryTools, AutoMemoryToolsAdvisor" [ref=e108]:
+                - generic [ref=e109]:
+                  - code [ref=e110]: AutoMemoryTools
+                  - text: ","
+                  - code [ref=e111]: AutoMemoryToolsAdvisor
+              - cell "Implements persistent, file-based fact retention across sessions." [ref=e112]:
+                - paragraph [ref=e113]:
+                  - text: Implements persistent, file-based fact retention across sessions.
+                  - superscript [ref=e114]
+        - button "Learn More" [ref=e117] [cursor=pointer]:
+          - img [ref=e118]: expand_more
+        - paragraph [ref=e119]:
+          - text: The baseline requirements for these patterns typically include Java 17+, Spring Boot 3.x or 4.x, and Spring AI 2.0.0-M4 or later.
+          - superscript [ref=e120]
+          - generic [ref=e121]:
+            - text: The dependency management is centralized through the
+            - code [ref=e122]: spring-ai-agent-utils-bom
+            - text: ", allowing for consistent versioning across the modular utilities."
+          - superscript [ref=e123]
+          - button "Learn More" [ref=e126] [cursor=pointer]:
+            - img [ref=e127]: expand_more
+        - 'heading "Part 1: Modular Capabilities via Agent Skills" [level=2] [ref=e128]'
+        - paragraph [ref=e129]:
+          - generic [ref=e130]:
+            - text: The first pattern in the series addresses the challenge of "prompt bloat." In traditional RAG or tool-calling systems, developers often overload the system prompt with every possible instruction or tool definition. This leads to increased token latency and a degradation of the model's focus. The Agent Skills pattern, detailed in Part 1 of the series (
+            - link "https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills" [ref=e133] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills
+            - text: ), introduces modular, discoverable folders of instructions and resources that agents load only when relevant.
+          - superscript [ref=e134]
+          - button "Learn More" [ref=e137] [cursor=pointer]:
+            - img [ref=e138]: expand_more
+        - heading "Mechanism of Discovery and Activation" [level=3] [ref=e139]
+        - paragraph [ref=e140]:
+          - generic [ref=e141]:
+            - text: "Agent Skills utilize a three-step lifecycle: discovery, semantic matching, and execution. During initialization, the"
+            - code [ref=e142]: SkillsTool
+            - text: scans specific directories (such as
+            - code [ref=e143]: .claude/skills/
+            - text: ) for
+            - code [ref=e144]: SKILL.md
+            - text: files. These files contain YAML frontmatter that provides the name and a concise description of the skill.
+          - superscript [ref=e145]
+          - text: This metadata is embedded into the tool definition provided to the LLM, acting as a lightweight registry.
+          - button "Learn More" [ref=e148] [cursor=pointer]:
+            - img [ref=e149]: expand_more
+        - paragraph [ref=e150]:
+          - generic [ref=e151]:
+            - text: When a user request matches a skill's description, the LLM invokes the
+            - code [ref=e152]: SkillsTool
+            - text: with the skill name as a parameter. The tool then loads the full Markdown instructions into the context window.
+          - superscript [ref=e153]
+          - text: This "progressive disclosure" keeps the context window lean until detailed knowledge is required.
+          - button "Learn More" [ref=e156] [cursor=pointer]:
+            - img [ref=e157]: expand_more
+        - heading "Implementation Requirements for Coding Assistants" [level=3] [ref=e158]
+        - paragraph [ref=e159]:
+          - generic [ref=e160]:
+            - text: For a coding assistant to implement this, it must follow the
+            - code [ref=e161]: SKILL.md
+            - text: specification. The skill folder can bundle bash scripts or reference materials that the agent can access using the
+            - code [ref=e162]: ShellTools
+            - text: or
+            - code [ref=e163]: FileSystemTools
+            - text: bundled within the
+            - code [ref=e164]: SkillsTool
+            - text: environment.
+          - superscript [ref=e165]
+          - button "Learn More" [ref=e168] [cursor=pointer]:
+            - img [ref=e169]: expand_more
+        - table [ref=e171]:
+          - rowgroup [ref=e172]:
+            - row "Field Requirement Purpose" [ref=e173]:
+              - columnheader "Field" [ref=e174]
+              - columnheader "Requirement" [ref=e175]
+              - columnheader "Purpose" [ref=e176]
+          - rowgroup [ref=e177]:
+            - row "name Max 64 chars, lowercase, numbers, hyphens. Unique identifier for tool calling." [ref=e178]:
+              - cell "name" [ref=e179]:
+                - code [ref=e181]: name
+              - cell "Max 64 chars, lowercase, numbers, hyphens." [ref=e182]
+              - cell "Unique identifier for tool calling." [ref=e183]:
+                - paragraph [ref=e184]:
+                  - text: Unique identifier for tool calling.
+                  - superscript [ref=e185]
+            - row "description Clear, semantic instruction. Helps the LLM decide when to activate the skill." [ref=e186]:
+              - cell "description" [ref=e187]:
+                - code [ref=e189]: description
+              - cell "Clear, semantic instruction." [ref=e190]
+              - cell "Helps the LLM decide when to activate the skill." [ref=e191]:
+                - paragraph [ref=e192]:
+                  - text: Helps the LLM decide when to activate the skill.
+                  - superscript [ref=e193]
+            - row "instructions Markdown body in SKILL.md. Detailed rules the agent follows once activated." [ref=e194]:
+              - cell "instructions" [ref=e195]:
+                - code [ref=e197]: instructions
+              - cell "Markdown body in SKILL.md." [ref=e198]:
+                - generic [ref=e199]:
+                  - text: Markdown body in
+                  - code [ref=e200]: SKILL.md
+                  - text: .
+              - cell "Detailed rules the agent follows once activated." [ref=e201]:
+                - paragraph [ref=e202]:
+                  - text: Detailed rules the agent follows once activated.
+                  - superscript [ref=e203]
+            - row "scripts/ Optional sub-folder. Contains helper scripts (Python/Bash) for execution." [ref=e204]:
+              - cell "scripts/" [ref=e205]:
+                - code [ref=e207]: scripts/
+              - cell "Optional sub-folder." [ref=e208]
+              - cell "Contains helper scripts (Python/Bash) for execution." [ref=e209]:
+                - paragraph [ref=e210]:
+                  - text: Contains helper scripts (Python/Bash) for execution.
+                  - superscript [ref=e211]
+        - button "Learn More" [ref=e214] [cursor=pointer]:
+          - img [ref=e215]: expand_more
+        - paragraph [ref=e216]:
+          - text: It is important to note that unlike Anthropic’s native skills, which run in a sandboxed cloud container, Spring AI Generic Agent Skills run in the host environment. This provides access to local resources but requires developers to treat third-party skills with the same caution as external code.
+          - superscript [ref=e217]
+          - button "Learn More" [ref=e220] [cursor=pointer]:
+            - img [ref=e221]: expand_more
+        - 'heading "Part 2: Interactive Workflows with AskUserQuestionTool" [level=2] [ref=e222]'
+        - paragraph [ref=e223]:
+          - generic [ref=e224]:
+            - text: Autonomous agents often reach decision points where multiple valid paths exist, or where user preference is required to proceed. Without a mechanism for clarification, agents often make assumptions that lead to rework. Part 2 of the series (
+            - link "https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool" [ref=e227] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool
+            - text: ) introduces the
+            - code [ref=e228]: AskUserQuestionTool
+            - text: ", which enables interactive workflows where the agent can pause and gather requirements."
+          - superscript [ref=e229]
+          - button "Learn More" [ref=e232] [cursor=pointer]:
+            - img [ref=e233]: expand_more
+        - heading "The Technical Workflow of Clarification" [level=3] [ref=e234]
+        - paragraph [ref=e235]:
+          - generic [ref=e236]:
+            - text: The
+            - code [ref=e237]: AskUserQuestionTool
+            - text: follows a structured request-response cycle. When the LLM determines it needs input, it generates a question object containing question text, a header, several options (2-4), and a flag for multi-select.
+          - superscript [ref=e238]
+          - generic [ref=e239]:
+            - text: This object is passed to a custom
+            - code [ref=e240]: QuestionHandler
+            - text: defined by the developer.
+          - button "Learn More" [ref=e243] [cursor=pointer]:
+            - img [ref=e244]: expand_more
+        - generic [ref=e247]:
+          - generic [ref=e248]:
+            - generic [ref=e249]: Java
+            - button "Copy code" [ref=e251] [cursor=pointer]:
+              - img [ref=e252]: content_copy
+          - code [ref=e258]: ChatClient chatClient = chatClientBuilder .defaultTools(AskUserQuestionTool.builder() .questionHandler(this::handleQuestions) .build()) .build();
+        - paragraph [ref=e259]:
+          - text: The handler is responsible for presenting these questions to the user—whether via a CLI console or a web-based front-end—and returning the answers to the agent. This allows the agent to continue execution with a tailored specification, reducing the need for iterative corrections.
+          - superscript [ref=e260]
+          - button "Learn More" [ref=e263] [cursor=pointer]:
+            - img [ref=e264]: expand_more
+        - heading "Implications for Multi-Select and Rich Context" [level=3] [ref=e265]
+        - paragraph [ref=e266]:
+          - text: A key innovation in this tool is the inclusion of "rich context" for each option. Every selection can include a description explaining the implications and trade-offs of that choice.
+          - superscript [ref=e267]
+          - text: For a coding assistant, this might involve asking the user whether to use a specific design pattern or a particular library, providing a brief explanation of why one might be preferred over the other.
+          - button "Learn More" [ref=e270] [cursor=pointer]:
+            - img [ref=e271]: expand_more
+        - table [ref=e273]:
+          - rowgroup [ref=e274]:
+            - row "Feature Technical Specification" [ref=e275]:
+              - columnheader "Feature" [ref=e276]
+              - columnheader "Technical Specification" [ref=e277]
+          - rowgroup [ref=e278]:
+            - row "Handler Interface Function<List<Question>, List<Answer>>" [ref=e279]:
+              - cell "Handler Interface" [ref=e280]
+              - cell "Function<List<Question>, List<Answer>>" [ref=e281]:
+                - code [ref=e283]: Function<List<Question>, List<Answer>>
+            - row "Input Modes Single-select, Multi-select, Free-text." [ref=e284]:
+              - cell "Input Modes" [ref=e285]
+              - cell "Single-select, Multi-select, Free-text." [ref=e286]:
+                - paragraph [ref=e287]:
+                  - text: Single-select, Multi-select, Free-text.
+                  - superscript [ref=e288]
+            - row "Contextual Data Options include headers and descriptions." [ref=e289]:
+              - cell "Contextual Data" [ref=e290]
+              - cell "Options include headers and descriptions." [ref=e291]:
+                - paragraph [ref=e292]:
+                  - text: Options include headers and descriptions.
+                  - superscript [ref=e293]
+            - row "Portability Model-agnostic; works with any Spring AI supported LLM." [ref=e294]:
+              - cell "Portability" [ref=e295]
+              - cell "Model-agnostic; works with any Spring AI supported LLM." [ref=e296]:
+                - paragraph [ref=e297]:
+                  - text: Model-agnostic; works with any Spring AI supported LLM.
+                  - superscript [ref=e298]
+        - button "Learn More" [ref=e301] [cursor=pointer]:
+          - img [ref=e302]: expand_more
+        - 'heading "Part 3: Structured Planning via TodoWriteTool" [level=2] [ref=e303]'
+        - paragraph [ref=e304]:
+          - generic [ref=e305]:
+            - text: One of the primary failures of autonomous agents in complex tasks is the "lost in the middle" phenomenon, where the model forgets intermediate steps during a long execution chain. Part 3 of the series (
+            - link "https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite" [ref=e308] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite
+            - text: ) addresses this through the
+            - code [ref=e309]: TodoWriteTool
+            - text: ", which transforms implicit reasoning into an explicit, observable task list."
+          - superscript [ref=e310]
+          - button "Learn More" [ref=e313] [cursor=pointer]:
+            - img [ref=e314]: expand_more
+        - heading "Enforcing Sequential Focus" [level=3] [ref=e315]
+        - paragraph [ref=e316]:
+          - generic [ref=e317]:
+            - text: The
+            - code [ref=e318]: TodoWriteTool
+            - text: allows the LLM to create and update a plan consisting of todo items. Each item has an ID, content, and status (e.g.,
+            - code [ref=e319]: todo
+            - text: ","
+            - code [ref=e320]: in_progress
+            - text: ","
+            - code [ref=e321]: completed
+            - text: ). A critical technical constraint of this tool is that only one task can be
+            - code [ref=e322]: in_progress
+            - text: at a time.
+          - superscript [ref=e323]
+          - text: This forces the agent to maintain sequential, focused execution, preventing the "scattered" attempts at parallel work that often result in errors.
+          - button "Learn More" [ref=e326] [cursor=pointer]:
+            - img [ref=e327]: expand_more
+        - paragraph [ref=e328]:
+          - text: The agent is instructed to use this tool autonomously when a task is deemed to require three or more distinct steps.
+          - superscript [ref=e329]
+          - text: This self-governing behavior ensures that the overhead of task management is only incurred for sufficiently complex requests.
+          - button "Learn More" [ref=e332] [cursor=pointer]:
+            - img [ref=e333]: expand_more
+        - 'heading "Technical Requirements: Advisors and Memory" [level=3] [ref=e334]'
+        - paragraph [ref=e335]:
+          - generic [ref=e336]:
+            - text: The effectiveness of the Todo-Write pattern is dependent on the agent's ability to retain the state of the todo list. Therefore, it requires the integration of a
+            - code [ref=e337]: ToolCallAdvisor
+            - text: and a
+            - code [ref=e338]: MessageChatMemoryAdvisor
+            - text: .
+          - superscript [ref=e339]
+          - button "Learn More" [ref=e342] [cursor=pointer]:
+            - img [ref=e343]: expand_more
+        - generic [ref=e346]:
+          - generic [ref=e347]:
+            - generic [ref=e348]: Java
+            - button "Copy code" [ref=e350] [cursor=pointer]:
+              - img [ref=e351]: content_copy
+          - code [ref=e357]: ChatClient chatClient = chatClientBuilder .defaultTools(TodoWriteTool.builder().build()) .defaultAdvisors( ToolCallAdvisor.builder().conversationHistoryEnabled(false).build(), MessageChatMemoryAdvisor.builder(chatMemory).build()) .build();
+        - paragraph [ref=e358]:
+          - generic [ref=e359]:
+            - text: Setting
+            - code [ref=e360]: conversationHistoryEnabled(false)
+            - text: in the
+            - code [ref=e361]: ToolCallAdvisor
+            - text: is a crucial detail; it disables the built-in tool-call history in favor of the more robust
+            - code [ref=e362]: MessageChatMemoryAdvisor
+            - text: ", ensuring all tool interactions are logged and accessible for subsequent reasoning steps."
+          - superscript [ref=e363]
+          - generic [ref=e364]:
+            - text: Furthermore, the tool can publish events (
+            - code [ref=e365]: TodoUpdateEvent
+            - text: ), allowing external systems to monitor agent progress in real-time.
+          - superscript [ref=e366]
+          - button "Learn More" [ref=e369] [cursor=pointer]:
+            - img [ref=e370]: expand_more
+        - 'heading "Part 4: Hierarchical Subagent Orchestration" [level=2] [ref=e371]'
+        - paragraph [ref=e372]:
+          - generic [ref=e373]:
+            - text: As tasks become even more complex—such as performing a full codebase migration or building a new feature from scratch—a single context window often becomes overwhelmed. Part 4 (
+            - link "https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents" [ref=e376] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents
+            - text: ) introduces Subagent Orchestration, a hierarchical architecture where a main orchestrator delegates focused tasks to specialized subagents.
+          - superscript [ref=e377]
+          - button "Learn More" [ref=e380] [cursor=pointer]:
+            - img [ref=e381]: expand_more
+        - heading "Isolated Context Windows and Multi-Model Routing" [level=3] [ref=e382]
+        - paragraph [ref=e383]:
+          - generic [ref=e384]:
+            - text: The
+            - code [ref=e385]: Task
+            - text: tool facilitates this hierarchy by allowing the main agent to spawn subagents in isolated context windows. This isolation prevents the clutter of intermediate reasoning from degrading the main agent's performance.
+          - superscript [ref=e386]
+          - text: Only the essential results are returned to the parent agent upon completion.
+          - button "Learn More" [ref=e389] [cursor=pointer]:
+            - img [ref=e390]: expand_more
+        - paragraph [ref=e391]:
+          - text: A powerful feature of this orchestration is multi-model routing. Developers can configure different models for different subagents based on the complexity of their tasks.
+          - superscript [ref=e392]
+          - button "Learn More" [ref=e395] [cursor=pointer]:
+            - img [ref=e396]: expand_more
+        - table [ref=e398]:
+          - rowgroup [ref=e399]:
+            - row "Subagent Type Ideal Model Typical Capabilities" [ref=e400]:
+              - columnheader "Subagent Type" [ref=e401]
+              - columnheader "Ideal Model" [ref=e402]
+              - columnheader "Typical Capabilities" [ref=e403]
+          - rowgroup [ref=e404]:
+            - row "Explore Claude Haiku Fast codebase exploration, finding files, searching code." [ref=e405]:
+              - cell "Explore" [ref=e406]:
+                - generic [ref=e407]: Explore
+              - cell "Claude Haiku" [ref=e408]
+              - cell "Fast codebase exploration, finding files, searching code." [ref=e409]:
+                - paragraph [ref=e410]:
+                  - text: Fast codebase exploration, finding files, searching code.
+                  - superscript [ref=e411]
+            - row "Plan Claude Sonnet Designing implementation strategies, identifying trade-offs." [ref=e412]:
+              - cell "Plan" [ref=e413]:
+                - generic [ref=e414]: Plan
+              - cell "Claude Sonnet" [ref=e415]
+              - cell "Designing implementation strategies, identifying trade-offs." [ref=e416]:
+                - paragraph [ref=e417]:
+                  - text: Designing implementation strategies, identifying trade-offs.
+                  - superscript [ref=e418]
+            - row "General-Purpose Claude Opus Complex multi-step research and execution with full read/write access." [ref=e419]:
+              - cell "General-Purpose" [ref=e420]:
+                - generic [ref=e421]: General-Purpose
+              - cell "Claude Opus" [ref=e422]
+              - cell "Complex multi-step research and execution with full read/write access." [ref=e423]:
+                - paragraph [ref=e424]:
+                  - text: Complex multi-step research and execution with full read/write access.
+                  - superscript [ref=e425]
+            - row "Bash Any standard model Terminal operations, git commands, and system setup." [ref=e426]:
+              - cell "Bash" [ref=e427]:
+                - generic [ref=e428]: Bash
+              - cell "Any standard model" [ref=e429]
+              - cell "Terminal operations, git commands, and system setup." [ref=e430]:
+                - paragraph [ref=e431]:
+                  - text: Terminal operations, git commands, and system setup.
+                  - superscript [ref=e432]
+        - button "Learn More" [ref=e435] [cursor=pointer]:
+          - img [ref=e436]: expand_more
+        - heading "Implementation and Configuration" [level=3] [ref=e437]
+        - paragraph [ref=e438]:
+          - text: Subagents are defined as Markdown files with YAML frontmatter, detailing their name, description, allowed tools, and preferred model.
+          - superscript [ref=e439]
+          - generic [ref=e440]:
+            - text: The
+            - code [ref=e441]: TaskToolCallbackProvider
+            - text: is used to wire these references into the
+            - code [ref=e442]: ChatClient
+            - text: .
+          - button "Learn More" [ref=e445] [cursor=pointer]:
+            - img [ref=e446]: expand_more
+        - generic [ref=e449]:
+          - generic [ref=e450]:
+            - generic [ref=e451]: Java
+            - button "Copy code" [ref=e453] [cursor=pointer]:
+              - img [ref=e454]: content_copy
+          - code [ref=e460]: var taskTools = TaskToolCallbackProvider.builder() .chatClientBuilder("default", mainBuilder) .chatClientBuilder("haiku", fastBuilder) .subagentReferences(ClaudeSubagentReferences.fromRootDirectory("agents/")) .build();
+        - paragraph [ref=e461]:
+          - text: The system is extensible, supporting various subagent types, including local Claude-style agents and remote agents communicating via protocols like A2A or MCP.
+          - superscript [ref=e462]
+          - button "Learn More" [ref=e465] [cursor=pointer]:
+            - img [ref=e466]: expand_more
+        - 'heading "Part 5: Interoperability via the Agent2Agent Protocol" [level=2] [ref=e467]'
+        - paragraph [ref=e468]:
+          - generic [ref=e469]:
+            - text: The fifth pattern (
+            - link "https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration" [ref=e472] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration
+            - text: ) addresses the need for cross-platform agent communication through the Agent2Agent (A2A) Protocol. This open standard allows agents to discover and interact with one another regardless of their underlying implementation or hosting platform.
+          - superscript [ref=e473]
+          - button "Learn More" [ref=e476] [cursor=pointer]:
+            - img [ref=e477]: expand_more
+        - heading "The AgentCard and Discovery Mechanism" [level=3] [ref=e478]
+        - paragraph [ref=e479]:
+          - generic [ref=e480]:
+            - text: The foundation of A2A communication is the
+            - code [ref=e481]: AgentCard
+            - text: ", a standardized JSON document typically exposed at"
+            - code [ref=e482]: /.well-known/agent-card.json
+            - text: . It describes an agent's identity, version, capabilities, and specific skills.
+          - superscript [ref=e483]
+          - button "Learn More" [ref=e486] [cursor=pointer]:
+            - img [ref=e487]: expand_more
+        - table [ref=e489]:
+          - rowgroup [ref=e490]:
+            - row "AgentCard Field Technical Description" [ref=e491]:
+              - columnheader "AgentCard Field" [ref=e492]
+              - columnheader "Technical Description" [ref=e493]
+          - rowgroup [ref=e494]:
+            - row "capabilities Defines support for streaming, text/image modes, etc." [ref=e495]:
+              - cell "capabilities" [ref=e496]:
+                - code [ref=e498]: capabilities
+              - cell "Defines support for streaming, text/image modes, etc." [ref=e499]:
+                - paragraph [ref=e500]:
+                  - text: Defines support for streaming, text/image modes, etc.
+                  - superscript [ref=e501]
+            - row "skills A list of task descriptions, tags, and execution examples." [ref=e502]:
+              - cell "skills" [ref=e503]:
+                - code [ref=e505]: skills
+              - cell "A list of task descriptions, tags, and execution examples." [ref=e506]:
+                - paragraph [ref=e507]:
+                  - text: A list of task descriptions, tags, and execution examples.
+                  - superscript [ref=e508]
+            - row "protocolVersion The version of the A2A spec being used." [ref=e509]:
+              - cell "protocolVersion" [ref=e510]:
+                - code [ref=e512]: protocolVersion
+              - cell "The version of the A2A spec being used." [ref=e513]:
+                - paragraph [ref=e514]:
+                  - text: The version of the A2A spec being used.
+                  - superscript [ref=e515]
+            - row "url The root endpoint for receiving A2A messages." [ref=e516]:
+              - cell "url" [ref=e517]:
+                - code [ref=e519]: url
+              - cell "The root endpoint for receiving A2A messages." [ref=e520]:
+                - paragraph [ref=e521]:
+                  - text: The root endpoint for receiving A2A messages.
+                  - superscript [ref=e522]
+        - button "Learn More" [ref=e525] [cursor=pointer]:
+          - img [ref=e526]: expand_more
+        - heading "Server-Side Integration in Spring AI" [level=3] [ref=e527]
+        - paragraph [ref=e528]:
+          - generic [ref=e529]:
+            - text: The
+            - code [ref=e530]: spring-ai-a2a
+            - text: project enables developers to expose their Spring AI agents as A2A servers with minimal configuration. The
+            - code [ref=e531]: spring-ai-a2a-server-autoconfigure
+            - text: dependency handles the exposure of the
+            - code [ref=e532]: AgentCard
+            - text: and the JSON-RPC message endpoints.
+          - superscript [ref=e533]
+          - button "Learn More" [ref=e536] [cursor=pointer]:
+            - img [ref=e537]: expand_more
+        - paragraph [ref=e538]:
+          - generic [ref=e539]:
+            - text: The request flow involves the
+            - code [ref=e540]: MessageController
+            - text: receiving a
+            - code [ref=e541]: sendMessage
+            - text: request, which is then routed to a
+            - code [ref=e542]: DefaultAgentExecutor
+            - text: . This executor bridges the A2A protocol with the Spring AI
+            - code [ref=e543]: ChatClient
+            - text: ", allowing the agent to reason about the request and return the result as a standardized A2A artifact."
+          - superscript [ref=e544]
+          - button "Learn More" [ref=e547] [cursor=pointer]:
+            - img [ref=e548]: expand_more
+        - heading "Implications for Multi-Agent Systems" [level=3] [ref=e549]
+        - paragraph [ref=e550]:
+          - text: A2A integration allows for the creation of complex, distributed multi-agent systems. For example, a "Travel Planner" orchestrator might discover and delegate tasks to a "Weather Agent" and a "Hotel Booking Agent," each hosted as an independent A2A server.
+          - superscript [ref=e551]
+          - text: This promotes a vendor-neutral foundation where agents can coordinate workflows across diverse environments.
+          - button "Learn More" [ref=e554] [cursor=pointer]:
+            - img [ref=e555]: expand_more
+        - 'heading "Part 6: Long-Term Memory via AutoMemoryTools" [level=2] [ref=e556]'
+        - paragraph [ref=e557]:
+          - generic [ref=e558]:
+            - text: The final pattern in the series (
+            - link "https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools" [ref=e561] [cursor=pointer]:
+              - /url: https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools
+            - text: ) addresses the fundamental limitation of ephemeral conversation history. While
+            - code [ref=e562]: ChatMemory
+            - text: preserves the immediate context, it is eventually subject to eviction.
+            - code [ref=e563]: AutoMemoryTools
+            - text: provide agents with a durable, file-based long-term memory that persists across JVM restarts.
+          - superscript [ref=e564]
+          - button "Learn More" [ref=e567] [cursor=pointer]:
+            - img [ref=e568]: expand_more
+        - heading "Fact Retention vs. Conversation History" [level=3] [ref=e569]
+        - paragraph [ref=e570]:
+          - generic [ref=e571]:
+            - text: The distinction between
+            - code [ref=e572]: ChatMemory
+            - text: and
+            - code [ref=e573]: AutoMemoryTools
+            - text: is critical.
+            - code [ref=e574]: ChatMemory
+            - text: is the "noisy" record of every turn, while
+            - code [ref=e575]: AutoMemoryTools
+            - text: is the curated layer where the agent writes only what is worth keeping indefinitely—user preferences, architectural decisions, or behavioral corrections.
+          - superscript [ref=e576]
+          - button "Learn More" [ref=e579] [cursor=pointer]:
+            - img [ref=e580]: expand_more
+        - paragraph [ref=e581]: "Memory is managed through six purpose-named tools that manipulate Markdown files within a sandboxed directory:"
+        - table [ref=e583]:
+          - rowgroup [ref=e584]:
+            - row "Tool Operation" [ref=e585]:
+              - columnheader "Tool" [ref=e586]
+              - columnheader "Operation" [ref=e587]
+          - rowgroup [ref=e588]:
+            - row "MemoryView Lists directory or reads file with line numbers." [ref=e589]:
+              - cell "MemoryView" [ref=e590]:
+                - code [ref=e592]: MemoryView
+              - cell "Lists directory or reads file with line numbers." [ref=e593]:
+                - paragraph [ref=e594]:
+                  - text: Lists directory or reads file with line numbers.
+                  - superscript [ref=e595]
+            - row "MemoryCreate Initiates the creation of a new topic file." [ref=e596]:
+              - cell "MemoryCreate" [ref=e597]:
+                - code [ref=e599]: MemoryCreate
+              - cell "Initiates the creation of a new topic file." [ref=e600]:
+                - paragraph [ref=e601]:
+                  - text: Initiates the creation of a new topic file.
+                  - superscript [ref=e602]
+            - row "MemoryInsert Appends text after a specific line (used for index updates)." [ref=e603]:
+              - cell "MemoryInsert" [ref=e604]:
+                - code [ref=e606]: MemoryInsert
+              - cell "Appends text after a specific line (used for index updates)." [ref=e607]:
+                - paragraph [ref=e608]:
+                  - text: Appends text after a specific line (used for index updates).
+                  - superscript [ref=e609]
+            - row "MemoryStrReplace Replaces unique strings for precise fact updates." [ref=e610]:
+              - cell "MemoryStrReplace" [ref=e611]:
+                - code [ref=e613]: MemoryStrReplace
+              - cell "Replaces unique strings for precise fact updates." [ref=e614]:
+                - paragraph [ref=e615]:
+                  - text: Replaces unique strings for precise fact updates.
+                  - superscript [ref=e616]
+            - row "MemoryDelete Recursively removes files or directories." [ref=e617]:
+              - cell "MemoryDelete" [ref=e618]:
+                - code [ref=e620]: MemoryDelete
+              - cell "Recursively removes files or directories." [ref=e621]:
+                - paragraph [ref=e622]:
+                  - text: Recursively removes files or directories.
+                  - superscript [ref=e623]
+            - row "MemoryRename Moves files and updates links." [ref=e624]:
+              - cell "MemoryRename" [ref=e625]:
+                - code [ref=e627]: MemoryRename
+              - cell "Moves files and updates links." [ref=e628]:
+                - paragraph [ref=e629]:
+                  - text: Moves files and updates links.
+                  - superscript [ref=e630]
+        - button "Learn More" [ref=e633] [cursor=pointer]:
+          - img [ref=e634]: expand_more
+        - heading "The Consolidation Trigger Mechanism" [level=3] [ref=e635]
+        - paragraph [ref=e636]:
+          - generic [ref=e637]:
+            - text: To prevent memory from becoming an unmanageable collection of redundant facts, the
+            - code [ref=e638]: AutoMemoryToolsAdvisor
+            - text: incorporates a "consolidation trigger." This is a predicate evaluated on each request that can be based on time, turn count, or probabilistic triggers.
+          - superscript [ref=e639]
+          - generic [ref=e640]:
+            - text: When the trigger returns true, the advisor appends a
+            - code [ref=e641]: <system-reminder>
+            - text: to the prompt, instructing the agent to merge duplicates or delete outdated information.
+          - button "Learn More" [ref=e644] [cursor=pointer]:
+            - img [ref=e645]: expand_more
+        - generic [ref=e648]:
+          - generic [ref=e649]:
+            - generic [ref=e650]: Java
+            - button "Copy code" [ref=e652] [cursor=pointer]:
+              - img [ref=e653]: content_copy
+          - code [ref=e659]: AutoMemoryToolsAdvisor memoryAdvisor = AutoMemoryToolsAdvisor.builder() .memoriesRootDirectory(memoryDir) .memoryConsolidationTrigger((request, instant) -> Math.random() < 0.05) .build();
+        - paragraph [ref=e660]:
+          - generic [ref=e661]:
+            - text: The system relies on a
+            - code [ref=e662]: MEMORY.md
+            - text: index file, which the agent reads at the start of every session to identify which specific topic files (
+            - code [ref=e663]: user_profile.md
+            - text: ","
+            - code [ref=e664]: project_history.md
+            - text: ) contain relevant facts.
+          - superscript [ref=e665]
+          - button "Learn More" [ref=e668] [cursor=pointer]:
+            - img [ref=e669]: expand_more
+        - heading "Technical Overview of the spring-ai-agent-utils Toolkit" [level=2] [ref=e670]
+        - paragraph [ref=e671]:
+          - text: Implementing these patterns requires a deep understanding of the underlying utilities provided by the
+          - code [ref=e672]: spring-ai-agent-utils
+          - text: project. This library is not merely a collection of tools; it is an environment abstraction that makes LLMs context-aware and capable of interacting with the physical system.
+        - heading "Core Environment and File System Utilities" [level=3] [ref=e673]
+        - paragraph [ref=e674]:
+          - generic [ref=e675]:
+            - text: A coding assistant's efficacy is largely determined by its ability to navigate and modify a codebase. The
+            - code [ref=e676]: AgentEnvironment
+            - text: tool is essential here, as it provides dynamic context regarding the OS, working directory, and git repository status.
+          - superscript [ref=e677]
+          - button "Learn More" [ref=e680] [cursor=pointer]:
+            - img [ref=e681]: expand_more
+        - paragraph [ref=e682]:
+          - generic [ref=e683]:
+            - text: The
+            - code [ref=e684]: FileSystemTools
+            - text: provide a safety-first approach to file manipulation, with operations like
+            - code [ref=e685]: Read
+            - text: (paginated),
+            - code [ref=e686]: Write
+            - text: (overwriting), and
+            - code [ref=e687]: Edit
+            - text: (string-based replacement with validation).
+          - superscript [ref=e688]
+          - generic [ref=e689]:
+            - text: Combined with
+            - code [ref=e690]: GrepTool
+            - text: and
+            - code [ref=e691]: GlobTool
+            - text: ", these allow for fast, accurate code search and modification."
+          - button "Learn More" [ref=e694] [cursor=pointer]:
+            - img [ref=e695]: expand_more
+        - table [ref=e697]:
+          - rowgroup [ref=e698]:
+            - row "Utility Capability Technical Detail" [ref=e699]:
+              - columnheader "Utility" [ref=e700]
+              - columnheader "Capability" [ref=e701]
+              - columnheader "Technical Detail" [ref=e702]
+          - rowgroup [ref=e703]:
+            - row "GrepTool Regex search Pure Java implementation with glob filtering." [ref=e704]:
+              - cell "GrepTool" [ref=e705]:
+                - code [ref=e707]: GrepTool
+              - cell "Regex search" [ref=e708]
+              - cell "Pure Java implementation with glob filtering." [ref=e709]:
+                - paragraph [ref=e710]:
+                  - text: Pure Java implementation with glob filtering.
+                  - superscript [ref=e711]
+            - row "GlobTool Pattern matching Finds files by name, sorted by modification time." [ref=e712]:
+              - cell "GlobTool" [ref=e713]:
+                - code [ref=e715]: GlobTool
+              - cell "Pattern matching" [ref=e716]
+              - cell "Finds files by name, sorted by modification time." [ref=e717]:
+                - paragraph [ref=e718]:
+                  - text: Finds files by name, sorted by modification time.
+                  - superscript [ref=e719]
+            - row "ShellTools Command execution Supports background processes and regex output filtering." [ref=e720]:
+              - cell "ShellTools" [ref=e721]:
+                - code [ref=e723]: ShellTools
+              - cell "Command execution" [ref=e724]
+              - cell "Supports background processes and regex output filtering." [ref=e725]:
+                - paragraph [ref=e726]:
+                  - text: Supports background processes and regex output filtering.
+                  - superscript [ref=e727]
+            - row "SmartWebFetch Web research Converts HTML to Markdown and summarizes via AI." [ref=e728]:
+              - cell "SmartWebFetch" [ref=e729]:
+                - code [ref=e731]: SmartWebFetch
+              - cell "Web research" [ref=e732]
+              - cell "Converts HTML to Markdown and summarizes via AI." [ref=e733]:
+                - paragraph [ref=e734]:
+                  - text: Converts HTML to Markdown and summarizes via AI.
+                  - superscript [ref=e735]
+        - button "Learn More" [ref=e738] [cursor=pointer]:
+          - img [ref=e739]: expand_more
+        - heading "Implementing the Comprehensive Agent Stack" [level=3] [ref=e740]
+        - paragraph [ref=e741]:
+          - text: For a production-grade coding assistant, the integration involves wiring these tools into the
+          - code [ref=e742]: ChatClient
+          - text: "alongside the appropriate advisors. The following represents a consolidated configuration pattern:"
+        - generic [ref=e745]:
+          - generic [ref=e746]:
+            - generic [ref=e747]: Java
+            - button "Copy code" [ref=e749] [cursor=pointer]:
+              - img [ref=e750]: content_copy
+          - code [ref=e756]: ChatClient chatClient = chatClientBuilder .defaultSystem(p -> p.text(agentSystemPrompt) .param(AgentEnvironment.ENVIRONMENT_INFO_KEY, AgentEnvironment.info()) .param(AgentEnvironment.GIT_STATUS_KEY, AgentEnvironment.gitStatus())) .defaultTools( new ShellTools(), new FileSystemTools(), new GrepTool(), new GlobTool(), new TodoWriteTool(), AskUserQuestionTool.builder().questionHandler(cliHandler).build()) .defaultToolCallbacks( SkillsTool.builder().addSkillsResources(skillPaths).build(), TaskTool.builder().subagentTypes(ClaudeSubagentType.builder().build()).build()) .defaultAdvisors( AutoMemoryToolsAdvisor.builder().memoriesRootDirectory(memoryDir).build(), ToolCallAdvisor.builder().conversationHistoryEnabled(false).build(), MessageChatMemoryAdvisor.builder(chatMemory).build()) .build();
+        - paragraph [ref=e757]: This stack ensures the agent is environmentally aware, capable of interactive clarification, sequential planning, hierarchical delegation, and long-term fact retention.
+        - 'heading "Comparative Analysis: Native Anthropic Skills vs. Generic Agent Skills" [level=2] [ref=e758]'
+        - paragraph [ref=e759]:
+          - text: When implementing these patterns, architects must decide between using Anthropic's native Skills API or the generic approach provided by
+          - code [ref=e760]: spring-ai-agent-utils
+          - text: . This decision has profound implications for portability, security, and document generation capabilities.
+        - table [ref=e762]:
+          - rowgroup [ref=e763]:
+            - row "Feature Anthropic Native Skills Generic Agent Skills" [ref=e764]:
+              - columnheader "Feature" [ref=e765]
+              - columnheader "Anthropic Native Skills" [ref=e766]
+              - columnheader "Generic Agent Skills" [ref=e767]
+          - rowgroup [ref=e768]:
+            - row "Portability Restricted to Claude Sonnet/Opus 4+. LLM-Agnostic (OpenAI, Gemini, etc.)." [ref=e769]:
+              - cell "Portability" [ref=e770]:
+                - generic [ref=e771]: Portability
+              - cell "Restricted to Claude Sonnet/Opus 4+." [ref=e772]:
+                - paragraph [ref=e773]:
+                  - text: Restricted to Claude Sonnet/Opus 4+.
+                  - superscript [ref=e774]
+              - cell "LLM-Agnostic (OpenAI, Gemini, etc.)." [ref=e775]:
+                - paragraph [ref=e776]:
+                  - text: LLM-Agnostic (OpenAI, Gemini, etc.).
+                  - superscript [ref=e777]
+            - row "Environment Sandboxed cloud container. Local host environment." [ref=e778]:
+              - cell "Environment" [ref=e779]:
+                - generic [ref=e780]: Environment
+              - cell "Sandboxed cloud container." [ref=e781]:
+                - paragraph [ref=e782]:
+                  - text: Sandboxed cloud container.
+                  - superscript [ref=e783]
+              - cell "Local host environment." [ref=e784]:
+                - paragraph [ref=e785]:
+                  - text: Local host environment.
+                  - superscript [ref=e786]
+            - row "Asset Access Files API (24-hour expiration). Local filesystem (persistent)." [ref=e787]:
+              - cell "Asset Access" [ref=e788]:
+                - generic [ref=e789]: Asset Access
+              - cell "Files API (24-hour expiration)." [ref=e790]:
+                - paragraph [ref=e791]:
+                  - text: Files API (24-hour expiration).
+                  - superscript [ref=e792]
+              - cell "Local filesystem (persistent)." [ref=e793]:
+                - paragraph [ref=e794]:
+                  - text: Local filesystem (persistent).
+                  - superscript [ref=e795]
+            - row "Capabilities Pre-built Excel, PDF, PPT generation. Custom scripts, local network access." [ref=e796]:
+              - cell "Capabilities" [ref=e797]:
+                - generic [ref=e798]: Capabilities
+              - cell "Pre-built Excel, PDF, PPT generation." [ref=e799]:
+                - paragraph [ref=e800]:
+                  - text: Pre-built Excel, PDF, PPT generation.
+                  - superscript [ref=e801]
+              - cell "Custom scripts, local network access." [ref=e802]:
+                - paragraph [ref=e803]:
+                  - text: Custom scripts, local network access.
+                  - superscript [ref=e804]
+            - row "Integration AnthropicChatOptions & unified skill(). Standard SkillsTool & spring-ai-agent-utils." [ref=e805]:
+              - cell "Integration" [ref=e806]:
+                - generic [ref=e807]: Integration
+              - cell "AnthropicChatOptions & unified skill()." [ref=e808]:
+                - paragraph [ref=e809]:
+                  - generic [ref=e810]:
+                    - code [ref=e811]: AnthropicChatOptions
+                    - text: "& unified"
+                    - code [ref=e812]: skill()
+                    - text: .
+                  - superscript [ref=e813]
+              - cell "Standard SkillsTool & spring-ai-agent-utils." [ref=e814]:
+                - paragraph [ref=e815]:
+                  - generic [ref=e816]:
+                    - text: Standard
+                    - code [ref=e817]: SkillsTool
+                    - text: "&"
+                    - code [ref=e818]: spring-ai-agent-utils
+                    - text: .
+                  - superscript [ref=e819]
+        - button "Learn More" [ref=e822] [cursor=pointer]:
+          - img [ref=e823]: expand_more
+        - paragraph [ref=e824]:
+          - text: Native Anthropic skills are ideal for scenarios requiring secure, sandboxed execution of Python scripts for document generation.
+          - superscript [ref=e825]
+          - text: However, Generic Agent Skills are superior when the agent requires deep access to a local project's resources, custom packages, or when avoiding vendor lock-in is a primary concern.
+          - superscript [ref=e826]
+          - button "Learn More" [ref=e829] [cursor=pointer]:
+            - img [ref=e830]: expand_more
+        - heading "Reliability and Performance Benchmarking" [level=2] [ref=e831]
+        - paragraph [ref=e832]:
+          - text: As agentic systems move toward production, ensuring their reliability becomes paramount. The "lost in the middle" failure and "assumption-driven errors" are mitigated by the TodoWrite and AskUserQuestion patterns, but broader benchmarking is required to evaluate goal-directed workflows.
+          - superscript [ref=e833]
+          - button "Learn More" [ref=e836] [cursor=pointer]:
+            - img [ref=e837]: expand_more
+        - paragraph [ref=e838]:
+          - text: Spring AI Bench provides a test harness for evaluating agents on enterprise tasks, measuring how effectively different models and toolsets complete their objectives.
+          - superscript [ref=e839]
+          - text: Furthermore, implementing "Dynamic Tool Discovery" can reduce token costs by 34% to 64% by only loading the metadata of tools initially and expanding the full definitions on demand—a mechanism closely mirrored by the Agent Skills pattern.
+          - superscript [ref=e840]
+          - button "Learn More" [ref=e843] [cursor=pointer]:
+            - img [ref=e844]: expand_more
+        - heading "Technical Synthesis and Strategic Recommendations" [level=2] [ref=e845]
+        - paragraph [ref=e846]: "The transition to agentic AI in the Spring ecosystem is characterized by a move away from simple prompt engineering toward complex system orchestration. For teams building autonomous tools, the following technical strategies are recommended:"
+        - paragraph [ref=e847]: Firstly, prioritize modularity by organizing domain knowledge into Agent Skills. This keeps the agent flexible and prevents the context window from being consumed by irrelevant instructions.
+        - paragraph [ref=e848]:
+          - text: Secondly, enforce explicit planning using the
+          - code [ref=e849]: TodoWriteTool
+          - text: . By making the agent's plan observable, developers can debug failures more effectively and provide users with real-time progress indicators.
+        - paragraph [ref=e850]: Thirdly, leverage hierarchical subagents for tasks that require distinct context windows or different model capabilities. Use Claude Haiku for fast, low-cost exploration and shift to Claude Opus or GPT-4o for complex architectural planning.
+        - paragraph [ref=e851]: Fourthly, implement persistent memory to create a sense of continuity. Moving beyond session-based chat to fact-based retention allows agents to learn from user feedback and adapt to project-specific requirements over time.
+        - paragraph [ref=e852]: Finally, adopt the A2A protocol for future-proofing. By exposing agents as A2A-compliant servers, they can become part of a larger, interoperable ecosystem of AI services, enabling cross-platform coordination that transcends single-model limitations.
+        - paragraph [ref=e853]:
+          - text: The
+          - code [ref=e854]: spring-ai-agent-utils
+          - text: library provides the necessary primitives to implement these patterns today. By combining these utilities with the foundational features of Spring AI 2.0, Java developers can build autonomous agents that are not only capable of reasoning and planning but are also robust enough for enterprise deployment. The shift from "chatbots" to "digital coworkers" is well underway, and these six patterns form the technical bedrock of that evolution.
+      - generic [ref=e855]:
+        - heading "Report unsafe content Opens in a new window" [level=2] [ref=e857]:
+          - link "Report unsafe content Opens in a new window" [ref=e858] [cursor=pointer]:
+            - /url: https://support.google.com/legal/troubleshooter/1114905?uraw=r_b8dfd486b3e7c346#ts=1115658%2C13774968
+            - text: Report unsafe content
+            - generic [ref=e859]: Opens in a new window
+        - button "Try Gemini Deep Research" [ref=e861]:
+          - generic [ref=e864]: Try Gemini Deep Research
