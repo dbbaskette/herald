@@ -121,7 +121,7 @@
 
 **Blog:** `AskUserQuestionTool` is the agent-local analog of MCP Elicitation. The blog notes Spring AI also supports `@McpElicitation` for server-driven scenarios. `AskUserQuestionTool` does not require an MCP server.
 
-**Herald:** ➖ **Not Fully Implemented.** Herald uses the agent-local `AskUserQuestionTool` pattern. `@McpElicitation` / MCP server-driven elicitation is not yet implemented, but Herald's existing MCP client connections (Calendar, Gmail) could support it in future.
+**Herald:** ✅ **Implemented.** Herald uses the agent-local `AskUserQuestionTool` pattern and also supports `@McpElicitation` via `TelegramMcpElicitationHandler`. When an MCP server sends an elicitation request, it is routed to the user via Telegram, blocking until they answer or cancel. Spring AI MCP Client is configured with SSE transport; adding a new MCP server is a single env-var entry.
 
 ---
 
@@ -358,7 +358,7 @@
 | Pattern | Blog Features | ✅ Adopted | ➕ Enhanced | ➖ Not Fully Implemented |
 |---|---|---|---|---|
 | Part 1: Agent Skills | 7 | 5 (format, discovery, matching, classpath, native Skills) | 4 (execution w/ guardrails, hot reload, self-teaching, HITL) | — |
-| Part 2: AskUserQuestion | 4 | 4 (core, handler, async bridge, Telegram handler) | — | 1 (MCP Elicitation) |
+| Part 2: AskUserQuestion | 4 | 5 (core, handler, async bridge, Telegram handler, MCP Elicitation) | — | — |
 | Part 3: TodoWrite | 5 | 4 (decomp, lifecycle, events, memory) | — | 1 (custom system prompt) |
 | Part 4: Subagents | 6 | 5 (provider, format, context, multi-model, built-in agents) | 1 (research subagent) | 1 (parallel/background) |
 | Part 5: A2A Protocol | 4 | — | 2 (LLM-driven routing, A2A Client) | 2 (AgentCard format, A2A Server) |

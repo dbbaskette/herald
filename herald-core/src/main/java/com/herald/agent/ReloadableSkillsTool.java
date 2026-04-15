@@ -27,19 +27,29 @@ public class ReloadableSkillsTool implements ToolCallback {
 
     private final String skillsDirectory;
     private final List<Resource> classpathResources;
+    private final ApprovalGate approvalGate;
+    private final List<String> skillsRequiringApproval;
     private volatile ToolCallback delegate;
     private volatile List<SkillsTool.Skill> currentSkills;
 
     public ReloadableSkillsTool(String skillsDirectory) {
-        this(skillsDirectory, List.of());
+        this(skillsDirectory, List.of(), null, List.of());
     }
 
     public ReloadableSkillsTool(String skillsDirectory, List<Resource> classpathResources) {
+        this(skillsDirectory, classpathResources, null, List.of());
+    }
+
+    public ReloadableSkillsTool(String skillsDirectory, List<Resource> classpathResources,
+                                ApprovalGate approvalGate, List<String> skillsRequiringApproval) {
         if (skillsDirectory.startsWith("~")) {
             skillsDirectory = System.getProperty("user.home") + skillsDirectory.substring(1);
         }
         this.skillsDirectory = skillsDirectory;
         this.classpathResources = classpathResources != null ? List.copyOf(classpathResources) : List.of();
+        this.approvalGate = approvalGate;
+        this.skillsRequiringApproval = skillsRequiringApproval != null
+                ? List.copyOf(skillsRequiringApproval) : List.of();
         reload();
     }
 
@@ -123,10 +133,18 @@ public class ReloadableSkillsTool implements ToolCallback {
         if (delegate == null) {
             return "No skills are currently loaded.";
         }
+
+        String skillName = extractSkillName(toolInput);
+
+        if (skillName != null && requiresApproval(skillName) && approvalGate != null) {
+            String approval = approvalGate.requestApproval("Execute skill: " + skillName);
+            if (!"APPROVED".equals(approval)) {
+                return "DENIED: Skill '" + skillName + "' requires user approval. Status: " + approval;
+            }
+        }
+
         String result = delegate.call(toolInput);
 
-        // Extract skill name from input and check for allowed-tools constraint
-        String skillName = extractSkillName(toolInput);
         if (skillName != null) {
             List<String> allowedTools = getAllowedTools(skillName);
             if (!allowedTools.isEmpty()) {
@@ -157,7 +175,7 @@ public class ReloadableSkillsTool implements ToolCallback {
     /**
      * Parses a frontmatter value that may be a List (YAML list) or a comma-separated String.
      */
-    static List<String> parseStringOrList(Object value) {
+    public static List<String> parseStringOrList(Object value) {
         if (value instanceof List<?> list) {
             return list.stream()
                     .filter(v -> v instanceof String)
@@ -186,6 +204,17 @@ public class ReloadableSkillsTool implements ToolCallback {
                 .filter(v -> v instanceof String)
                 .map(v -> (String) v)
                 .orElse(null);
+    }
+
+    public boolean requiresApproval(String skillName) {
+        if (skillsRequiringApproval.contains(skillName)) return true;
+        if (currentSkills == null) return false;
+        return currentSkills.stream()
+                .filter(s -> s.name().equals(skillName))
+                .findFirst()
+                .map(s -> s.frontMatter().get("requires-approval"))
+                .map(v -> Boolean.TRUE.equals(v) || "true".equalsIgnoreCase(String.valueOf(v)))
+                .orElse(false);
     }
 
     private static String extractSkillName(String toolInput) {

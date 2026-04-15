@@ -50,11 +50,12 @@ cron:
     enabled: true
     schedule: '0 7 * * 1-5'
 
-mcp_servers:
-  - name: google-calendar
-    url: ${GCAL_MCP_URL}
-  - name: gmail
-    url: ${GMAIL_MCP_URL}
+# MCP Servers — configure via environment variables
+# Set HERALD_MCP_CLIENT_ENABLED=true and provide server URLs:
+#   GCAL_MCP_URL=http://localhost:3000/sse     (Google Calendar MCP)
+#   GMAIL_MCP_URL=http://localhost:3001/sse     (Gmail MCP)
+# Additional MCP servers can be added in application.yaml under
+# spring.ai.mcp.client.sse.connections
 
 ui:
   enabled: true

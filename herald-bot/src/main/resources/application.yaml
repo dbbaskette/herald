@@ -26,6 +26,18 @@ spring:
         repository:
           jdbc:
             initialize-schema: never  # Schema managed by DataSourceInitializer via schema.sql
+    mcp:
+      client:
+        enabled: ${HERALD_MCP_CLIENT_ENABLED:false}
+        type: SYNC
+        toolcallback:
+          enabled: true
+        sse:
+          connections:
+            google-calendar:
+              url: ${GCAL_MCP_URL:}
+            gmail:
+              url: ${GMAIL_MCP_URL:}
 
 herald:
   memory:
@@ -68,6 +80,8 @@ herald:
     max-context-tokens: ${HERALD_AGENT_MAX_CONTEXT_TOKENS:200000}
     skills-directory: ${HERALD_SKILLS_DIRECTORY:~/.herald/skills}
     prompt-dump: ${HERALD_PROMPT_DUMP:false}
+    approval-timeout-seconds: ${HERALD_APPROVAL_TIMEOUT_SECONDS:60}
+    skills-requiring-approval: ${HERALD_SKILLS_REQUIRING_APPROVAL:}
     model:
       haiku: ${HERALD_MODEL_HAIKU:claude-haiku-4-5}
       sonnet: ${HERALD_MODEL_SONNET:claude-sonnet-4-5}
