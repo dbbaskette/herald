@@ -68,6 +68,8 @@ herald:
     max-context-tokens: ${HERALD_AGENT_MAX_CONTEXT_TOKENS:200000}
     skills-directory: ${HERALD_SKILLS_DIRECTORY:~/.herald/skills}
     prompt-dump: ${HERALD_PROMPT_DUMP:false}
+    approval-timeout-seconds: ${HERALD_APPROVAL_TIMEOUT_SECONDS:60}
+    skills-requiring-approval: ${HERALD_SKILLS_REQUIRING_APPROVAL:}
     model:
       haiku: ${HERALD_MODEL_HAIKU:claude-haiku-4-5}
       sonnet: ${HERALD_MODEL_SONNET:claude-sonnet-4-5}
