@@ -57,7 +57,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
@@ -72,6 +72,7 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
@@ -99,7 +100,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockModel = mock(ChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -117,6 +118,7 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
@@ -135,7 +137,7 @@ class HeraldAgentConfigIntegrationTest {
         ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
 
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
@@ -153,6 +155,7 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
@@ -206,7 +209,7 @@ class HeraldAgentConfigIntegrationTest {
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
                 mockModel, config, false,
@@ -223,6 +226,7 @@ class HeraldAgentConfigIntegrationTest {
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(),
                 new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
@@ -238,7 +242,7 @@ class HeraldAgentConfigIntegrationTest {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
@@ -256,7 +260,7 @@ class HeraldAgentConfigIntegrationTest {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
         HeraldConfig config = new HeraldConfig(null, null,
-                new HeraldConfig.Agent("TestBot", null, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
@@ -285,10 +289,10 @@ class HeraldAgentConfigIntegrationTest {
                 todoTool, askTool,
                 Optional.empty(), Optional.empty(),
                 new WebTools(""),
-                Optional.empty());
+                Optional.empty(),
+                new ValidateSkillTool("skills"));
 
-        // shellDecorator, fsTools, todoTool, askTool, webTools = 5
-        // (AutoMemoryTools is now registered by AutoMemoryToolsAdvisor, not in the tool list)
-        assertThat(tools).hasSize(5);
+        // shellDecorator, fsTools, todoTool, askTool, webTools, validateSkillTool = 6
+        assertThat(tools).hasSize(6);
     }
 }

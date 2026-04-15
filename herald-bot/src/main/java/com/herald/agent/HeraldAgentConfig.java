@@ -99,6 +99,7 @@ public class HeraldAgentConfig {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
                 "task", "taskOutput", "skills", "web", "toolSearchTool",
+                "validateSkill",
                 "MemoryView", "MemoryCreate", "MemoryStrReplace",
                 "MemoryInsert", "MemoryDelete", "MemoryRename"));
         cronTools.ifPresent(t -> names.add("cron"));
@@ -125,7 +126,9 @@ public class HeraldAgentConfig {
     @Bean
     public ReloadableSkillsTool reloadableSkillsTool(
             @Value("${herald.agent.skills-directory:skills}") String skillsDirectory,
-            ResourcePatternResolver resourceResolver) throws IOException {
+            ResourcePatternResolver resourceResolver,
+            ApprovalGate approvalGate,
+            HeraldConfig config) throws IOException {
         Resource[] skillMdFiles = resourceResolver.getResources("classpath:skills/*/SKILL.md");
         List<Resource> classpathSkillDirs = new ArrayList<>();
         for (Resource r : skillMdFiles) {
@@ -135,7 +138,8 @@ public class HeraldAgentConfig {
                 log.warn("Could not resolve classpath skill resource to filesystem: {}", r, e);
             }
         }
-        return new ReloadableSkillsTool(skillsDirectory, classpathSkillDirs);
+        return new ReloadableSkillsTool(skillsDirectory, classpathSkillDirs,
+                approvalGate, config.skillsRequiringApproval());
     }
 
     @Bean
@@ -156,6 +160,7 @@ public class HeraldAgentConfig {
             @Value("classpath:prompts/MAIN_AGENT_SYSTEM_PROMPT.md") Resource promptResource,
             @Value("${herald.agent.agents-directory:.claude/agents}") String agentsDirectory,
             ReloadableSkillsTool reloadableSkillsTool,
+            ValidateSkillTool validateSkillTool,
             @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}") String defaultModel,
             @Value("${herald.agent.model.haiku:claude-haiku-4-5}") String haikuModel,
             @Value("${herald.agent.model.sonnet:claude-sonnet-4-5}") String sonnetModel,
@@ -185,7 +190,8 @@ public class HeraldAgentConfig {
 
         // Resolve system prompt (memory instructions are injected by AutoMemoryToolsAdvisor)
         String promptTemplate = loadPromptTemplate(promptResource);
-        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel);
+        String systemPrompt = resolvePrompt(promptTemplate, config, defaultModel,
+                reloadableSkillsTool.getSkillsDirectory());
 
         // Set up CONTEXT.md advisor — reads standing brief from disk each turn
         Path contextFilePath = resolveTildePath(config.contextFile());
@@ -279,7 +285,8 @@ public class HeraldAgentConfig {
                 contextMdAdvisor, memoriesDir, chatModel, config, promptDump);
 
         var toolList = buildToolList(shellDecorator, fsTools,
-                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt);
+                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt,
+                validateSkillTool);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
@@ -385,7 +392,8 @@ public class HeraldAgentConfig {
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
             WebTools webTools,
-            Optional<CronTools> cronToolsOpt) {
+            Optional<CronTools> cronToolsOpt,
+            ValidateSkillTool validateSkillTool) {
 
         List<Object> tools = new ArrayList<>();
         tools.add(shellDecorator);
@@ -393,6 +401,7 @@ public class HeraldAgentConfig {
         tools.add(todoTool);
         tools.add(askTool);
         tools.add(webTools);
+        tools.add(validateSkillTool);
 
         telegramSendToolOpt.ifPresent(tools::add);
         gwsToolsOpt.ifPresent(tools::add);
@@ -416,11 +425,12 @@ public class HeraldAgentConfig {
      * {@code {current_datetime}} and {@code {timezone}} are intentionally left unresolved
      * here and handled per-turn by {@link DateTimePromptAdvisor}.
      */
-    String resolvePrompt(String template, HeraldConfig config, String modelId) {
+    String resolvePrompt(String template, HeraldConfig config, String modelId, String skillsDirectory) {
         return template
                 .replace("{persona}", config.persona())
                 .replace("{model_id}", modelId)
-                .replace("{system_prompt_extra}", config.systemPromptExtra());
+                .replace("{system_prompt_extra}", config.systemPromptExtra())
+                .replace("{skills_directory}", skillsDirectory);
     }
 
     List<SubagentReference> loadSubagentReferences(String agentsDirectory) {

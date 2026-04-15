@@ -27,7 +27,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("TestBot — a test persona", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         assertThat(result).contains("You are **TestBot — a test persona**");
         assertThat(result).doesNotContain("{persona}");
@@ -38,7 +38,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         // Dynamic placeholders are resolved per-turn by DateTimePromptAdvisor, not at startup
         assertThat(result).contains("{current_datetime}");
@@ -50,7 +50,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, "Always respond in haiku format.");
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         assertThat(result).contains("Always respond in haiku format.");
         assertThat(result).doesNotContain("{system_prompt_extra}");
@@ -61,7 +61,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith(null, null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         assertThat(result).doesNotContain("{system_prompt_extra}");
     }
@@ -84,7 +84,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         assertThat(result).contains("You are **Herald");
         assertThat(result).doesNotContain("{persona}");
@@ -95,7 +95,7 @@ class HeraldAgentConfigTest {
         String template = loadPromptTemplate();
         HeraldConfig config = configWith("   ", null);
 
-        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5");
+        String result = agentConfig.resolvePrompt(template, config, "claude-sonnet-4-5", "skills");
 
         assertThat(result).contains("You are **Herald");
         assertThat(result).doesNotContain("{persona}");
@@ -115,6 +115,7 @@ class HeraldAgentConfigTest {
                         Optional.empty(), Optional.empty(),
                         new ClassPathResource("prompts/NONEXISTENT.md"),
                         ".claude/agents", new ReloadableSkillsTool("skills"),
+                        new ValidateSkillTool("skills"),
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
                         "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b",
@@ -141,7 +142,7 @@ class HeraldAgentConfigTest {
 
     private HeraldConfig configWith(String persona, String extra) {
         return new HeraldConfig(null, null,
-                new HeraldConfig.Agent(persona, extra, null, null, null, null), null, null, null, null, null, null, null);
+                new HeraldConfig.Agent(persona, extra, null, null, null, null, null), null, null, null, null, null, null, null);
     }
 
     private String loadPromptTemplate() throws IOException {
