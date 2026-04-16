@@ -21,7 +21,27 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
         this(memory, telegram, agent, providers, cron, weather, obsidian, vault, archival, longTermMemory, null);
     }
 
-    public record A2a(List<A2aAgent> agents) {
+    public record A2a(List<A2aAgent> agents, Server server) {
+        /**
+         * Backwards-compatible constructor for callers that predate the A2A
+         * server-side config. Leaves {@code server} null (server defaults to
+         * disabled).
+         */
+        public A2a(List<A2aAgent> agents) {
+            this(agents, null);
+        }
+
+        /**
+         * Server-side A2A configuration — when {@code enabled}, Herald exposes
+         * a JSON-RPC {@code message/send} endpoint at {@code /} and an
+         * AgentCard at {@code /.well-known/agent-card.json}.
+         */
+        public record Server(Boolean enabled, String baseUrl, String name, String description,
+                             String version, Auth auth) {
+        }
+
+        public record Auth(String bearerToken) {
+        }
     }
 
     public record A2aAgent(String name, String url, Map<String, String> metadata) {
