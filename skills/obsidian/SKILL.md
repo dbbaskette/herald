@@ -96,10 +96,66 @@ obsidian create vault="Documents" path="Herald-Memory/Research/.gitkeep" content
 obsidian create vault="Documents" path="Herald-Memory/Projects/.gitkeep" content="" overwrite
 obsidian create vault="Documents" path="Herald-Memory/People/.gitkeep" content="" overwrite
 obsidian create vault="Documents" path="Herald-Memory/Reference/.gitkeep" content="" overwrite
-obsidian create vault="Documents" path="Herald-Memory/Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Full Conversation\n\n" overwrite
-obsidian create vault="Documents" path="Herald-Memory/Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n" overwrite
-obsidian create vault="Documents" path="Herald-Memory/Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Chat Session.md" content="---\ntags: [chat-session]\ndate: {{date}}\ntopic: \nconversation-id: \n---\n\n# {{title}}\n\n## Summary\n\n## Key Points\n\n## Action Items\n\n- [ ] \n\n## Related\n\n- \n\n## Full Conversation\n\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Daily Briefing.md" content="---\ntags: [daily]\ndate: {{date}}\n---\n\n# Daily Briefing — {{date}}\n\n## Weather\n\n## Calendar\n\n## Top Priorities\n\n## Notes\n\n## Related\n\n- \n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Templates/Research.md" content="---\ntags: [research]\ndate: {{date}}\ntopic: \n---\n\n# {{title}}\n\n## Summary\n\n## Sources\n\n## Key Findings\n\n## Next Steps\n\n## Related\n\n- \n" overwrite
 ```
+
+Also create a top-level vault index and a Herald project index on first use:
+
+```bash
+obsidian create vault="Documents" path="Herald-Memory/Index.md" content="---\ntags: [index]\n---\n\n# Herald-Memory Index\n\nEntry point for the Herald-Memory vault. Link new top-level notes here.\n\n## Projects\n\n- [[Projects/Herald/Index]]\n\n## Sections\n\n- Chat-Sessions/\n- Daily/\n- Research/\n- Projects/\n- People/\n- Reference/\n"
+obsidian create vault="Documents" path="Herald-Memory/Projects/Herald/Index.md" content="---\ntags: [index, project/herald]\n---\n\n# Herald — Project Index\n\n## Architecture & Decisions\n\n- \n\n## Open Questions\n\n- \n\n## Related Research\n\n- \n\n## Recent Chat Sessions\n\n- \n"
+```
+
+## Linking Conventions
+
+Notes are only as useful as the connections between them. Every note you create should link out to related context using Obsidian `[[wikilinks]]`, so the graph view and backlinks stay populated.
+
+### Wikilinks in generated content
+
+Use wikilinks — not plain text — when a note references another note. Link targets use the path from the vault root without the `.md` extension, and can be given a display alias with `|`:
+
+```markdown
+Relates to [[Projects/Herald/architecture|the architecture doc]] and the
+earlier session [[Chat-Sessions/2026-03-10-herald-model-config]].
+Follows up on [[Research/spring-ai-jdbc-chat-memory]].
+```
+
+Link out whenever a note mentions:
+
+- A project discussed elsewhere → `[[Projects/<name>/Index]]` or a specific project note.
+- A person → `[[People/<name>]]`.
+- Prior research on the topic → `[[Research/<prior-note>]]`.
+- An earlier chat session that set context → `[[Chat-Sessions/YYYY-MM-DD-<topic>]]`.
+- A reference/cheat sheet that's relevant → `[[Reference/<note>]]`.
+
+Every generated note should include a `## Related` section at the bottom listing the wikilinks it depends on. If there are no related notes, keep the heading and leave a single `- ` bullet — future sessions will fill it in.
+
+### Index notes
+
+Index notes are aggregator pages that list wikilinks to everything in a scope. They turn a folder full of notes into a navigable hub.
+
+- `Herald-Memory/Index.md` — top-level vault entry point. Link to each project index and the major sections.
+- `Projects/<name>/Index.md` — per-project hub. Sections for Architecture & Decisions, Open Questions, Related Research, Recent Chat Sessions.
+- Optional per-section indexes (e.g. `Research/Index.md`) if a section grows large.
+
+When creating a note that belongs in a scope that has an index, **append a wikilink to that index** so it stays current. Use `obsidian append` rather than regenerating the index:
+
+```bash
+obsidian append vault="Documents" file="Projects/Herald/Index" content="- [[Chat-Sessions/2026-03-10-herald-model-config]]"
+```
+
+If an expected index doesn't exist yet, create it using the structure shown in the Bootstrap block above, then add the link.
+
+### Discrete concept notes
+
+Prefer many small single-concept notes over one large dump. When a chat session covers multiple distinct topics (e.g. a model-routing question and an unrelated Obsidian setup issue), split them:
+
+1. Write each distinct reusable concept as its own note under `Reference/` or the relevant `Projects/<name>/` folder.
+2. In the Chat-Session summary, link to those notes from the `## Related` section rather than duplicating their content.
+
+Rule of thumb: if a section of a note would make sense on its own and might be referenced later, it's probably its own note.
 
 ## Saving Chat Sessions
 
@@ -118,7 +174,13 @@ After a meaningful conversation (not trivial greetings or single-question lookup
 2. Write a structured summary (not a raw transcript):
 
 ```bash
-obsidian create vault="Documents" path="Herald-Memory/Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Chat-Sessions/2026-03-10-herald-model-config.md" content="---\ntags: [chat-session, project/herald]\ndate: 2026-03-10\ntopic: Herald model configuration\nconversation-id: web-console\n---\n\n# Herald Model Configuration\n\n## Summary\nInvestigated why web chat reported Claude 3.7 Sonnet while Telegram showed claude-sonnet-4-5. Root cause was stale conversation history in SPRING_AI_CHAT_MEMORY. See [[Projects/Herald/architecture]] for the advisor chain context.\n\n## Key Points\n- Both Telegram and web chat use the same AgentService.chat() code path\n- Stale messages in SPRING_AI_CHAT_MEMORY replayed wrong model identity\n- Added {model_id} to system prompt for consistent self-identification\n- Created ToolPairSanitizingAdvisor to fix orphaned tool message pairs (see [[Reference/tool-pair-sanitizing]])\n\n## Action Items\n- [x] Clear stale web-console conversation\n- [x] Add model_id to system prompt\n- [x] Create ToolPairSanitizingAdvisor\n\n## Related\n- [[Projects/Herald/Index]]\n- [[Projects/Herald/architecture]]\n- [[Research/spring-ai-chat-memory]]\n" overwrite
+```
+
+Then keep the project index current:
+
+```bash
+obsidian append vault="Documents" file="Projects/Herald/Index" content="- [[Chat-Sessions/2026-03-10-herald-model-config]]"
 ```
 
 ### What to include in the summary
@@ -140,7 +202,7 @@ obsidian create vault="Documents" path="Herald-Memory/Chat-Sessions/2026-03-10-h
 When Herald performs web research or deep analysis, save the findings:
 
 ```bash
-obsidian create vault="Documents" path="Herald-Memory/Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Research/spring-ai-jdbc-chat-memory.md" content="---\ntags: [research, spring-ai]\ndate: 2026-03-10\ntopic: Spring AI JDBC Chat Memory\n---\n\n# Spring AI JDBC Chat Memory\n\n## Summary\n...\n\n## Sources\n- https://...\n\n## Key Findings\n- ...\n\n## Related\n- [[Projects/Herald/Index]]\n- [[Research/spring-ai-chat-memory]]\n" overwrite
 ```
 
 ## Saving Daily Briefings
@@ -148,7 +210,7 @@ obsidian create vault="Documents" path="Herald-Memory/Research/spring-ai-jdbc-ch
 Morning briefings and weekly reviews go to `Daily/`:
 
 ```bash
-obsidian create vault="Documents" path="Herald-Memory/Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll\n2. Deploy UI updates\n\n## Notes\n- ...\n" overwrite
+obsidian create vault="Documents" path="Herald-Memory/Daily/2026-03-10.md" content="---\ntags: [daily]\ndate: 2026-03-10\n---\n\n# Monday, March 10, 2026\n\n## Weather\nRaleigh: 62°F, partly cloudy\n\n## Calendar\n- 10:00 AM — Team standup\n\n## Top Priorities\n1. Fix Herald chat scroll — see [[Projects/Herald/Index]]\n2. Deploy UI updates\n\n## Notes\n- Discussed model routing in [[Chat-Sessions/2026-03-10-herald-model-config]]\n\n## Related\n- [[Projects/Herald/Index]]\n" overwrite
 ```
 
 ## Referencing Past Context
@@ -370,4 +432,5 @@ Format responses as clean Telegram-friendly messages (Markdown):
 - **Research persistence:** Save web research findings to `Research/` for future reference.
 - **Memory sync:** Key facts from Herald's key-value memory can be cross-referenced with vault notes.
 - **Prior context lookup:** Search `Chat-Sessions/` and `Research/` before answering questions to recall prior discussions.
+- **Index upkeep:** When creating a note in a scope that has an `Index.md`, append a wikilink to the index so it stays current (see Linking Conventions).
 - **Clipboard:** Add `--copy` to any command to copy output to clipboard instead of stdout.
