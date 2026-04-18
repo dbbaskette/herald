@@ -172,6 +172,8 @@ sequenceDiagram
 
 This guide walks you through setting up Herald from scratch — from creating a Telegram bot to running your first conversation.
 
+> **Brand new to Herald?** Start with the [Getting Started 101 guide](docs/getting-started-101.md) — it gets you to a working task agent in about ten minutes without Telegram, a database, or prior Spring/Java experience.
+
 ### Prerequisites
 
 Before you begin, make sure you have the following installed:
