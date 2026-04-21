@@ -4,8 +4,12 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.core.Ordered;
+
+import reactor.core.publisher.Flux;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -19,7 +23,7 @@ import java.time.format.DateTimeFormatter;
  * <p>Must run before {@link MemoryBlockAdvisor} so that memory content appended later
  * cannot inject datetime template placeholders.</p>
  */
-class DateTimePromptAdvisor implements CallAdvisor {
+class DateTimePromptAdvisor implements CallAdvisor, StreamAdvisor {
 
     private final ZoneId timezone;
     private final DateTimeFormatter formatter;
@@ -38,20 +42,33 @@ class DateTimePromptAdvisor implements CallAdvisor {
         }
         INJECTED.set(true);
         try {
-            ZonedDateTime now = ZonedDateTime.now(timezone);
-            request = request.mutate()
-                    .prompt(request.prompt().augmentSystemMessage(
-                            existing -> {
-                                String text = existing.getText()
-                                        .replace("{current_datetime}", now.format(formatter))
-                                        .replace("{timezone}", timezone.getId());
-                                return new SystemMessage(text);
-                            }))
-                    .build();
-            return chain.nextCall(request);
+            return chain.nextCall(injectDateTime(request));
         } finally {
             INJECTED.remove();
         }
+    }
+
+    @Override
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+        if (INJECTED.get()) {
+            return chain.nextStream(request);
+        }
+        INJECTED.set(true);
+        return chain.nextStream(injectDateTime(request))
+                .doFinally(signal -> INJECTED.remove());
+    }
+
+    private ChatClientRequest injectDateTime(ChatClientRequest request) {
+        ZonedDateTime now = ZonedDateTime.now(timezone);
+        return request.mutate()
+                .prompt(request.prompt().augmentSystemMessage(
+                        existing -> {
+                            String text = existing.getText()
+                                    .replace("{current_datetime}", now.format(formatter))
+                                    .replace("{timezone}", timezone.getId());
+                            return new SystemMessage(text);
+                        }))
+                .build();
     }
 
     @Override

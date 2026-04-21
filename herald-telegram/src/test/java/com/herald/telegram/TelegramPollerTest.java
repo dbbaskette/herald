@@ -10,10 +10,14 @@ import com.pengrad.telegrambot.request.GetUpdates;
 import com.pengrad.telegrambot.response.GetUpdatesResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
+
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class TelegramPollerTest {
@@ -103,7 +107,7 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(questionHandler).resolveAnswer("B");
-        verify(agentService, never()).chat(any());
+        verify(agentService, never()).streamChat(anyString(), anyString());
     }
 
     @Test
@@ -111,7 +115,8 @@ class TelegramPollerTest {
         when(questionHandler.hasPendingQuestion()).thenReturn(true);
         when(questionHandler.resolveAnswer("B")).thenReturn(false);
         when(commandHandler.handle("B")).thenReturn(false);
-        when(agentService.chat("B")).thenReturn("agent reply");
+        Flux<String> streamReply = Flux.just("agent reply");
+        when(agentService.streamChat(eq("B"), anyString())).thenReturn(streamReply);
 
         Update update = createUpdate(12345L, "B");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -122,8 +127,8 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(questionHandler).resolveAnswer("B");
-        verify(agentService).chat("B");
-        verify(sender).sendMessage("agent reply");
+        verify(agentService).streamChat(eq("B"), anyString());
+        verify(sender).sendStreamingMessage(streamReply);
     }
 
     @Test
@@ -179,7 +184,8 @@ class TelegramPollerTest {
     @Test
     void pollPassesNonCommandToAgentLoop() throws Exception {
         when(commandHandler.handle("hello")).thenReturn(false);
-        when(agentService.chat("hello")).thenReturn("Hi there!");
+        Flux<String> streamReply = Flux.just("Hi ", "there!");
+        when(agentService.streamChat(eq("hello"), anyString())).thenReturn(streamReply);
 
         Update update = createUpdate(12345L, "hello");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -191,14 +197,15 @@ class TelegramPollerTest {
 
         verify(commandHandler).handle("hello");
         verify(sender).sendTypingAction();
-        verify(agentService).chat("hello");
-        verify(sender).sendMessage("Hi there!");
+        verify(agentService).streamChat(eq("hello"), anyString());
+        verify(sender).sendStreamingMessage(streamReply);
     }
 
     @Test
     void pollSendsErrorMessageWhenAgentThrows() throws Exception {
         when(commandHandler.handle("hello")).thenReturn(false);
-        when(agentService.chat("hello")).thenThrow(new RuntimeException("model error"));
+        when(agentService.streamChat(eq("hello"), anyString()))
+                .thenThrow(new RuntimeException("model error"));
 
         Update update = createUpdate(12345L, "hello");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -209,23 +216,6 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(sender).sendMessage("Sorry, something went wrong processing your message. Please try again.");
-    }
-
-    @Test
-    void pollDoesNotSendBlankAgentResponse() throws Exception {
-        when(commandHandler.handle("hello")).thenReturn(false);
-        when(agentService.chat("hello")).thenReturn("");
-
-        Update update = createUpdate(12345L, "hello");
-        GetUpdatesResponse response = mock(GetUpdatesResponse.class);
-        when(response.isOk()).thenReturn(true);
-        when(response.updates()).thenReturn(List.of(update));
-        when(bot.execute(any(GetUpdates.class))).thenReturn(response);
-
-        poller.poll();
-
-        verify(agentService).chat("hello");
-        verify(sender, never()).sendMessage(any());
     }
 
     @Test

@@ -22,9 +22,13 @@ async function scrollToBottom() {
   }
 }
 
-// Auto-scroll whenever messages change or sending state changes
+// Auto-scroll whenever messages change, content updates, or sending state changes
 watch(() => store.messages.length, scrollToBottom)
 watch(() => store.sending, scrollToBottom)
+watch(
+  () => store.messages.map((m) => m.content.length).join(','),
+  scrollToBottom
+)
 
 onMounted(() => {
   inputEl.value?.focus()
@@ -80,23 +84,21 @@ onMounted(() => {
             <span v-else>!</span>
           </div>
           <div class="message-content">
-            <div class="message-text" v-html="renderMarkdown(msg.content)"></div>
-            <span class="message-time">{{ formatTime(msg.timestamp) }}</span>
-          </div>
-        </div>
-
-        <!-- Typing indicator -->
-        <div v-if="store.sending" class="message message-assistant">
-          <div class="message-avatar"><span>H</span></div>
-          <div class="message-content">
-            <div class="typing-indicator">
+            <!-- Streaming bubble with no content yet: show dots inline -->
+            <div v-if="msg.streaming && !msg.content" class="typing-indicator">
               <span class="typing-dot"></span>
               <span class="typing-dot"></span>
               <span class="typing-dot"></span>
             </div>
+            <div
+              v-else
+              class="message-text"
+              :class="{ 'message-streaming': msg.streaming }"
+              v-html="renderMarkdown(msg.content)"
+            ></div>
+            <span class="message-time">{{ formatTime(msg.timestamp) }}</span>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -348,6 +350,22 @@ function formatTime(ts: string): string {
   color: #1a1a1a;
   border: 1px solid #e8e5df;
   border-bottom-left-radius: 4px;
+}
+
+.message-streaming::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: #1a1a1a;
+  vertical-align: text-bottom;
+  animation: streaming-cursor 1s steps(2) infinite;
+}
+
+@keyframes streaming-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .message-error .message-text {
