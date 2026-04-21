@@ -132,12 +132,10 @@ public class TelegramPoller {
             }
         }
 
-        // Pass message to agent loop
+        // Pass message to agent loop, streaming the response back
         try {
-            String response = agentService.chat(text);
-            if (response != null && !response.isBlank()) {
-                sender.sendMessage(response);
-            }
+            sender.sendStreamingMessage(
+                    agentService.streamChat(text, com.herald.agent.AgentService.DEFAULT_CONVERSATION_ID));
         } catch (Exception e) {
             log.error("Agent loop error: {}", e.getMessage(), e);
             sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");

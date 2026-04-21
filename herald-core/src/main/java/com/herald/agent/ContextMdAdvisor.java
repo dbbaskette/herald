@@ -6,8 +6,12 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.core.Ordered;
+
+import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +26,7 @@ import java.nio.file.Path;
  * <p>Runs after {@link DateTimePromptAdvisor} but before {@link MemoryBlockAdvisor},
  * so context assembly order is: system prompt → CONTEXT.md → memory block.</p>
  */
-class ContextMdAdvisor implements CallAdvisor {
+class ContextMdAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(ContextMdAdvisor.class);
 
@@ -41,18 +45,32 @@ class ContextMdAdvisor implements CallAdvisor {
         }
         INJECTED.set(true);
         try {
-            String content = readContextFile();
-            if (!content.isEmpty()) {
-                String delimited = "\n\n<context>\n" + content + "\n</context>";
-                request = request.mutate()
-                        .prompt(request.prompt().augmentSystemMessage(
-                                existing -> new SystemMessage(existing.getText() + delimited)))
-                        .build();
-            }
-            return chain.nextCall(request);
+            return chain.nextCall(injectContext(request));
         } finally {
             INJECTED.remove();
         }
+    }
+
+    @Override
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+        if (INJECTED.get()) {
+            return chain.nextStream(request);
+        }
+        INJECTED.set(true);
+        return chain.nextStream(injectContext(request))
+                .doFinally(signal -> INJECTED.remove());
+    }
+
+    private ChatClientRequest injectContext(ChatClientRequest request) {
+        String content = readContextFile();
+        if (content.isEmpty()) {
+            return request;
+        }
+        String delimited = "\n\n<context>\n" + content + "\n</context>";
+        return request.mutate()
+                .prompt(request.prompt().augmentSystemMessage(
+                        existing -> new SystemMessage(existing.getText() + delimited)))
+                .build();
     }
 
     @Override

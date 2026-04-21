@@ -10,19 +10,24 @@ import java.time.format.DateTimeFormatter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.core.Ordered;
+
+import reactor.core.publisher.Flux;
 
 /**
  * Diagnostic advisor that dumps the full prompt (system + messages + tool defs)
  * to timestamped files under ~/.herald/prompt-dump/ for token analysis.
  * Only active when HERALD_PROMPT_DUMP=true.
  */
-class PromptDumpAdvisor implements CallAdvisor {
+class PromptDumpAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(PromptDumpAdvisor.class);
     private static final DateTimeFormatter FILE_FMT =
@@ -65,6 +70,27 @@ class PromptDumpAdvisor implements CallAdvisor {
         }
 
         return response;
+    }
+
+    @Override
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+        if (!enabled) {
+            return chain.nextStream(request);
+        }
+        if (!DUMPED.get()) {
+            DUMPED.set(true);
+            dumpRequest(request);
+        }
+
+        Flux<ChatClientResponse> stream = chain.nextStream(request);
+        return new ChatClientMessageAggregator()
+                .aggregateChatClientResponse(stream, aggregated -> {
+                    if (DUMPED.get()) {
+                        DUMPED.set(false);
+                        dumpResponse(aggregated);
+                    }
+                })
+                .doFinally(signal -> DUMPED.remove());
     }
 
     private void dumpRequest(ChatClientRequest request) {

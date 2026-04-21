@@ -5,16 +5,21 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.Ordered;
+
+import reactor.core.publisher.Flux;
 
 /**
  * A memory advisor that loads and saves conversation history exactly <b>once</b> per
@@ -27,7 +32,7 @@ import org.springframework.core.Ordered;
  * memory is loaded before the first model call and saved after the final response, with
  * all intermediate tool iterations passed through untouched.</p>
  */
-class OneShotMemoryAdvisor implements CallAdvisor {
+class OneShotMemoryAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(OneShotMemoryAdvisor.class);
     private static final String CONVERSATION_ID_KEY = "chat_memory_conversation_id";
@@ -57,30 +62,11 @@ class OneShotMemoryAdvisor implements CallAdvisor {
         String conversationId = resolveConversationId(request);
 
         try {
-            // Capture the user message(s) from THIS turn immediately — before the chain
-            // runs, because ToolCallAdvisor mutates the prompt's instruction list during
-            // tool-call iterations, which can duplicate user messages.
-            List<Message> originalUserMessages = request.prompt().getInstructions().stream()
-                    .filter(UserMessage.class::isInstance)
-                    .toList();
-
-            // Load conversation history (only the most recent messages) and prepend to the prompt
-            List<Message> history = chatMemory.get(conversationId);
-            if (history.size() > maxMessages) {
-                history = history.subList(history.size() - maxMessages, history.size());
-            }
-            List<Message> currentMessages = request.prompt().getInstructions();
-
-            List<Message> combined = new ArrayList<>(history.size() + currentMessages.size());
-            combined.addAll(history);
-            combined.addAll(currentMessages);
-
-            request = request.mutate()
-                    .prompt(new Prompt(combined, request.prompt().getOptions()))
-                    .build();
+            List<Message> originalUserMessages = captureUserMessages(request);
+            ChatClientRequest withHistory = loadHistory(request, conversationId);
 
             // Run the full chain (ToolCallAdvisor loop happens here)
-            ChatClientResponse response = chain.nextCall(request);
+            ChatClientResponse response = chain.nextCall(withHistory);
 
             // Save only the captured user message + assistant response
             saveNewMessages(conversationId, originalUserMessages, response);
@@ -89,6 +75,51 @@ class OneShotMemoryAdvisor implements CallAdvisor {
         } finally {
             MEMORY_LOADED.remove();
         }
+    }
+
+    @Override
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+        if (MEMORY_LOADED.get()) {
+            return chain.nextStream(request);
+        }
+
+        MEMORY_LOADED.set(true);
+
+        String conversationId = resolveConversationId(request);
+        List<Message> originalUserMessages = captureUserMessages(request);
+        ChatClientRequest withHistory = loadHistory(request, conversationId);
+
+        Flux<ChatClientResponse> stream = chain.nextStream(withHistory);
+
+        return new ChatClientMessageAggregator()
+                .aggregateChatClientResponse(stream, aggregated ->
+                        saveNewMessages(conversationId, originalUserMessages, aggregated))
+                .doFinally(signal -> MEMORY_LOADED.remove());
+    }
+
+    private List<Message> captureUserMessages(ChatClientRequest request) {
+        // Capture the user message(s) from THIS turn immediately — before the chain
+        // runs, because ToolCallAdvisor mutates the prompt's instruction list during
+        // tool-call iterations, which can duplicate user messages.
+        return request.prompt().getInstructions().stream()
+                .filter(UserMessage.class::isInstance)
+                .toList();
+    }
+
+    private ChatClientRequest loadHistory(ChatClientRequest request, String conversationId) {
+        List<Message> history = chatMemory.get(conversationId);
+        if (history.size() > maxMessages) {
+            history = history.subList(history.size() - maxMessages, history.size());
+        }
+        List<Message> currentMessages = request.prompt().getInstructions();
+
+        List<Message> combined = new ArrayList<>(history.size() + currentMessages.size());
+        combined.addAll(history);
+        combined.addAll(currentMessages);
+
+        return request.mutate()
+                .prompt(new Prompt(combined, request.prompt().getOptions()))
+                .build();
     }
 
     private void saveNewMessages(String conversationId, List<Message> userMessages, ChatClientResponse response) {

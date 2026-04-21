@@ -6,6 +6,8 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -13,6 +15,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.core.Ordered;
+
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +32,7 @@ import java.util.List;
  * <p>Must run before {@code OneShotMemoryAdvisor} so that compaction happens
  * before history is loaded into the prompt.</p>
  */
-class ContextCompactionAdvisor implements CallAdvisor {
+class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(ContextCompactionAdvisor.class);
     static final double CEILING_RATIO = 0.8;
@@ -54,19 +58,33 @@ class ContextCompactionAdvisor implements CallAdvisor {
         COMPACTION_DONE.set(true);
 
         try {
-            String conversationId = resolveConversationId(request);
-            List<Message> history = chatMemory.get(conversationId);
-
-            int estimatedTokens = estimateTokens(history);
-            int ceiling = (int) (maxContextTokens * CEILING_RATIO);
-
-            if (estimatedTokens > ceiling) {
-                compactHistory(conversationId, history, ceiling);
-            }
-
+            compactIfNeeded(request);
             return chain.nextCall(request);
         } finally {
             COMPACTION_DONE.remove();
+        }
+    }
+
+    @Override
+    public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
+        if (COMPACTION_DONE.get()) {
+            return chain.nextStream(request);
+        }
+        COMPACTION_DONE.set(true);
+        compactIfNeeded(request);
+        return chain.nextStream(request)
+                .doFinally(signal -> COMPACTION_DONE.remove());
+    }
+
+    private void compactIfNeeded(ChatClientRequest request) {
+        String conversationId = resolveConversationId(request);
+        List<Message> history = chatMemory.get(conversationId);
+
+        int estimatedTokens = estimateTokens(history);
+        int ceiling = (int) (maxContextTokens * CEILING_RATIO);
+
+        if (estimatedTokens > ceiling) {
+            compactHistory(conversationId, history, ceiling);
         }
     }
 

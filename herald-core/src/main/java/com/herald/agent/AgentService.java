@@ -3,6 +3,8 @@ package com.herald.agent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -13,6 +15,8 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+
+import reactor.core.publisher.Flux;
 
 /**
  * Thin wrapper around the main ChatClient that provides a simple call interface
@@ -97,7 +101,83 @@ public class AgentService {
         return content != null ? stripThinkTags(content) : "";
     }
 
-    static String stripThinkTags(String text) {
+    /**
+     * Stream the agent response as text chunks. Advisors handle memory, tool calls, and
+     * context injection just as in {@link #chat}. Emits incremental assistant text as the
+     * model produces it; the Flux completes once the turn is fully finished (including any
+     * tool-call iterations). Metrics are recorded once at completion via the
+     * {@link AgentTurnListener}.
+     *
+     * <p>Note: think-tag stripping is NOT applied per-chunk — callers should accumulate
+     * the full text and apply {@link #stripThinkTags} before persisting or displaying the
+     * final reply. Chunks may contain partial text of a {@code <think>...</think>} block.</p>
+     */
+    public Flux<String> streamChat(String userMessage, String conversationId) {
+        log.info("Agent streaming message (conversation={}): {}",
+                conversationId, userMessage.substring(0, Math.min(userMessage.length(), 50)));
+
+        long startTime = System.nanoTime();
+        AtomicReference<String> modelRef = new AtomicReference<>("unknown");
+        AtomicLong tokensInRef = new AtomicLong(0);
+        AtomicLong tokensOutRef = new AtomicLong(0);
+        AtomicReference<List<String>> toolCallsRef = new AtomicReference<>(Collections.emptyList());
+        AtomicLong totalChars = new AtomicLong(0);
+
+        Flux<ChatResponse> responses = modelSwitcher.getActiveClient().prompt()
+                .user(userMessage)
+                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                .stream()
+                .chatResponse();
+
+        return responses
+                .doOnNext(chatResponse -> {
+                    if (chatResponse.getMetadata() != null) {
+                        Usage usage = chatResponse.getMetadata().getUsage();
+                        if (usage != null) {
+                            if (usage.getPromptTokens() != null) {
+                                tokensInRef.set(usage.getPromptTokens().longValue());
+                            }
+                            if (usage.getCompletionTokens() != null) {
+                                tokensOutRef.set(usage.getCompletionTokens().longValue());
+                            }
+                        }
+                        if (chatResponse.getMetadata().getModel() != null) {
+                            modelRef.set(chatResponse.getMetadata().getModel());
+                        }
+                    }
+                    List<String> calls = extractToolCalls(chatResponse);
+                    if (!calls.isEmpty()) {
+                        List<String> combined = new ArrayList<>(toolCallsRef.get());
+                        combined.addAll(calls);
+                        toolCallsRef.set(combined);
+                    }
+                })
+                .map(chatResponse -> {
+                    if (chatResponse.getResult() == null || chatResponse.getResult().getOutput() == null) {
+                        return "";
+                    }
+                    String text = chatResponse.getResult().getOutput().getText();
+                    return text != null ? text : "";
+                })
+                .filter(s -> !s.isEmpty())
+                .doOnNext(chunk -> totalChars.addAndGet(chunk.length()))
+                .doOnError(err -> log.error("Stream error (conversation={}): {}",
+                        conversationId, err.getMessage(), err))
+                .doFinally(signal -> {
+                    long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
+                    log.info("Agent stream finished (conversation={}, signal={}), chars={}",
+                            conversationId, signal, totalChars.get());
+                    if (agentTurnListener != null) {
+                        String model = modelRef.get();
+                        String provider = AgentTurnListener.deriveProvider(model);
+                        agentTurnListener.recordTurn(provider, model,
+                                tokensInRef.get(), tokensOutRef.get(), latencyMs,
+                                toolCallsRef.get(), null);
+                    }
+                });
+    }
+
+    public static String stripThinkTags(String text) {
         return THINK_TAGS.matcher(text).replaceAll("").strip();
     }
 
