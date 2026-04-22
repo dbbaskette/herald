@@ -135,4 +135,61 @@ class ContextMdAdvisorTest {
         assertThat(advisor.getOrder()).isGreaterThan(dateTimeOrder);
         assertThat(advisor.getOrder()).isLessThan(memoryOrder);
     }
+
+    // --- Phase E: Memory Storage Mode surfacing ---
+
+    @Test
+    void updateMemoryStorageModeWritesVaultModeSectionWhenEnabled() throws IOException {
+        Path ctx = tempDir.resolve("CONTEXT.md");
+        Files.writeString(ctx, "# Herald Context\n\n## Notes\n\nstuff\n", StandardCharsets.UTF_8);
+
+        var advisor = new ContextMdAdvisor(ctx);
+        advisor.updateMemoryStorageMode(true);
+
+        String content = Files.readString(ctx, StandardCharsets.UTF_8);
+        assertThat(content)
+                .contains("## Memory Storage Mode")
+                .contains("obsidian-vault")
+                .contains("[[path]]")
+                .contains("## Notes");
+    }
+
+    @Test
+    void updateMemoryStorageModeWritesPlainMarkdownSectionWhenDisabled() throws IOException {
+        Path ctx = tempDir.resolve("CONTEXT.md");
+        Files.writeString(ctx, "# Herald Context\n", StandardCharsets.UTF_8);
+
+        var advisor = new ContextMdAdvisor(ctx);
+        advisor.updateMemoryStorageMode(false);
+
+        String content = Files.readString(ctx, StandardCharsets.UTF_8);
+        assertThat(content)
+                .contains("plain-markdown")
+                .contains("[text](path.md)")
+                .doesNotContain("[[path]]");
+    }
+
+    @Test
+    void updateMemoryStorageModeIsIdempotent() throws IOException {
+        Path ctx = tempDir.resolve("CONTEXT.md");
+        Files.writeString(ctx, "# Herald Context\n", StandardCharsets.UTF_8);
+
+        var advisor = new ContextMdAdvisor(ctx);
+        advisor.updateMemoryStorageMode(false);
+        advisor.updateMemoryStorageMode(true);
+        advisor.updateMemoryStorageMode(false);
+
+        String content = Files.readString(ctx, StandardCharsets.UTF_8);
+        long occurrences = content.lines().filter(l -> l.startsWith("## Memory Storage Mode")).count();
+        assertThat(occurrences).isEqualTo(1);
+        assertThat(content).contains("plain-markdown");
+        assertThat(content).doesNotContain("obsidian-vault");
+    }
+
+    @Test
+    void updateMemoryStorageModeSkipsWhenFileMissing() {
+        var advisor = new ContextMdAdvisor(tempDir.resolve("missing.md"));
+        advisor.updateMemoryStorageMode(true);
+        // no throw
+    }
 }

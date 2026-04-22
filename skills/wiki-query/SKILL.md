@@ -15,6 +15,11 @@ The read-path half of Herald's compounding wiki. Pairs with `wiki-ingest` (write
 
 The memory root is `$HERALD_MEMORIES_DIR` (default `~/.herald/memories`). Search with `shell` + `ripgrep`/`grep`; load pages with `MemoryView`. **Never** answer these questions from training data — if it's not in memory, say so.
 
+**Link conventions in the answer:** check the `## Memory Storage Mode` section in `CONTEXT.md`.
+
+- Mode `plain-markdown` (default) → citations use `[text](path.md)`.
+- Mode `obsidian-vault` → citations use `[[path]]` wikilinks so Obsidian resolves and back-populates them.
+
 ## When to run
 
 - Any recall question: "what do we know about…", "have we saved…", "what did X say about Y".

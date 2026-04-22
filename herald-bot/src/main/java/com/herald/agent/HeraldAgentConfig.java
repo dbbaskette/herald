@@ -232,6 +232,12 @@ public class HeraldAgentConfig {
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(contextFilePath);
         contextMdAdvisor.ensureTemplateExists(loadContextTemplate());
         contextMdAdvisor.updateObsidianConfig(config.obsidianVaultPath());
+        boolean obsidianVaultModeEnabled = config.resolveObsidianVaultMode(memoriesDir.toString());
+        contextMdAdvisor.updateMemoryStorageMode(obsidianVaultModeEnabled);
+        log.info("Memory storage mode: {} (preference={}, vaultPath={})",
+                obsidianVaultModeEnabled ? "obsidian-vault (wikilinks)" : "plain-markdown",
+                config.obsidianVaultModePreference(),
+                config.obsidianVaultPath().isEmpty() ? "<unset>" : config.obsidianVaultPath());
 
         // Configure multi-model routing for subagent delegation
         var taskRepository = new DefaultTaskRepository();

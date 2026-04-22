@@ -97,4 +97,71 @@ class HeraldConfigTest {
                 new HeraldConfig.Weather("  "), null, null, null, null);
         assertThat(config.weatherLocation()).isEmpty();
     }
+
+    // --- Phase E: Obsidian vault mode ---
+
+    @Test
+    void obsidianVaultModePreferenceDefaultsToAuto() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
+        assertThat(config.obsidianVaultModePreference()).isEqualTo("auto");
+    }
+
+    @Test
+    void obsidianVaultModePreferenceNormalizesCase() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian(null, "ON"), null, null, null);
+        assertThat(config.obsidianVaultModePreference()).isEqualTo("on");
+    }
+
+    @Test
+    void obsidianVaultModePreferenceRejectsInvalidValues() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian(null, "yes-please"), null, null, null);
+        assertThat(config.obsidianVaultModePreference()).isEqualTo("auto");
+    }
+
+    @Test
+    void resolveObsidianVaultModeOffIsAlwaysDisabled() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian("/vault", "off"), null, null, null);
+        assertThat(config.resolveObsidianVaultMode("/vault/memories")).isFalse();
+    }
+
+    @Test
+    void resolveObsidianVaultModeOnIsAlwaysEnabled() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian(null, "on"), null, null, null);
+        assertThat(config.resolveObsidianVaultMode("/anywhere")).isTrue();
+    }
+
+    @Test
+    void resolveObsidianVaultModeAutoEnabledWhenPathsOverlap() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian("/Users/dan/Vault", "auto"), null, null, null);
+        assertThat(config.resolveObsidianVaultMode("/Users/dan/Vault/Herald-Memory")).isTrue();
+        // Reverse containment (memories dir is a parent) also counts.
+        assertThat(config.resolveObsidianVaultMode("/Users/dan")).isTrue();
+    }
+
+    @Test
+    void resolveObsidianVaultModeAutoDisabledWhenPathsDisjoint() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian("/Users/dan/Vault", "auto"), null, null, null);
+        assertThat(config.resolveObsidianVaultMode("/Users/dan/OtherDir")).isFalse();
+    }
+
+    @Test
+    void resolveObsidianVaultModeAutoDisabledWhenNoVaultPath() {
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
+        assertThat(config.resolveObsidianVaultMode("/Users/dan/.herald/memories")).isFalse();
+    }
+
+    @Test
+    void resolveObsidianVaultModeExpandsTildeInPaths() {
+        String home = System.getProperty("user.home");
+        HeraldConfig config = new HeraldConfig(null, null, null, null, null, null,
+                new HeraldConfig.Obsidian("~/Documents/Vault", "auto"), null, null, null);
+        assertThat(config.resolveObsidianVaultMode(home + "/Documents/Vault/Herald")).isTrue();
+        assertThat(config.resolveObsidianVaultMode("~/Documents/Vault/Herald")).isTrue();
+    }
 }

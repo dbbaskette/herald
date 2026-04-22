@@ -180,6 +180,62 @@ class ContextMdAdvisor implements CallAdvisor, StreamAdvisor {
         }
     }
 
+    /**
+     * Writes a `## Memory Storage Mode` section to CONTEXT.md describing whether
+     * the wiki skills should use Obsidian-style {@code [[wikilinks]]} or plain
+     * markdown links. Skills look up this section at runtime.
+     *
+     * <p>Idempotent — replaces the existing section if present.</p>
+     *
+     * @param vaultModeEnabled whether vault-mode link conventions apply
+     */
+    public void updateMemoryStorageMode(boolean vaultModeEnabled) {
+        if (!Files.exists(contextFilePath)) {
+            return;
+        }
+
+        String section = buildMemoryStorageSection(vaultModeEnabled);
+        try {
+            String content = Files.readString(contextFilePath, StandardCharsets.UTF_8);
+            String marker = "## Memory Storage Mode";
+
+            if (content.contains(marker)) {
+                content = content.replaceAll(
+                        "## Memory Storage Mode\\n[\\s\\S]*?(?=\\n## |\\Z)",
+                        section);
+            } else if (content.contains("## Obsidian Configuration")) {
+                content = content.replace("## Obsidian Configuration",
+                        section + "\n## Obsidian Configuration");
+            } else if (content.contains("## Notes")) {
+                content = content.replace("## Notes", section + "\n## Notes");
+            } else {
+                content = content + "\n" + section;
+            }
+
+            Files.writeString(contextFilePath, content, StandardCharsets.UTF_8);
+            log.info("Updated Memory Storage Mode in CONTEXT.md: vaultMode={}", vaultModeEnabled);
+        } catch (IOException e) {
+            log.warn("Failed to update Memory Storage Mode in CONTEXT.md: {}", e.getMessage());
+        }
+    }
+
+    private static String buildMemoryStorageSection(boolean vaultModeEnabled) {
+        var sb = new StringBuilder();
+        sb.append("## Memory Storage Mode\n\n");
+        if (vaultModeEnabled) {
+            sb.append("- **Mode:** `obsidian-vault` — use `[[path]]` wikilinks for all new memory pages.\n");
+            sb.append("- When the wiki-ingest / wiki-query / wiki-lint skills cross-link pages, ")
+                    .append("prefer `[[concepts/foo]]` over `[text](concepts/foo.md)`. `MEMORY.md` ")
+                    .append("entries may still use markdown-link syntax since they need an ")
+                    .append("explicit display title.\n\n");
+        } else {
+            sb.append("- **Mode:** `plain-markdown` — use `[text](path.md)` links for all new memory pages.\n");
+            sb.append("- Do NOT use `[[wikilinks]]`. They render as raw text in GitHub, VS Code, ")
+                    .append("and most non-Obsidian viewers.\n\n");
+        }
+        return sb.toString();
+    }
+
     private String buildObsidianSection(String vaultName, String heraldFolder, String fullPath) {
         var sb = new StringBuilder();
         sb.append("## Obsidian Configuration\n\n");
