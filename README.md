@@ -65,7 +65,7 @@ java -jar herald-bot.jar --agents=hello-agent.md
 ## Features
 
 - **Telegram-native** — chat with your AI assistant where you already message
-- **Long-term memory** — file-based persistent memory via [AutoMemoryTools (Part 6)](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools) with typed Markdown files and MEMORY.md index
+- **Long-term memory** — file-based persistent memory via [AutoMemoryTools (Part 6)](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools). Pages carry a `type:` frontmatter (`user`, `feedback`, `project`, `reference`, `concept`, `entity`, `source`), and `MEMORY.md` is a catalog grouped by type. Compaction summaries persist to `log.md` and refresh a `hot.md` session-continuity note.
 - **Skills system** — extensible via Markdown files in `skills/` directory based on [Agent Skills (Part 1)](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/)
 - **Subagent delegation** — routes complex research to specialist agents via [Subagent Orchestration (Part 4)](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents)
 - **Task management** — structured workflows via [TodoWriteTool (Part 3)](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite)

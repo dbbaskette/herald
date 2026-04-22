@@ -265,7 +265,7 @@
 
 **Blog:** Two variants ship in the jar: `AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md` (Options A & B) and `AUTO_MEMORY_FILESYSTEM_TOOLS_SYSTEM_PROMPT.md` (Option C). They instruct the model to read `MEMORY.md` at startup, apply 4 memory types, and use a two-step save process.
 
-**Herald:** ✅ **Implemented.** Uses `AUTO_MEMORY_SYSTEM_PROMPT.md` (equivalent variant) injected by the `AutoMemoryToolsAdvisor`.
+**Herald:** ➕ **Enhanced.** Uses `AUTO_MEMORY_SYSTEM_PROMPT.md` injected by `HeraldAutoMemoryAdvisor` (a Herald-owned replacement for the upstream advisor, see below). The prompt extends the blog's 4-type taxonomy (`user`, `feedback`, `project`, `reference`) with three additional types borrowed from [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): `concept` (shared mental models and vocabulary), `entity` (named people/teams/customers), and `source` (durable external references with takeaways). `MEMORY.md` is a catalog grouped by `## Type` sections rather than a flat list.
 
 ---
 
@@ -281,7 +281,7 @@
 
 **Blog:** Option A: zero-boilerplate `AutoMemoryToolsAdvisor`. Option B: Manual setup wiring `AutoMemoryTools` and prompt. Option C: `FileSystemTools` and `ShellTools` with convention-based memory.
 
-**Herald:** ✅ **Implemented.** Herald uses **Option A** (`AutoMemoryToolsAdvisor`). It drops the advisor into the chain at `HIGHEST_PRECEDENCE + 100`, which handles injecting the prompt and registering the 6 tools. (Replaced Herald's previous custom `MemoryMdAdvisor` and SQLite implementation).
+**Herald:** ➕ **Enhanced.** Originally dropped the upstream `AutoMemoryToolsAdvisor` into the chain at `HIGHEST_PRECEDENCE + 100` (Option A). As of Memory Phase A (#287), replaced with `HeraldAutoMemoryAdvisor` — mirrors upstream behavior but decorates each mutating memory `ToolCallback` so successful ops append to an append-only `log.md`. The upstream advisor has no hook for a custom `AutoMemoryTools` instance or tool listener; the fork is tracked for removal once an upstream hook lands. Also registered alongside a new `HotMdAdvisor` at `+90` that injects `hot.md` (session-continuity summary refreshed on compaction) into the system prompt.
 
 ---
 
