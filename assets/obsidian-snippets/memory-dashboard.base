@@ -1,0 +1,71 @@
+filters:
+  and:
+    - file.ext == "md"
+    - file.path != "MEMORY.md"
+    - file.path != "log.md"
+    - file.path != "hot.md"
+
+properties:
+  type:
+    displayName: Type
+  description:
+    displayName: Description
+  file.name:
+    displayName: Title
+  file.mtime:
+    displayName: Last updated
+
+views:
+  - type: table
+    name: All memory pages
+    order:
+      - file.name
+      - type
+      - description
+      - file.mtime
+    sort:
+      - property: file.mtime
+        direction: DESC
+
+  - type: table
+    name: Concepts
+    filters:
+      and:
+        - type == "concept"
+    order:
+      - file.name
+      - description
+      - file.mtime
+
+  - type: table
+    name: Entities
+    filters:
+      and:
+        - type == "entity"
+    order:
+      - file.name
+      - description
+      - file.mtime
+
+  - type: table
+    name: Sources
+    filters:
+      and:
+        - type == "source"
+    order:
+      - file.name
+      - description
+      - file.mtime
+
+  - type: table
+    name: Recent (30d)
+    filters:
+      and:
+        - file.mtime >= date(today) - duration("30d")
+    order:
+      - file.name
+      - type
+      - file.mtime
+    sort:
+      - property: file.mtime
+        direction: DESC

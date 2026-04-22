@@ -14,6 +14,8 @@ The health-check arm of Herald's wiki — complements `wiki-ingest` (write) and 
 
 Memory root: `$HERALD_MEMORIES_DIR` (default `~/.herald/memories`). All checks operate via `shell` (grep/find/awk) plus `MemoryView` for content reads.
 
+The dead-wikilink and orphan checks already handle both link styles (`[text](path.md)` and `[[path]]`) — no vault-mode branching needed. See the `## Memory Storage Mode` section in `CONTEXT.md` only when the lint report suggests a fix that involves adding new links: match the existing mode for new links you propose.
+
 ## When to run
 
 - User says "lint memory", "audit the wiki", "check memory health", "find orphans", "any broken links".

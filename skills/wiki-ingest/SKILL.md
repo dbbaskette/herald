@@ -15,6 +15,15 @@ Turns a one-off source (article, gist, PDF text, meeting notes, paper abstract) 
 
 The memory root is `$HERALD_MEMORIES_DIR` (default `~/.herald/memories`). All Markdown memory tools (`MemoryView`, `MemoryCreate`, `MemoryStrReplace`, `MemoryInsert`) operate on paths relative to that root.
 
+### Link style (vault mode)
+
+Before creating cross-links, **check the `## Memory Storage Mode` section in `CONTEXT.md`**:
+
+- Mode `plain-markdown` (default) → use `[text](path.md)` for every link. `[[wikilinks]]` render as raw text in GitHub, VS Code, and most non-Obsidian viewers.
+- Mode `obsidian-vault` → prefer `[[path]]` wikilinks for cross-links between pages (`[[concepts/hot-path]]`, `[[entities/acme]]`). This enables Obsidian's Graph view and backlinks. **`MEMORY.md` entries still use markdown-link syntax** because they carry explicit display titles.
+
+When in doubt (CONTEXT.md missing the section), default to plain markdown.
+
 ## When to run
 
 - User hands over a URL, file path, or pasted content and wants it "saved", "remembered", or "ingested".
@@ -91,6 +100,14 @@ ingested: <YYYY-MM-DD>
 - [[entities/<slug>]]
 ```
 
+**In plain-markdown mode** swap the `Related concepts` bullets for:
+
+```markdown
+## Related concepts
+- [<concept-name>](concepts/<slug>.md)
+- [<entity-name>](entities/<slug>.md)
+```
+
 ### 4. Create or update concept pages
 
 For each key concept:
@@ -98,7 +115,7 @@ For each key concept:
 1. `MemoryView concepts/` to see existing pages.
 2. If a matching `concepts/<slug>.md` exists, `MemoryStrReplace` to append a line under a `## Referenced in` section:
    ```
-   - [[sources/<source-slug>]] — <one-line why this source matters to this concept>
+   - [[sources/<source-slug>]]  <!-- or [(source title)](sources/<source-slug>.md) in plain-markdown mode --> — <one-line why this source matters to this concept>
    ```
    Create that section with `MemoryInsert` if it doesn't exist yet.
 3. If no page exists, `MemoryCreate` `concepts/<slug>.md`:
@@ -117,7 +134,7 @@ For each key concept:
    <What decisions or designs this concept shapes.>
 
    ## Referenced in
-   - [[sources/<source-slug>]] — <why>
+   - [[sources/<source-slug>]]  <!-- or [(source title)](sources/<source-slug>.md) in plain-markdown mode --> — <why>
    ```
 
 ### 5. Create or update entity pages

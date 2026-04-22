@@ -132,7 +132,14 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record Weather(String location) {
     }
 
-    public record Obsidian(String vaultPath) {
+    public record Obsidian(String vaultPath, String vaultMode) {
+        /**
+         * Backwards-compatible constructor predating the Phase E vault-mode flag.
+         * Leaves {@code vaultMode} null so the resolver falls back to {@code auto}.
+         */
+        public Obsidian(String vaultPath) {
+            this(vaultPath, null);
+        }
     }
 
     public record Vault(
@@ -162,6 +169,61 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return obsidian.vaultPath();
         }
         return "";
+    }
+
+    /**
+     * Returns the configured Obsidian vault-mode preference — one of
+     * {@code auto}, {@code on}, or {@code off}. Defaults to {@code auto}.
+     * This is the user preference only; the effective mode is resolved by
+     * {@link #resolveObsidianVaultMode(String)} which also factors in whether
+     * the memories dir actually overlaps the vault.
+     */
+    public String obsidianVaultModePreference() {
+        if (obsidian != null && obsidian.vaultMode() != null && !obsidian.vaultMode().isBlank()) {
+            String mode = obsidian.vaultMode().toLowerCase();
+            if (mode.equals("auto") || mode.equals("on") || mode.equals("off")) {
+                return mode;
+            }
+        }
+        return "auto";
+    }
+
+    /**
+     * Resolves the effective Obsidian vault mode given the memories dir.
+     *
+     * <ul>
+     *   <li>{@code off} — plain markdown links always ({@code [text](path.md)}).</li>
+     *   <li>{@code on} — wikilinks always ({@code [[path]]}), even without a vault path.</li>
+     *   <li>{@code auto} — wikilinks when a vault path is set AND overlaps the memories dir.</li>
+     * </ul>
+     *
+     * @param memoriesDir absolute path to the long-term memories directory; may be empty
+     * @return {@code true} when vault-mode link conventions should apply
+     */
+    public boolean resolveObsidianVaultMode(String memoriesDir) {
+        String pref = obsidianVaultModePreference();
+        if (pref.equals("off")) {
+            return false;
+        }
+        if (pref.equals("on")) {
+            return true;
+        }
+        // auto
+        String vault = obsidianVaultPath();
+        if (vault.isEmpty() || memoriesDir == null || memoriesDir.isBlank()) {
+            return false;
+        }
+        String vaultNorm = normalizeForCompare(vault);
+        String memNorm = normalizeForCompare(memoriesDir);
+        return memNorm.startsWith(vaultNorm) || vaultNorm.startsWith(memNorm);
+    }
+
+    private static String normalizeForCompare(String raw) {
+        String expanded = raw;
+        if (expanded.startsWith("~/")) {
+            expanded = System.getProperty("user.home") + expanded.substring(1);
+        }
+        return expanded.replaceAll("/+$", "");
     }
 
     public String weatherLocation() {

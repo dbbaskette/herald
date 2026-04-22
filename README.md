@@ -75,7 +75,7 @@ java -jar herald-bot.jar --agents=hello-agent.md
 - **Shell & file access** — executes commands on your Mac with security guardrails
 - **Google Workspace** — Gmail and Google Calendar via `gws` CLI
 - **Multi-provider** — Anthropic, OpenAI, Ollama, and Gemini models, switchable at runtime
-- **Configurable memory storage** — memories directory is configurable, can point to an Obsidian vault for browsable/searchable notes
+- **Configurable memory storage** — memories directory is configurable, can point to an Obsidian vault for browsable/searchable notes. Opt-in `obsidian-vault` mode switches new memory pages to `[[wikilinks]]` for Graph view / backlinks; default `plain-markdown` mode keeps notes portable across GitHub, VS Code, and other viewers (`HERALD_OBSIDIAN_VAULT_MODE=auto|on|off`). Optional CSS/Bases snippets live under `assets/obsidian-snippets/` — copy in if you want the polished Obsidian UX, ignore otherwise.
 - **Management console** — Vue 3 web UI for skills editing, memory, cron, and status
 
 ### Herald Console
@@ -322,6 +322,8 @@ Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)]
 | `HERALD_WEATHER_LOCATION` | Location for weather tool | No | — |
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_MEMORIES_DIR` | Long-term memory directory (can be an Obsidian vault folder) | No | `~/.herald/memories` |
+| `HERALD_OBSIDIAN_VAULT_PATH` | Obsidian vault path for vault-aware tools/skills | No | — |
+| `HERALD_OBSIDIAN_VAULT_MODE` | Link style for new memory pages: `auto` / `on` / `off` | No | `auto` |
 | `HERALD_CONFIG` | Override config file path | No | `~/.herald/herald.yaml` |
 
 ## Task Agent Mode

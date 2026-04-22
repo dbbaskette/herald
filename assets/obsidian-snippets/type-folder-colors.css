@@ -1,0 +1,39 @@
+/*
+ * type-folder-colors.css
+ *
+ * Colors Herald memory subfolders in the Obsidian file tree so each type is
+ * visually distinct. Match the folder names Herald's wiki-ingest skill creates.
+ *
+ * Enable via: Settings → Appearance → CSS snippets.
+ */
+
+/* Concepts — blue */
+.nav-folder-title[data-path^="concepts"] .nav-folder-title-content,
+.nav-file-title[data-path^="concepts/"] .nav-file-title-content {
+    color: var(--color-blue);
+}
+
+/* Entities — orange */
+.nav-folder-title[data-path^="entities"] .nav-folder-title-content,
+.nav-file-title[data-path^="entities/"] .nav-file-title-content {
+    color: var(--color-orange);
+}
+
+/* Sources — green */
+.nav-folder-title[data-path^="sources"] .nav-folder-title-content,
+.nav-file-title[data-path^="sources/"] .nav-file-title-content {
+    color: var(--color-green);
+}
+
+/* Hot context + log — muted so they read as machine files */
+.nav-file-title[data-path="hot.md"] .nav-file-title-content,
+.nav-file-title[data-path="log.md"] .nav-file-title-content {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* MEMORY.md — bold, accent color so the index is obvious */
+.nav-file-title[data-path="MEMORY.md"] .nav-file-title-content {
+    color: var(--text-accent);
+    font-weight: 600;
+}

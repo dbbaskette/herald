@@ -63,6 +63,15 @@ sources/karpathy_wiki.md
 
 This is a convention, not a rule. Existing memories do not need to move. Always write the full relative path in the `MEMORY.md` link target.
 
+## Link Style (vault mode)
+
+Herald can operate in two link modes. The active mode is written into the `## Memory Storage Mode` section of `CONTEXT.md` — consult it before cross-linking between pages.
+
+- `plain-markdown` (default) — use `[text](path.md)`. Safe for every viewer: GitHub, VS Code, `cat`, Obsidian.
+- `obsidian-vault` — use `[[path]]` wikilinks for cross-links between memory pages. This enables Obsidian's Graph view and backlinks. `MEMORY.md` entries still use `[text](path.md)` because they carry explicit display titles.
+
+When the `## Memory Storage Mode` section is missing from `CONTEXT.md`, default to `plain-markdown` — never guess wikilinks.
+
 ## Memory Types
 
 <types>

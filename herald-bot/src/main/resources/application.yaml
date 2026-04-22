@@ -92,6 +92,10 @@ herald:
       lmstudio: ${HERALD_MODEL_LMSTUDIO:qwen/qwen3.5-35b-a3b}
   obsidian:
     vault-path: ${HERALD_OBSIDIAN_VAULT_PATH:}
+    # auto | on | off — controls whether new memory pages use [[wikilinks]].
+    # auto: enable when vault-path overlaps HERALD_MEMORIES_DIR. on: always.
+    # off: always plain markdown links — safest for plain-text viewers.
+    vault-mode: ${HERALD_OBSIDIAN_VAULT_MODE:auto}
   vault:
     vector-store-path: ~/.herald/vector-store.json
     index-hashes-path: ~/.herald/vault-index-hashes.json
