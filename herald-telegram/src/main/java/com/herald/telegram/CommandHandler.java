@@ -35,6 +35,7 @@ public class CommandHandler {
     private final UsageTracker usageTracker;
     private final ModelSwitcher modelSwitcher;
     private final ReloadableSkillsTool reloadableSkillsTool;
+    private final AgentService agentService;
     private final int activeToolsCount;
     private final int maxContextTokens;
     private final ApprovalGate approvalGate;
@@ -43,6 +44,7 @@ public class CommandHandler {
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                           @Qualifier("activeToolNames") List<String> activeToolNames,
                           ReloadableSkillsTool reloadableSkillsTool,
+                          AgentService agentService,
                           @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens,
                           ApprovalGate approvalGate) {
         this.cronService = cronService;
@@ -51,6 +53,7 @@ public class CommandHandler {
         this.usageTracker = usageTracker;
         this.modelSwitcher = modelSwitcher;
         this.reloadableSkillsTool = reloadableSkillsTool;
+        this.agentService = agentService;
         this.activeToolsCount = activeToolNames.size();
         this.maxContextTokens = maxContextTokens;
         this.approvalGate = approvalGate;
@@ -74,6 +77,7 @@ public class CommandHandler {
             case "/skills" -> handleSkills(parts);
             case "/cron" -> handleCron(parts);
             case "/confirm" -> handleConfirm(parts);
+            case "/save" -> handleSave(text);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -98,6 +102,7 @@ public class CommandHandler {
                 /skills list — List all loaded skills
                 /skills reload — Reload skills from disk
                 /confirm <id> yes|no — Approve or deny a pending action
+                /save [name] — File this conversation into long-term memory (wiki-ingest)
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
@@ -302,6 +307,62 @@ public class CommandHandler {
         if (!resolved) {
             sender.sendMessage("No pending approval found for ID: " + approvalId);
         }
+    }
+
+    private void handleSave(String fullText) {
+        String optionalName = extractSaveName(fullText);
+        List<Message> history = chatMemory.get(AgentService.DEFAULT_CONVERSATION_ID);
+        if (history == null || history.isEmpty()) {
+            sender.sendMessage("Nothing to save — the current conversation is empty.");
+            return;
+        }
+
+        String agentPrompt = buildSavePrompt(optionalName);
+        log.info("Dispatching /save command (name='{}', history={} msgs)",
+                optionalName == null ? "" : optionalName, history.size());
+
+        sender.sendTypingAction();
+        try {
+            sender.sendStreamingMessage(
+                    agentService.streamChat(agentPrompt, AgentService.DEFAULT_CONVERSATION_ID));
+        } catch (Exception e) {
+            log.error("/save failed: {}", e.getMessage(), e);
+            sender.sendMessage("Sorry, something went wrong saving the conversation. Check the logs.");
+        }
+    }
+
+    static String extractSaveName(String fullText) {
+        if (fullText == null) {
+            return null;
+        }
+        String trimmed = fullText.strip();
+        if (!trimmed.toLowerCase().startsWith("/save")) {
+            return null;
+        }
+        String rest = trimmed.substring("/save".length()).strip();
+        return rest.isEmpty() ? null : rest;
+    }
+
+    static String buildSavePrompt(String optionalName) {
+        StringBuilder sb = new StringBuilder()
+                .append("The user ran `/save` and wants this conversation filed into long-term ")
+                .append("memory as a wiki note. Use the `wiki-ingest` skill, treating the ")
+                .append("current conversation as the source material (not a URL or file). ")
+                .append("Extract the concepts and entities that came up, create the appropriate ")
+                .append("`sources/`, `concepts/`, and `entities/` pages, and update the grouped ")
+                .append("`MEMORY.md` index. ");
+        if (optionalName != null && !optionalName.isBlank()) {
+            sb.append("Use `")
+                    .append(optionalName.replaceAll("[^A-Za-z0-9 _-]", ""))
+                    .append("` as the source title / slug hint. ");
+        } else {
+            sb.append("Pick a short, descriptive title and matching slug yourself. ");
+        }
+        sb.append("When you're done, report back a 1–3 bullet summary of what was created or ")
+                .append("updated (source page, new concepts, new entities). The advisor layer ")
+                .append("automatically records each memory mutation in `log.md`, so you don't ")
+                .append("need to write log entries yourself.");
+        return sb.toString();
     }
 
     private void handleModelSwitch(String provider, String model) {
