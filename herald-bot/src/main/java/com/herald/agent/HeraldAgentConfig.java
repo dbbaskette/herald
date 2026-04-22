@@ -182,7 +182,26 @@ public class HeraldAgentConfig {
             Files.createDirectories(memoriesDir);
             Path memoryMdPath = memoriesDir.resolve("MEMORY.md");
             if (!Files.exists(memoryMdPath)) {
-                Files.writeString(memoryMdPath, "# Memory Index\n\n");
+                Files.writeString(memoryMdPath, """
+                        # Memory Index
+
+                        _Catalog of long-term memory pages, grouped by type. \
+                        Edit via the `Memory*` tools only._
+
+                        ## User
+
+                        ## Feedback
+
+                        ## Projects
+
+                        ## References
+
+                        ## Concepts
+
+                        ## Entities
+
+                        ## Sources
+                        """);
                 log.info("Created starter MEMORY.md at {}", memoryMdPath);
             }
             if (!Files.exists(memoryLogPath)) {

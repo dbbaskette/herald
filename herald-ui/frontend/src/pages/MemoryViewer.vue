@@ -2,9 +2,15 @@
 import { ref, onMounted } from 'vue'
 import { useMemoryStore } from '@/stores/memory'
 import { useObsidianStore } from '@/stores/obsidian'
+import {
+  useFileMemoryStore,
+  TYPE_ORDER,
+  TYPE_LABEL,
+} from '@/stores/fileMemory'
 
 const store = useMemoryStore()
 const obsidian = useObsidianStore()
+const fileMemory = useFileMemoryStore()
 
 const newKey = ref('')
 const newValue = ref('')
@@ -20,7 +26,14 @@ const obsidianFolder = ref('')
 onMounted(() => {
   store.fetchEntries()
   obsidian.fetchFolders()
+  fileMemory.fetchPages()
 })
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 async function searchObsidian() {
   if (!obsidianQuery.value.trim()) return
@@ -263,6 +276,76 @@ function formatTime(ts: string | null): string {
         </table>
       </div>
     </div>
+    <!-- Long-Term Memory (file-based) -->
+    <div class="mt-10">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-900">Long-Term Memory</h2>
+        <button
+          class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 text-gray-700"
+          :disabled="fileMemory.loading"
+          @click="fileMemory.fetchPages()"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div v-if="fileMemory.error" class="mb-4 p-3 rounded-md text-sm bg-red-50 text-red-700">
+        {{ fileMemory.error }}
+      </div>
+
+      <div v-if="fileMemory.loading" class="text-gray-500">Loading memory pages…</div>
+
+      <!-- File content viewer -->
+      <div
+        v-else-if="fileMemory.selected"
+        class="bg-white rounded-lg shadow overflow-hidden"
+      >
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <span class="text-sm font-medium text-gray-700">{{ fileMemory.selected.path }}</span>
+          <button
+            class="text-sm text-blue-600 hover:text-blue-800"
+            @click="fileMemory.clearSelected()"
+          >
+            Back
+          </button>
+        </div>
+        <pre class="px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap font-mono overflow-x-auto max-h-96 overflow-y-auto">{{ fileMemory.selected.content }}</pre>
+      </div>
+
+      <!-- Grouped list -->
+      <div v-else class="space-y-4">
+        <div
+          v-for="type in TYPE_ORDER"
+          :key="type"
+          class="bg-white rounded-lg shadow overflow-hidden"
+        >
+          <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <span class="text-sm font-semibold text-gray-700">{{ TYPE_LABEL[type] }}</span>
+            <span class="text-xs text-gray-500">
+              {{ (fileMemory.grouped[type] || []).length }} page{{ (fileMemory.grouped[type] || []).length === 1 ? '' : 's' }}
+            </span>
+          </div>
+          <div v-if="(fileMemory.grouped[type] || []).length === 0" class="px-4 py-3 text-sm text-gray-400">
+            No {{ TYPE_LABEL[type].toLowerCase() }} memories yet.
+          </div>
+          <table v-else class="w-full text-sm">
+            <tbody>
+              <tr
+                v-for="page in fileMemory.grouped[type]"
+                :key="page.path"
+                class="border-t border-gray-50 hover:bg-blue-50 cursor-pointer"
+                @click="fileMemory.openPage(page.path)"
+              >
+                <td class="px-4 py-2 text-blue-700 font-medium w-1/3">{{ page.path }}</td>
+                <td class="px-4 py-2 text-gray-700">{{ page.description || '—' }}</td>
+                <td class="px-4 py-2 text-gray-400 text-xs whitespace-nowrap w-24">{{ formatBytes(page.size) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Obsidian Knowledge Base -->
     <div class="mt-10">
       <h2 class="text-xl font-bold text-gray-900 mb-4">Obsidian Knowledge Base</h2>

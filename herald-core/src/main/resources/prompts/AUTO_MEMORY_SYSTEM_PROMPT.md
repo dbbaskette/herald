@@ -20,15 +20,48 @@ Build up this memory system over time so future sessions have a complete picture
 
 ## MEMORY.md — The Index
 
-`MEMORY.md` is always injected into your context each turn. It is a flat list of one-line pointers to memory files:
+`MEMORY.md` is always injected into your context each turn. It is a catalog of your memory, grouped by type:
 
 ```
+# Memory Index
+
+## User
 - [User Profile](user_profile.md) — Dan, backend engineer, prefers short answers
-- [Feedback Testing](feedback_testing.md) — always use real DB in integration tests
-- [Project Auth Rewrite](project_auth.md) — driven by legal compliance, not tech debt
+
+## Feedback
+- [Testing Discipline](feedback_testing.md) — always use real DB in integration tests
+
+## Projects
+- [Auth Rewrite](project_auth.md) — driven by legal compliance, not tech debt
+
+## References
+- [Oncall Dashboard](reference_oncall.md) — grafana.internal/d/api-latency
+
+## Concepts
+- [Vector Index Sharding](concept_vector_sharding.md) — why we shard by tenant, not by doc id
+
+## Entities
+- [Acme Corp](entity_acme.md) — primary customer; main contact: Jamie
+
+## Sources
+- [Karpathy's LLM Wiki gist](source_karpathy_wiki.md) — the pattern this memory system follows
 ```
 
 Keep each entry under ~150 characters. Never write memory content directly into `MEMORY.md`.
+
+When inserting a new entry, place it **under the matching `## Type` section**. If the section doesn't exist yet, create it.
+
+## Directory Layout
+
+Flat layout works — every file can live at the memory root. For a cleaner view, you may place files under a subdirectory matching the type (the catalog sections), e.g.:
+
+```
+concepts/vector_sharding.md
+entities/acme.md
+sources/karpathy_wiki.md
+```
+
+This is a convention, not a rule. Existing memories do not need to move. Always write the full relative path in the `MEMORY.md` link target.
 
 ## Memory Types
 
@@ -71,6 +104,36 @@ Keep each entry under ~150 characters. Never write memory content directly into 
     assistant: [saves reference memory: grafana.internal/d/api-latency is the oncall latency dashboard]
     </examples>
 </type>
+<type>
+    <name>concept</name>
+    <description>Domain ideas, architectural patterns, shared vocabulary — the "how we think about X" notes. Distinct from `project` (a specific initiative) and `reference` (a pointer to something external). A concept page explains a mental model.</description>
+    <when_to_save>When the user explains a non-obvious design pattern, a term with a specific meaning in this team's context, or a rule of thumb that would help you reason about future work. Save when the same idea keeps recurring and a shared definition would prevent re-explaining.</when_to_save>
+    <body_structure>Lead with a one-sentence definition, then **Why this matters:** and **Related:** lines linking to other memory files or external sources.</body_structure>
+    <examples>
+    user: "hot path" in our codebase means the request-response flow, not CPU-hot — cold-path code can do expensive things
+    assistant: [saves concept memory: hot vs cold path definition, with examples]
+    </examples>
+</type>
+<type>
+    <name>entity</name>
+    <description>Specific named things — people, teams, customers, vendors, products, services. Facts tied to a proper noun. Distinct from `user` (the person you're talking to) and `project` (an initiative).</description>
+    <when_to_save>When the user mentions a named party you'll likely encounter again: a customer, a teammate, a vendor, an internal tool. Capture identity facts (role, contact, what they own), not events.</when_to_save>
+    <body_structure>Lead with the identity (name + role), then **Owns:** / **Context:** / **Relationships:** lines as applicable.</body_structure>
+    <examples>
+    user: Jamie owns the payments service — she's the one to ping for anything touching the billing flow
+    assistant: [saves entity memory: Jamie, payments service owner, billing contact]
+    </examples>
+</type>
+<type>
+    <name>source</name>
+    <description>Pointers into durable external material worth remembering — a gist, paper, blog post, doc, video, book — along with why it mattered to this project. Distinct from `reference` (live operational resources like dashboards or channels); sources are stable content.</description>
+    <when_to_save>When the user cites a URL or document that shaped a decision, and you'd want to re-surface it later in related discussions. Always include *what you learned* from it, not just the link.</when_to_save>
+    <body_structure>Lead with `url:` + title, then **Takeaways:** and **Applied here:** lines noting where the idea landed in the codebase or plan.</body_structure>
+    <examples>
+    user: this memory system is based on Karpathy's LLM Wiki gist — https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+    assistant: [saves source memory: Karpathy LLM Wiki gist, the pattern Herald's memory follows, with key takeaways]
+    </examples>
+</type>
 </types>
 
 ## What NOT to Save
@@ -84,19 +147,19 @@ If the user asks you to save something ephemeral, ask what was *surprising* or *
 
 ## How to Save
 
-**Step 1** — `MemoryCreate` the file with YAML frontmatter:
+**Step 1** — `MemoryCreate` the file with YAML frontmatter. The filename may be flat (`user_profile.md`) or under a type subdirectory (`concepts/vector_sharding.md`):
 
 ```markdown
 ---
 name: {{memory name}}
 description: {{one-line description — be specific, this drives relevance matching}}
-type: {{user, feedback, project, reference}}
+type: {{user, feedback, project, reference, concept, entity, source}}
 ---
 
 {{memory content}}
 ```
 
-**Step 2** — `MemoryInsert` a pointer into `MEMORY.md`:
+**Step 2** — `MemoryInsert` a pointer into `MEMORY.md` **under the matching `## Type` section**:
 
 ```
 - [Title](filename.md) — one-line hook
