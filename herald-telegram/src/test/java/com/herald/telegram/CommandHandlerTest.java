@@ -1,9 +1,11 @@
 package com.herald.telegram;
 
+import com.herald.agent.AgentService;
 import com.herald.agent.ApprovalGate;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.ReloadableSkillsTool;
 import com.herald.agent.UsageTracker;
+import reactor.core.publisher.Flux;
 import com.herald.cron.CronJob;
 import com.herald.cron.CronService;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +34,7 @@ class CommandHandlerTest {
     private ModelSwitcher modelSwitcher;
     private ReloadableSkillsTool reloadableSkillsTool;
     private ApprovalGate approvalGate;
+    private AgentService agentService;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -50,9 +53,11 @@ class CommandHandlerTest {
         when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
         reloadableSkillsTool = new ReloadableSkillsTool(tempDir.toString());
         approvalGate = mock(ApprovalGate.class);
+        agentService = mock(AgentService.class);
+        when(agentService.streamChat(anyString(), anyString())).thenReturn(Flux.empty());
         handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
-                reloadableSkillsTool, 200_000, approvalGate);
+                reloadableSkillsTool, agentService, 200_000, approvalGate);
     }
 
     // --- handle() routing ---
@@ -473,5 +478,65 @@ class CommandHandlerTest {
     void helpIncludesConfirmCommand() {
         handler.handle("/help");
         verify(sender).sendMessage(argThat(msg -> msg.contains("/confirm")));
+    }
+
+    // --- /save ---
+
+    @Test
+    void saveWithEmptyHistoryShortCircuitsWithoutAgent() {
+        when(chatMemory.get(anyString())).thenReturn(Collections.emptyList());
+        handler.handle("/save");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Nothing to save")));
+        verifyNoInteractions(agentService);
+    }
+
+    @Test
+    void saveDispatchesAgentWithWikiIngestPrompt() {
+        Message userMsg = mock(Message.class);
+        when(userMsg.getText()).thenReturn("hi");
+        when(chatMemory.get(anyString())).thenReturn(List.of(userMsg));
+
+        handler.handle("/save");
+
+        verify(sender).sendTypingAction();
+        verify(agentService).streamChat(argThat(prompt ->
+                prompt.contains("wiki-ingest")
+                        && prompt.contains("/save")
+                        && prompt.toLowerCase().contains("sources/")), anyString());
+    }
+
+    @Test
+    void saveWithNameForwardsSlugHintToAgent() {
+        when(chatMemory.get(anyString())).thenReturn(List.of(mock(Message.class)));
+
+        handler.handle("/save phase-a-plan");
+
+        verify(agentService).streamChat(argThat(prompt ->
+                prompt.contains("phase-a-plan")), anyString());
+    }
+
+    @Test
+    void saveSanitizesSlugHint() {
+        when(chatMemory.get(anyString())).thenReturn(List.of(mock(Message.class)));
+
+        handler.handle("/save <script>alert(1)</script>");
+
+        verify(agentService).streamChat(argThat(prompt ->
+                !prompt.contains("<script>") && !prompt.contains("</script>")), anyString());
+    }
+
+    @Test
+    void extractSaveNameParsesArgument() {
+        assertThat(CommandHandler.extractSaveName("/save")).isNull();
+        assertThat(CommandHandler.extractSaveName("/save   ")).isNull();
+        assertThat(CommandHandler.extractSaveName("/save foo")).isEqualTo("foo");
+        assertThat(CommandHandler.extractSaveName("/save multi word name"))
+                .isEqualTo("multi word name");
+    }
+
+    @Test
+    void helpIncludesSaveCommand() {
+        handler.handle("/help");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("/save")));
     }
 }
