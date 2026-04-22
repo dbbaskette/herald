@@ -4,7 +4,6 @@ import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
-import org.springaicommunity.agent.advisors.AutoMemoryToolsAdvisor;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
@@ -175,14 +174,30 @@ public class HeraldAgentConfig {
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
             @Qualifier("activeToolNames") List<String> activeToolNames) {
 
-        // Set up long-term memory (AutoMemoryToolsAdvisor owns the tools)
+        // Set up long-term memory (HeraldAutoMemoryAdvisor owns the tools)
         Path memoriesDir = resolveTildePath(config.memoriesDir());
+        Path memoryLogPath = memoriesDir.resolve("log.md");
+        Path hotMdPath = memoriesDir.resolve("hot.md");
         try {
             Files.createDirectories(memoriesDir);
             Path memoryMdPath = memoriesDir.resolve("MEMORY.md");
             if (!Files.exists(memoryMdPath)) {
                 Files.writeString(memoryMdPath, "# Memory Index\n\n");
                 log.info("Created starter MEMORY.md at {}", memoryMdPath);
+            }
+            if (!Files.exists(memoryLogPath)) {
+                Files.writeString(memoryLogPath,
+                        "# Memory Log\n\n"
+                                + "_Append-only. One event per line. "
+                                + "Format: `<timestamp> <EVENT> key=value ...`_\n\n");
+                log.info("Created starter log.md at {}", memoryLogPath);
+            }
+            if (!Files.exists(hotMdPath)) {
+                Files.writeString(hotMdPath,
+                        "# Hot Context\n\n"
+                                + "_Session-continuity cache. Refreshed automatically "
+                                + "when the conversation is compacted._\n");
+                log.info("Created starter hot.md at {}", hotMdPath);
             }
         } catch (IOException e) {
             log.warn("Failed to bootstrap memories directory at {}: {}", memoriesDir, e.getMessage());
@@ -282,7 +297,8 @@ public class HeraldAgentConfig {
 
         // Build advisor chain and tool list dynamically based on available beans
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
-                contextMdAdvisor, memoriesDir, chatModel, config, promptDump);
+                contextMdAdvisor, memoriesDir, memoryLogPath, hotMdPath,
+                chatModel, config, promptDump);
 
         var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt,
@@ -343,6 +359,8 @@ public class HeraldAgentConfig {
             Optional<ChatMemory> chatMemoryOpt,
             ContextMdAdvisor contextMdAdvisor,
             Path memoriesDir,
+            Path memoryLogPath,
+            Path hotMdPath,
             ChatModel chatModel,
             HeraldConfig config,
             boolean promptDump) {
@@ -352,12 +370,13 @@ public class HeraldAgentConfig {
         // Always active
         advisors.add(new DateTimePromptAdvisor(DEFAULT_TIMEZONE, DATETIME_FORMAT));
         advisors.add(contextMdAdvisor);
+        advisors.add(new HotMdAdvisor(hotMdPath));
 
-        // Long-term memory — library advisor owns per-request memory tool registration
-        // and injects the memory system prompt each turn. The no-op consolidation trigger
-        // locks in current behavior against future library default changes.
-        advisors.add(AutoMemoryToolsAdvisor.builder()
-                .memoriesRootDirectory(memoriesDir.toString())
+        // Long-term memory — Herald-owned advisor mirrors upstream AutoMemoryToolsAdvisor
+        // but wraps each memory tool callback so mutations land in log.md.
+        advisors.add(HeraldAutoMemoryAdvisor.builder()
+                .memoriesRootDirectory(memoriesDir)
+                .logFile(memoryLogPath)
                 .memorySystemPrompt(new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"))
                 .order(Ordered.HIGHEST_PRECEDENCE + 100)
                 .memoryConsolidationTrigger((req, instant) -> false)
@@ -366,7 +385,8 @@ public class HeraldAgentConfig {
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
             advisors.add(new ContextCompactionAdvisor(
-                    chatMemory, chatModel, config.maxContextTokens()));
+                    chatMemory, chatModel, config.maxContextTokens(),
+                    memoryLogPath, hotMdPath));
             advisors.add(new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES));
         }
 

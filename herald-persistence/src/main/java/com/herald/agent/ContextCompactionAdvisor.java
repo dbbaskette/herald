@@ -18,16 +18,20 @@ import org.springframework.core.Ordered;
 
 import reactor.core.publisher.Flux;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Advisor that monitors conversation history token usage and compacts old messages
  * when the estimated token count exceeds 80% of the configured context window.
  *
- * <p>When compaction triggers, the oldest messages are removed from chat history.
- * The LLM-generated summary is logged but not persisted — long-term facts should
- * be saved to AutoMemoryTools by the agent during the conversation.</p>
+ * <p>When compaction triggers, the oldest messages are removed from chat history and
+ * an LLM-generated summary of the dropped portion is written to {@code log.md}
+ * (a {@code COMPACT} event) and {@code hot.md} (overwritten with the full summary
+ * as session-continuity context).</p>
  *
  * <p>Must run before {@code OneShotMemoryAdvisor} so that compaction happens
  * before history is loaded into the prompt.</p>
@@ -41,11 +45,20 @@ class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
     private final ChatMemory chatMemory;
     private final ChatModel summaryModel;
     private final int maxContextTokens;
+    private final Path logFile;
+    private final Path hotFile;
 
     ContextCompactionAdvisor(ChatMemory chatMemory, ChatModel summaryModel, int maxContextTokens) {
+        this(chatMemory, summaryModel, maxContextTokens, null, null);
+    }
+
+    ContextCompactionAdvisor(ChatMemory chatMemory, ChatModel summaryModel, int maxContextTokens,
+                             Path logFile, Path hotFile) {
         this.chatMemory = chatMemory;
         this.summaryModel = summaryModel;
         this.maxContextTokens = maxContextTokens;
+        this.logFile = logFile;
+        this.hotFile = hotFile;
     }
 
     private static final ThreadLocal<Boolean> COMPACTION_DONE = ThreadLocal.withInitial(() -> false);
@@ -143,8 +156,11 @@ class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
             return;
         }
 
-        // Replace history with remaining messages
+        List<Message> dropped = new ArrayList<>(history.subList(0, splitIndex));
         List<Message> remaining = new ArrayList<>(history.subList(splitIndex, history.size()));
+
+        String summary = generateSummary(dropped);
+
         chatMemory.clear(conversationId);
         if (!remaining.isEmpty()) {
             chatMemory.add(conversationId, remaining);
@@ -154,6 +170,41 @@ class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
                         + "Remaining: {} messages (~{} tokens)",
                 splitIndex, removedTokens,
                 remaining.size(), estimateTokens(remaining));
+
+        persistSummary(summary, splitIndex, removedTokens, remaining.size());
+    }
+
+    private String generateSummary(List<Message> dropped) {
+        if (summaryModel == null || dropped.isEmpty()) {
+            return "";
+        }
+        try {
+            String transcript = formatTranscript(dropped);
+            String prompt = String.format(SUMMARY_PROMPT, transcript);
+            String summary = summaryModel.call(new Prompt(prompt))
+                    .getResult().getOutput().getText();
+            return summary == null ? "" : summary.strip();
+        } catch (Exception e) {
+            log.warn("Failed to generate compaction summary: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    private void persistSummary(String summary, int removedMessages, int removedTokens,
+                                int remainingMessages) {
+        if (logFile != null) {
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("removed_msgs", Integer.toString(removedMessages));
+            fields.put("removed_tokens", Integer.toString(removedTokens));
+            fields.put("kept_msgs", Integer.toString(remainingMessages));
+            if (!summary.isEmpty()) {
+                fields.put("summary", summary);
+            }
+            MemoryLogWriter.appendEvent(logFile, "COMPACT", fields);
+        }
+        if (hotFile != null && !summary.isEmpty()) {
+            MemoryLogWriter.writeHot(hotFile, summary);
+        }
     }
 
     private static final String SUMMARY_PROMPT = """

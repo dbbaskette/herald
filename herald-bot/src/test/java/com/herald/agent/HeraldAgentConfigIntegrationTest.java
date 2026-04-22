@@ -246,10 +246,12 @@ class HeraldAgentConfigIntegrationTest {
 
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
+                tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config, false);
 
-        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, AutoMemoryToolsAdvisor, PromptDumpAdvisor, ToolCallAdvisor
-        assertThat(advisors).hasSize(5);
+        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
+        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, ToolSearchToolCallAdvisor
+        assertThat(advisors).hasSize(6);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
@@ -264,6 +266,7 @@ class HeraldAgentConfigIntegrationTest {
 
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
+                tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config, false);
 
         assertThat(advisors)
