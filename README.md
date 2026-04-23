@@ -413,6 +413,7 @@ Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup
 | `HERALD_AGENT_CONTEXT_FILE` | Path to standing brief | No | `~/.herald/CONTEXT.md` |
 | `HERALD_WEATHER_LOCATION` | Location for weather tool | No | — |
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
+| `HERALD_ANTHROPIC_CACHE_STRATEGY` | Anthropic prompt-cache strategy: `none` / `tools_only` / `system_only` / `system_and_tools` / `conversation_history` | No | `system_and_tools` |
 | `HERALD_MEMORIES_DIR` | Long-term memory directory (can be an Obsidian vault folder) | No | `~/.herald/memories` |
 | `HERALD_OBSIDIAN_VAULT_PATH` | Obsidian vault path for vault-aware tools/skills | No | — |
 | `HERALD_OBSIDIAN_VAULT_MODE` | Link style for new memory pages: `auto` / `on` / `off` | No | `auto` |

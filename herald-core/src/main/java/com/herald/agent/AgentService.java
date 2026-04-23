@@ -60,6 +60,8 @@ public class AgentService {
         String model = "unknown";
         long tokensIn = 0;
         long tokensOut = 0;
+        long cacheReadTokens = 0;
+        long cacheWriteTokens = 0;
         List<String> toolCalls = Collections.emptyList();
         ChatResponse chatResponse = null;
 
@@ -75,6 +77,9 @@ public class AgentService {
                 if (usage != null) {
                     tokensIn = usage.getPromptTokens() != null ? usage.getPromptTokens().longValue() : 0;
                     tokensOut = usage.getCompletionTokens() != null ? usage.getCompletionTokens().longValue() : 0;
+                    long[] cache = extractCacheTokens(usage.getNativeUsage());
+                    cacheReadTokens = cache[0];
+                    cacheWriteTokens = cache[1];
                 }
                 if (chatResponse.getMetadata().getModel() != null) {
                     model = chatResponse.getMetadata().getModel();
@@ -87,7 +92,8 @@ public class AgentService {
             long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
             if (agentTurnListener != null) {
                 String provider = AgentTurnListener.deriveProvider(model);
-                agentTurnListener.recordTurn(provider, model, tokensIn, tokensOut, latencyMs, toolCalls, null);
+                agentTurnListener.recordTurn(provider, model, tokensIn, tokensOut,
+                        cacheReadTokens, cacheWriteTokens, latencyMs, toolCalls, null);
             }
         }
 
@@ -120,6 +126,8 @@ public class AgentService {
         AtomicReference<String> modelRef = new AtomicReference<>("unknown");
         AtomicLong tokensInRef = new AtomicLong(0);
         AtomicLong tokensOutRef = new AtomicLong(0);
+        AtomicLong cacheReadRef = new AtomicLong(0);
+        AtomicLong cacheWriteRef = new AtomicLong(0);
         AtomicReference<List<String>> toolCallsRef = new AtomicReference<>(Collections.emptyList());
         AtomicLong totalChars = new AtomicLong(0);
 
@@ -140,6 +148,9 @@ public class AgentService {
                             if (usage.getCompletionTokens() != null) {
                                 tokensOutRef.set(usage.getCompletionTokens().longValue());
                             }
+                            long[] cache = extractCacheTokens(usage.getNativeUsage());
+                            if (cache[0] > 0) cacheReadRef.set(cache[0]);
+                            if (cache[1] > 0) cacheWriteRef.set(cache[1]);
                         }
                         if (chatResponse.getMetadata().getModel() != null) {
                             modelRef.set(chatResponse.getMetadata().getModel());
@@ -171,14 +182,52 @@ public class AgentService {
                         String model = modelRef.get();
                         String provider = AgentTurnListener.deriveProvider(model);
                         agentTurnListener.recordTurn(provider, model,
-                                tokensInRef.get(), tokensOutRef.get(), latencyMs,
-                                toolCallsRef.get(), null);
+                                tokensInRef.get(), tokensOutRef.get(),
+                                cacheReadRef.get(), cacheWriteRef.get(),
+                                latencyMs, toolCallsRef.get(), null);
                     }
                 });
     }
 
     public static String stripThinkTags(String text) {
         return THINK_TAGS.matcher(text).replaceAll("").strip();
+    }
+
+    /**
+     * Extracts cache-read and cache-write token counts from a provider's native
+     * {@code Usage} object. For Anthropic, these are {@code cacheReadInputTokens}
+     * and {@code cacheCreationInputTokens} respectively. Other providers return
+     * {@code {0, 0}} — their native usage shape doesn't expose cache metrics and
+     * Herald currently only uses prompt caching on Anthropic.
+     *
+     * <p>Uses reflection so herald-core doesn't have to reference the concrete
+     * Anthropic types at call sites (the dependency is transitive regardless,
+     * but this keeps the method generic).</p>
+     *
+     * @return {@code long[2]} — index 0 is cache-read, index 1 is cache-write
+     */
+    static long[] extractCacheTokens(Object nativeUsage) {
+        if (nativeUsage == null) {
+            return new long[]{0L, 0L};
+        }
+        long read = invokeTokenAccessor(nativeUsage, "cacheReadInputTokens");
+        long write = invokeTokenAccessor(nativeUsage, "cacheCreationInputTokens");
+        return new long[]{read, write};
+    }
+
+    private static long invokeTokenAccessor(Object usage, String methodName) {
+        try {
+            var method = usage.getClass().getMethod(methodName);
+            Object result = method.invoke(usage);
+            if (result instanceof Number n) {
+                return n.longValue();
+            }
+        } catch (NoSuchMethodException e) {
+            // Non-Anthropic native usage shape — not an error, just no cache data.
+        } catch (Exception e) {
+            log.debug("Failed to read {} from native usage: {}", methodName, e.getMessage());
+        }
+        return 0L;
     }
 
     private List<String> extractToolCalls(ChatResponse chatResponse) {

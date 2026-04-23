@@ -71,6 +71,14 @@ CREATE TABLE IF NOT EXISTS model_usage (
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Prompt-cache metrics added in #313. Kept as ALTER-only (not in the CREATE
+-- TABLE above) so both new installs and existing DBs go through the same
+-- column-addition path. The populator runs with continueOnError=true; on
+-- second run these fail with "duplicate column name" and are logged but
+-- non-fatal.
+ALTER TABLE model_usage ADD COLUMN cache_read_tokens INTEGER;
+ALTER TABLE model_usage ADD COLUMN cache_write_tokens INTEGER;
+
 -- Chat memory — stores messages as JSON blobs via JsonChatMemoryRepository
 CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
     conversation_id TEXT NOT NULL,

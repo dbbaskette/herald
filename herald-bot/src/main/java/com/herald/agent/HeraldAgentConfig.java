@@ -23,6 +23,7 @@ import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
 import com.herald.agent.subagent.HeraldSubagentReferences;
 import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.AnthropicCacheStrategy;
 import org.springframework.ai.chat.client.ChatClient;
 // MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
 // re-loading/re-saving memory on each ToolSearchToolCallAdvisor iteration
@@ -177,6 +178,7 @@ public class HeraldAgentConfig {
             @Value("${herald.agent.model.ollama:llama3.2}") String ollamaModel,
             @Value("${herald.agent.model.gemini:gemini-2.5-flash}") String geminiModel,
             @Value("${herald.agent.model.lmstudio:qwen/qwen3.5-35b-a3b}") String lmstudioModel,
+            @Value("${herald.agent.anthropic.cache-strategy:system_and_tools}") String anthropicCacheStrategyName,
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
             @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
@@ -379,8 +381,11 @@ public class HeraldAgentConfig {
 
         // Build the initial client from the resolved provider (apply Anthropic skills for main agent)
         ChatModel initialChatModel = availableModels.get(initialProvider);
+        AnthropicCacheStrategy cacheStrategy = parseCacheStrategy(anthropicCacheStrategyName);
+        log.info("Anthropic cache strategy: {} (configured: {})", cacheStrategy, anthropicCacheStrategyName);
         ChatClient initialClient = clientBuilderFactory.apply(initialChatModel)
-                .defaultOptions(ModelSwitcher.chatOptionsForModel(initialChatModel, initialModel, config.anthropicSkills()))
+                .defaultOptions(ModelSwitcher.chatOptionsForModel(
+                        initialChatModel, initialModel, config.anthropicSkills(), cacheStrategy))
                 .build();
 
         var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplateOpt.orElse(null),
@@ -478,6 +483,20 @@ public class HeraldAgentConfig {
     // Used for subagent ChatClient builders — skills not needed for subagents
     static org.springframework.ai.chat.prompt.ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
         return ModelSwitcher.chatOptionsForModel(chatModel, modelId, List.of());
+    }
+
+    static AnthropicCacheStrategy parseCacheStrategy(String name) {
+        if (name == null || name.isBlank()) {
+            return AnthropicCacheStrategy.SYSTEM_AND_TOOLS;
+        }
+        String normalized = name.trim().toLowerCase().replace('-', '_');
+        try {
+            return AnthropicCacheStrategy.valueOf(normalized.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown herald.agent.anthropic.cache-strategy '{}' — falling back to SYSTEM_AND_TOOLS. "
+                    + "Valid values: none, tools_only, system_only, system_and_tools, conversation_history", name);
+            return AnthropicCacheStrategy.SYSTEM_AND_TOOLS;
+        }
     }
 
     /**

@@ -55,8 +55,9 @@ class AgentMetricsTest {
         agentMetrics.recordTurn("anthropic", "claude-sonnet-4-5", 100, 50, 200, List.of("memory_get"), null);
 
         verify(jdbcTemplate).update(
-                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?, ?)",
-                null, "anthropic", "claude-sonnet-4-5", 100L, 50L);
+                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out, "
+                        + "cache_read_tokens, cache_write_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                null, "anthropic", "claude-sonnet-4-5", 100L, 50L, 0L, 0L);
     }
 
     @Test
@@ -64,8 +65,9 @@ class AgentMetricsTest {
         agentMetrics.recordTurn("anthropic", "claude-haiku-4-5", 50, 20, 100, List.of(), "research-agent");
 
         verify(jdbcTemplate).update(
-                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?, ?)",
-                "research-agent", "anthropic", "claude-haiku-4-5", 50L, 20L);
+                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out, "
+                        + "cache_read_tokens, cache_write_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "research-agent", "anthropic", "claude-haiku-4-5", 50L, 20L, 0L, 0L);
     }
 
     @Test

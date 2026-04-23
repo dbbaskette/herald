@@ -262,4 +262,49 @@ class ReloadableSkillsToolTest {
         assertThat(tool.getSkills()).extracting(s -> s.name())
                 .containsExactlyInAnyOrder("dir-skill", "cp-skill");
     }
+
+    // --- #313 deterministic ordering ---
+
+    @Test
+    void skillsAreReturnedInAlphabeticalOrder() throws IOException {
+        // Create skills in reverse-alphabetical order to make sure sort is what
+        // produces the final ordering, not insertion/directory-walk order.
+        String[] names = {"zebra", "alpha", "mango", "beta"};
+        for (String name : names) {
+            Path dir = tempDir.resolve(name);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("SKILL.md"), """
+                    ---
+                    name: %s
+                    description: test
+                    ---
+                    body
+                    """.formatted(name));
+        }
+
+        var tool = new ReloadableSkillsTool(tempDir.toString());
+
+        assertThat(tool.getSkills()).extracting(s -> s.name())
+                .containsExactly("alpha", "beta", "mango", "zebra");
+    }
+
+    @Test
+    void reloadPreservesAlphabeticalOrder() throws IOException {
+        for (String name : new String[]{"charlie", "alpha", "bravo"}) {
+            Path dir = tempDir.resolve(name);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("SKILL.md"), """
+                    ---
+                    name: %s
+                    description: test
+                    ---
+                    """.formatted(name));
+        }
+
+        var tool = new ReloadableSkillsTool(tempDir.toString());
+        tool.reload();
+
+        assertThat(tool.getSkills()).extracting(s -> s.name())
+                .containsExactly("alpha", "bravo", "charlie");
+    }
 }

@@ -9,6 +9,8 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
+import org.springframework.ai.anthropic.AnthropicCacheOptions;
+import org.springframework.ai.anthropic.AnthropicCacheStrategy;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -141,8 +143,23 @@ public class ModelSwitcher {
      * Build vendor-specific ChatOptions for the given model.
      * Extracted here so herald-core has no dependency on HeraldAgentConfig.
      * Anthropic skills are applied when provided; pass {@code List.of()} for subagent builders.
+     *
+     * <p>For Anthropic models, applies {@link AnthropicCacheStrategy#SYSTEM_AND_TOOLS}
+     * by default so Herald's large system prompt (skills, memory index, context) and
+     * tool catalog are cached across turns. Without this, every turn pays full-price
+     * input tokens. See issue #313.</p>
      */
-    static ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId, List<String> anthropicSkills) {
+    public static ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId, List<String> anthropicSkills) {
+        return chatOptionsForModel(chatModel, modelId, anthropicSkills, AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+    }
+
+    /**
+     * Variant that lets callers pick a cache strategy — useful when the user has
+     * set {@code herald.agent.anthropic.cache-strategy} to a non-default value.
+     */
+    public static ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId,
+                                                             List<String> anthropicSkills,
+                                                             AnthropicCacheStrategy cacheStrategy) {
         if (chatModel instanceof OpenAiChatModel) {
             return ChatOptions.builder().model(modelId);
         }
@@ -150,6 +167,11 @@ public class ModelSwitcher {
         var builder = AnthropicChatOptions.builder().model(modelId);
         for (String skillId : anthropicSkills) {
             builder.skill(skillId);
+        }
+        if (cacheStrategy != null && cacheStrategy != AnthropicCacheStrategy.NONE) {
+            builder.cacheOptions(AnthropicCacheOptions.builder()
+                    .strategy(cacheStrategy)
+                    .build());
         }
         return builder;
     }
