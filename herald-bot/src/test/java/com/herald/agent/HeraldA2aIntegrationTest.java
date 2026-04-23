@@ -109,6 +109,7 @@ class HeraldA2aIntegrationTest {
                 new ValidateSkillTool(tempDir.resolve("skills").toString()),
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                "system_and_tools",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
 

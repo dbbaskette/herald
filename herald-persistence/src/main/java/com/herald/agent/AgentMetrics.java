@@ -39,10 +39,21 @@ public class AgentMetrics implements AgentTurnListener {
     }
 
     /**
-     * Record metrics for a completed agent turn.
+     * Legacy signature — delegates to the cache-aware overload with zeros.
      */
     @Override
     public void recordTurn(String provider, String model, long tokensIn, long tokensOut,
+                    long latencyMs, List<String> toolCalls, String subagentId) {
+        recordTurn(provider, model, tokensIn, tokensOut, 0L, 0L, latencyMs, toolCalls, subagentId);
+    }
+
+    /**
+     * Record metrics for a completed agent turn, including Anthropic cache
+     * hit/miss counters.
+     */
+    @Override
+    public void recordTurn(String provider, String model, long tokensIn, long tokensOut,
+                    long cacheReadTokens, long cacheWriteTokens,
                     long latencyMs, List<String> toolCalls, String subagentId) {
         String turnId = UUID.randomUUID().toString();
 
@@ -60,19 +71,41 @@ public class AgentMetrics implements AgentTurnListener {
                 .description("Output tokens produced")
                 .register(meterRegistry)
                 .increment(tokensOut);
+        if (cacheReadTokens > 0) {
+            Counter.builder("herald.tokens.cache_read")
+                    .tag("provider", provider)
+                    .tag("model", model)
+                    .description("Input tokens served from prompt cache")
+                    .register(meterRegistry)
+                    .increment(cacheReadTokens);
+        }
+        if (cacheWriteTokens > 0) {
+            Counter.builder("herald.tokens.cache_write")
+                    .tag("provider", provider)
+                    .tag("model", model)
+                    .description("Input tokens written to prompt cache")
+                    .register(meterRegistry)
+                    .increment(cacheWriteTokens);
+        }
         latencyTimer.record(Duration.ofMillis(latencyMs));
 
         // Structured JSON log entry
         String toolCallsJson = toolCalls.stream()
                 .map(name -> "\"" + name.replace("\"", "\\\"") + "\"")
                 .collect(Collectors.joining(",", "[", "]"));
-        log.info("{\"turn_id\":\"{}\",\"provider\":\"{}\",\"model\":\"{}\",\"subagent_id\":\"{}\",\"tokens_in\":{},\"tokens_out\":{},\"latency_ms\":{},\"tool_calls\":{}}",
-                turnId, provider, model, subagentId, tokensIn, tokensOut, latencyMs, toolCallsJson);
+        log.info("{\"turn_id\":\"{}\",\"provider\":\"{}\",\"model\":\"{}\",\"subagent_id\":\"{}\","
+                        + "\"tokens_in\":{},\"tokens_out\":{},\"cache_read\":{},\"cache_write\":{},"
+                        + "\"latency_ms\":{},\"tool_calls\":{}}",
+                turnId, provider, model, subagentId,
+                tokensIn, tokensOut, cacheReadTokens, cacheWriteTokens,
+                latencyMs, toolCallsJson);
 
         // Persist to model_usage table
         jdbcTemplate.update(
-                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out) VALUES (?, ?, ?, ?, ?)",
-                subagentId, provider, model, tokensIn, tokensOut);
+                "INSERT INTO model_usage (subagent_id, provider, model, tokens_in, tokens_out, "
+                        + "cache_read_tokens, cache_write_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                subagentId, provider, model, tokensIn, tokensOut,
+                cacheReadTokens, cacheWriteTokens);
     }
 
     /**

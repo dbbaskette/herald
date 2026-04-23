@@ -2,6 +2,7 @@ package com.herald.agent;
 
 import com.herald.config.HeraldConfig;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.anthropic.AnthropicCacheStrategy;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -132,6 +133,7 @@ class HeraldAgentConfigTest {
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
                         "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b",
+                        "system_and_tools",
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                         List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web")))
                 .isInstanceOf(UncheckedIOException.class)
@@ -163,5 +165,45 @@ class HeraldAgentConfigTest {
             assertThat(stream).as("Prompt template resource must exist").isNotNull();
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    // --- #313 cache-strategy parsing ---
+
+    @Test
+    void parseCacheStrategyDefaultsToSystemAndToolsForBlankInput() {
+        assertThat(HeraldAgentConfig.parseCacheStrategy(null))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+        assertThat(HeraldAgentConfig.parseCacheStrategy(""))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("   "))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+    }
+
+    @Test
+    void parseCacheStrategyAcceptsAllValidValuesCaseInsensitively() {
+        assertThat(HeraldAgentConfig.parseCacheStrategy("none"))
+                .isEqualTo(AnthropicCacheStrategy.NONE);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("TOOLS_ONLY"))
+                .isEqualTo(AnthropicCacheStrategy.TOOLS_ONLY);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("system_only"))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_ONLY);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("system_and_tools"))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("conversation_history"))
+                .isEqualTo(AnthropicCacheStrategy.CONVERSATION_HISTORY);
+    }
+
+    @Test
+    void parseCacheStrategyNormalizesHyphens() {
+        assertThat(HeraldAgentConfig.parseCacheStrategy("system-and-tools"))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+        assertThat(HeraldAgentConfig.parseCacheStrategy("tools-only"))
+                .isEqualTo(AnthropicCacheStrategy.TOOLS_ONLY);
+    }
+
+    @Test
+    void parseCacheStrategyFallsBackOnInvalidInput() {
+        assertThat(HeraldAgentConfig.parseCacheStrategy("unknown-strategy"))
+                .isEqualTo(AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
     }
 }

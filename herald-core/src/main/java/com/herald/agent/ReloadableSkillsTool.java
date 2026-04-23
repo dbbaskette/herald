@@ -74,6 +74,13 @@ public class ReloadableSkillsTool implements ToolCallback {
             allSkills.addAll(Skills.loadResources(classpathResources));
         }
 
+        // Deterministic ordering — critical for prompt caching. Directory
+        // iteration + classpath resource scan order is not guaranteed stable
+        // across JVMs or after reload events, which used to cause avoidable
+        // cache misses on every turn. See issue #313.
+        allSkills.sort(java.util.Comparator.comparing(SkillsTool.Skill::name,
+                String.CASE_INSENSITIVE_ORDER));
+
         this.currentSkills = Collections.unmodifiableList(allSkills);
         if (allSkills.isEmpty()) {
             this.delegate = null;

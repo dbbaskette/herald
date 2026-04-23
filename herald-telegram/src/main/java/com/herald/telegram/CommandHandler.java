@@ -389,6 +389,18 @@ public class CommandHandler {
                 String.join(", ", modelSwitcher.getAvailableProviders())).append("\n");
         sb.append("Tokens today: ").append(formatTokens(daily.tokensIn())).append(" in / ")
                 .append(formatTokens(daily.tokensOut())).append(" out\n");
+        if (daily.cacheReadTokens() > 0 || daily.cacheWriteTokens() > 0) {
+            sb.append("Prompt cache today: ").append(formatTokens(daily.cacheReadTokens())).append(" read / ")
+                    .append(formatTokens(daily.cacheWriteTokens())).append(" write");
+            if (daily.tokensIn() > 0) {
+                long denom = daily.tokensIn() + daily.cacheReadTokens();
+                if (denom > 0) {
+                    double ratio = (double) daily.cacheReadTokens() / (double) denom;
+                    sb.append(String.format(" (%.1f%% hit rate)", ratio * 100.0));
+                }
+            }
+            sb.append("\n");
+        }
         sb.append("Estimated cost today: $").append(cost.toPlainString()).append("\n");
 
         if (!breakdown.isEmpty()) {
@@ -397,7 +409,11 @@ public class CommandHandler {
                 sb.append("  ").append(usage.agent())
                         .append(" (").append(usage.provider()).append("/").append(usage.model()).append("): ")
                         .append(formatTokens(usage.tokensIn())).append(" in / ")
-                        .append(formatTokens(usage.tokensOut())).append(" out\n");
+                        .append(formatTokens(usage.tokensOut())).append(" out");
+                if (usage.cacheReadTokens() > 0) {
+                    sb.append(" · ").append(formatTokens(usage.cacheReadTokens())).append(" cache-read");
+                }
+                sb.append("\n");
             }
         }
 

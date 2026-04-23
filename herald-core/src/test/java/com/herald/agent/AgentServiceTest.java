@@ -56,7 +56,7 @@ class AgentServiceTest {
 
         assertThat(result).isEqualTo("Hello from Herald!");
         verify(requestSpec).user("Hi");
-        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -87,7 +87,7 @@ class AgentServiceTest {
                 .hasMessage("API error");
 
         // Metrics should still be recorded on failure with zero tokens
-        verify(agentTurnListener).recordTurn(eq("unknown"), eq("unknown"), eq(0L), eq(0L), anyLong(), eq(List.of()), isNull());
+        verify(agentTurnListener).recordTurn(eq("unknown"), eq("unknown"), eq(0L), eq(0L), eq(0L), eq(0L), anyLong(), eq(List.of()), isNull());
     }
 
     @Test
@@ -96,7 +96,7 @@ class AgentServiceTest {
 
         agentService.chat("test");
 
-        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), any(), isNull());
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), any(), isNull());
     }
 
     @Test
@@ -118,7 +118,8 @@ class AgentServiceTest {
 
         agentService.chat("run tools");
 
-        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(), anyLong(),
+        verify(agentTurnListener).recordTurn(anyString(), anyString(), anyLong(), anyLong(),
+                anyLong(), anyLong(), anyLong(),
                 eq(List.of("shell_exec", "file_read")), isNull());
     }
 
@@ -164,5 +165,42 @@ class AgentServiceTest {
     void stripThinkTagsHandlesMultipleBlocks() {
         String input = "<think>first</think>Hello <think>second</think>world";
         assertThat(AgentService.stripThinkTags(input)).isEqualTo("Hello world");
+    }
+
+    // --- #313 cache-token extraction ---
+
+    @Test
+    void extractCacheTokensReturnsZerosWhenNativeUsageNull() {
+        assertThat(AgentService.extractCacheTokens(null)).containsExactly(0L, 0L);
+    }
+
+    @Test
+    void extractCacheTokensReturnsZerosForForeignUsageShape() {
+        // Non-Anthropic native usage without the Anthropic-specific methods.
+        Object fakeUsage = new Object() {
+            public int promptTokens() { return 100; }
+            public int completionTokens() { return 50; }
+        };
+        assertThat(AgentService.extractCacheTokens(fakeUsage)).containsExactly(0L, 0L);
+    }
+
+    @Test
+    void extractCacheTokensReadsAnthropicShapedUsage() {
+        // Anthropic's AnthropicApi$Usage exposes cacheReadInputTokens() +
+        // cacheCreationInputTokens(). Build a structurally compatible stub.
+        Object anthropicUsage = new Object() {
+            public Integer cacheReadInputTokens() { return 4_000; }
+            public Integer cacheCreationInputTokens() { return 200; }
+        };
+        assertThat(AgentService.extractCacheTokens(anthropicUsage)).containsExactly(4_000L, 200L);
+    }
+
+    @Test
+    void extractCacheTokensHandlesNullReturnValues() {
+        Object anthropicUsage = new Object() {
+            public Integer cacheReadInputTokens() { return null; }
+            public Integer cacheCreationInputTokens() { return null; }
+        };
+        assertThat(AgentService.extractCacheTokens(anthropicUsage)).containsExactly(0L, 0L);
     }
 }

@@ -82,6 +82,12 @@ herald:
     prompt-dump: ${HERALD_PROMPT_DUMP:false}
     approval-timeout-seconds: ${HERALD_APPROVAL_TIMEOUT_SECONDS:60}
     skills-requiring-approval: ${HERALD_SKILLS_REQUIRING_APPROVAL:}
+    anthropic:
+      # Prompt-cache strategy for Anthropic requests. Anthropic charges 25% of
+      # input price on cache hits and ~1.25× on misses, so caching the system
+      # prompt + tool catalog is a big win for Herald's steady-state load.
+      # Values: none | tools_only | system_only | system_and_tools | conversation_history
+      cache-strategy: ${HERALD_ANTHROPIC_CACHE_STRATEGY:system_and_tools}
     model:
       haiku: ${HERALD_MODEL_HAIKU:claude-haiku-4-5}
       sonnet: ${HERALD_MODEL_SONNET:claude-sonnet-4-5}

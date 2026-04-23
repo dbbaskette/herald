@@ -119,4 +119,44 @@ class ModelSwitcherTest {
         assertThat(switcher.getActiveProvider()).isEqualTo("anthropic");
         assertThat(switcher.getActiveModel()).isEqualTo("claude-haiku-4-5");
     }
+
+    // --- #313 cache-options wiring ---
+
+    @Test
+    void chatOptionsForAnthropicAppliesSystemAndToolsCacheByDefault() {
+        var chatModel = org.mockito.Mockito.mock(org.springframework.ai.anthropic.AnthropicChatModel.class);
+
+        var options = (org.springframework.ai.anthropic.AnthropicChatOptions)
+                ModelSwitcher.chatOptionsForModel(chatModel, "claude-sonnet-4-5", List.of()).build();
+
+        assertThat(options.getCacheOptions()).isNotNull();
+        assertThat(options.getCacheOptions().getStrategy())
+                .isEqualTo(org.springframework.ai.anthropic.AnthropicCacheStrategy.SYSTEM_AND_TOOLS);
+    }
+
+    @Test
+    void chatOptionsForAnthropicRespectsExplicitStrategy() {
+        var chatModel = org.mockito.Mockito.mock(org.springframework.ai.anthropic.AnthropicChatModel.class);
+
+        var options = (org.springframework.ai.anthropic.AnthropicChatOptions)
+                ModelSwitcher.chatOptionsForModel(chatModel, "claude-sonnet-4-5", List.of(),
+                        org.springframework.ai.anthropic.AnthropicCacheStrategy.CONVERSATION_HISTORY).build();
+
+        assertThat(options.getCacheOptions().getStrategy())
+                .isEqualTo(org.springframework.ai.anthropic.AnthropicCacheStrategy.CONVERSATION_HISTORY);
+    }
+
+    @Test
+    void chatOptionsForAnthropicAppliesNoneStrategyWhenRequested() {
+        var chatModel = org.mockito.Mockito.mock(org.springframework.ai.anthropic.AnthropicChatModel.class);
+
+        var options = (org.springframework.ai.anthropic.AnthropicChatOptions)
+                ModelSwitcher.chatOptionsForModel(chatModel, "claude-sonnet-4-5", List.of(),
+                        org.springframework.ai.anthropic.AnthropicCacheStrategy.NONE).build();
+
+        // AnthropicChatOptions defaults CacheOptions to strategy=NONE; we just
+        // want to confirm passing NONE doesn't flip it to a caching strategy.
+        assertThat(options.getCacheOptions().getStrategy())
+                .isEqualTo(org.springframework.ai.anthropic.AnthropicCacheStrategy.NONE);
+    }
 }

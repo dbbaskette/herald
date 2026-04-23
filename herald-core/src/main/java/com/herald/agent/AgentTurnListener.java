@@ -11,6 +11,24 @@ public interface AgentTurnListener {
 
     /**
      * Record metrics for a completed agent turn.
+     *
+     * @param cacheReadTokens prompt tokens served from Anthropic's prompt cache
+     *                        (charged at 0.25×). 0 for non-Anthropic turns.
+     * @param cacheWriteTokens prompt tokens that populated the cache this turn
+     *                         (charged at ~1.25×). 0 for non-Anthropic turns.
+     */
+    default void recordTurn(String provider, String model, long tokensIn, long tokensOut,
+                            long cacheReadTokens, long cacheWriteTokens,
+                            long latencyMs, List<String> toolCalls, String subagentId) {
+        // Default delegates to the legacy signature so older implementations
+        // keep working. Implementations should override this to record cache
+        // tokens.
+        recordTurn(provider, model, tokensIn, tokensOut, latencyMs, toolCalls, subagentId);
+    }
+
+    /**
+     * Legacy signature without cache-token fields. Prefer the overload that
+     * accepts {@code cacheReadTokens}/{@code cacheWriteTokens}.
      */
     void recordTurn(String provider, String model, long tokensIn, long tokensOut,
                     long latencyMs, List<String> toolCalls, String subagentId);
