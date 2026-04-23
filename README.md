@@ -138,6 +138,7 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 - ✅ **Structured task tracking** — `TodoWriteTool` with per-step progress messages ([Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite))
 - ⏰ **Proactive scheduling** — morning briefings, reminders, cron-driven outreach
 - 📧 **Google Workspace** — Gmail and Calendar via the `gws` CLI
+- 📋 **Apple Reminders** — read, create, complete, and delete reminders via the `reminders` CLI (macOS only); morning briefings surface today's + overdue items
 - 🐚 **Shell & file access** — with regex-blocked destructive commands, sensitive-value redaction, and confirmation gating
 
 **Models**
@@ -189,6 +190,7 @@ skills/
 ├── gmail/             # Email composition and search (via gws CLI)
 ├── google-calendar/   # Calendar management (via gws CLI)
 ├── google-drive/      # Drive file operations (via gws CLI)
+├── reminders/         # Apple Reminders (via reminders CLI, macOS only)
 ├── obsidian/          # Obsidian vault search (via obsidian CLI)
 ├── weather/           # Weather lookups (wttr.in)
 └── broadcom/          # VMware / Broadcom knowledge base

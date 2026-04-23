@@ -123,6 +123,7 @@ class HeraldAgentConfigTest {
                         Optional.empty(),
                         mock(org.springframework.beans.factory.ObjectProvider.class),
                         Optional.empty(), Optional.empty(),
+                        Optional.empty(), mock(com.herald.tools.RemindersAvailabilityChecker.class),
                         new com.herald.tools.WebTools(""),
                         Optional.empty(), Optional.empty(),
                         new ClassPathResource("prompts/NONEXISTENT.md"),

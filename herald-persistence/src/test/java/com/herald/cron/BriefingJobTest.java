@@ -2,6 +2,7 @@ package com.herald.cron;
 
 import com.herald.config.HeraldConfig;
 import com.herald.tools.GwsAvailabilityChecker;
+import com.herald.tools.RemindersAvailabilityChecker;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -18,7 +19,25 @@ class BriefingJobTest {
 
     private BriefingJob createJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
                                   boolean webSearch, BriefingJob.WeatherFetcher fetcher) {
-        return new BriefingJob(config, gwsChecker, webSearch, fetcher);
+        return createJob(config, gwsChecker, remindersUnavailable(), webSearch, fetcher);
+    }
+
+    private BriefingJob createJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
+                                  RemindersAvailabilityChecker remindersChecker,
+                                  boolean webSearch, BriefingJob.WeatherFetcher fetcher) {
+        return new BriefingJob(config, gwsChecker, remindersChecker, webSearch, fetcher);
+    }
+
+    private static RemindersAvailabilityChecker remindersUnavailable() {
+        RemindersAvailabilityChecker checker = mock(RemindersAvailabilityChecker.class);
+        when(checker.isAvailable()).thenReturn(false);
+        return checker;
+    }
+
+    private static RemindersAvailabilityChecker remindersAvailable() {
+        RemindersAvailabilityChecker checker = mock(RemindersAvailabilityChecker.class);
+        when(checker.isAvailable()).thenReturn(true);
+        return checker;
     }
 
     // --- buildMorningPrompt tests ---
@@ -305,5 +324,34 @@ class BriefingJobTest {
         String result = job.buildMorningPrompt();
 
         assertThat(result).doesNotContain("Weather");
+    }
+
+    // --- Apple Reminders section ---
+
+    @Test
+    void morningPromptIncludesRemindersSectionWhenAvailable() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, remindersAvailable(),
+                false, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result)
+                .contains("Apple Reminders")
+                .contains("reminders_show");
+    }
+
+    @Test
+    void morningPromptOmitsRemindersSectionWhenUnavailable() {
+        GwsAvailabilityChecker gwsChecker = mock(GwsAvailabilityChecker.class);
+        when(gwsChecker.isAvailable()).thenReturn(false);
+
+        BriefingJob job = createJob(defaultConfig, gwsChecker, false, url -> "");
+
+        String result = job.buildMorningPrompt();
+
+        assertThat(result).doesNotContain("Apple Reminders");
     }
 }

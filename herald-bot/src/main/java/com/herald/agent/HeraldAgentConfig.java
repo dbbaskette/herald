@@ -7,6 +7,8 @@ import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springaicommunity.agent.utils.CommandLineQuestionHandler;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
+import com.herald.tools.RemindersAvailabilityChecker;
+import com.herald.tools.RemindersTools;
 import com.herald.tools.HeraldShellDecorator;
 import com.herald.tools.TelegramSendTool;
 import com.herald.tools.WebTools;
@@ -94,7 +96,9 @@ public class HeraldAgentConfig {
     public List<String> activeToolNames(
             Optional<CronTools> cronTools,
             Optional<TelegramSendTool> telegramSendTool,
-            Optional<GwsTools> gwsTools) {
+            Optional<GwsTools> gwsTools,
+            Optional<RemindersTools> remindersTools,
+            RemindersAvailabilityChecker remindersAvailabilityChecker) {
         List<String> names = new ArrayList<>(List.of(
                 "shell", "filesystem", "todoWrite", "askUserQuestion",
                 "task", "taskOutput", "skills", "web", "toolSearchTool",
@@ -104,6 +108,9 @@ public class HeraldAgentConfig {
         cronTools.ifPresent(t -> names.add("cron"));
         telegramSendTool.ifPresent(t -> names.add("telegram_send"));
         gwsTools.ifPresent(t -> names.add("gws"));
+        if (remindersTools.isPresent() && remindersAvailabilityChecker.isAvailable()) {
+            names.add("reminders");
+        }
         return List.copyOf(names);
     }
 
@@ -153,6 +160,8 @@ public class HeraldAgentConfig {
             ObjectProvider<TelegramQuestionHandler> questionHandlerProvider,
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
+            Optional<RemindersTools> remindersToolsOpt,
+            RemindersAvailabilityChecker remindersAvailabilityChecker,
             WebTools webTools,
             Optional<CronTools> cronToolsOpt,
             Optional<JdbcTemplate> jdbcTemplateOpt,
@@ -326,8 +335,9 @@ public class HeraldAgentConfig {
                 chatModel, config, promptDump);
 
         var toolList = buildToolList(shellDecorator, fsTools,
-                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt, webTools, cronToolsOpt,
-                validateSkillTool);
+                todoTool, askTool, telegramSendToolOpt, gwsToolsOpt,
+                remindersToolsOpt, remindersAvailabilityChecker,
+                webTools, cronToolsOpt, validateSkillTool);
 
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
@@ -436,6 +446,8 @@ public class HeraldAgentConfig {
             AskUserQuestionTool askTool,
             Optional<TelegramSendTool> telegramSendToolOpt,
             Optional<GwsTools> gwsToolsOpt,
+            Optional<RemindersTools> remindersToolsOpt,
+            RemindersAvailabilityChecker remindersAvailabilityChecker,
             WebTools webTools,
             Optional<CronTools> cronToolsOpt,
             ValidateSkillTool validateSkillTool) {
@@ -450,6 +462,9 @@ public class HeraldAgentConfig {
 
         telegramSendToolOpt.ifPresent(tools::add);
         gwsToolsOpt.ifPresent(tools::add);
+        if (remindersAvailabilityChecker.isAvailable()) {
+            remindersToolsOpt.ifPresent(tools::add);
+        }
         cronToolsOpt.ifPresent(tools::add);
 
         return tools;
