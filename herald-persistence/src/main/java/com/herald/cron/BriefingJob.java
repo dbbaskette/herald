@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import com.herald.config.HeraldConfig;
 import com.herald.tools.GwsAvailabilityChecker;
+import com.herald.tools.RemindersAvailabilityChecker;
 
 @Component
 public class BriefingJob {
@@ -35,21 +36,25 @@ public class BriefingJob {
 
     private final HeraldConfig config;
     private final GwsAvailabilityChecker gwsChecker;
+    private final RemindersAvailabilityChecker remindersChecker;
     private final boolean webSearchAvailable;
     private final WeatherFetcher weatherFetcher;
 
     @Autowired
     public BriefingJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
+                       RemindersAvailabilityChecker remindersChecker,
                        @Value("${herald.web.search-api-key:}") String webSearchApiKey) {
-        this(config, gwsChecker,
+        this(config, gwsChecker, remindersChecker,
                 webSearchApiKey != null && !webSearchApiKey.isBlank(),
                 BriefingJob::fetchWeatherHttp);
     }
 
     BriefingJob(HeraldConfig config, GwsAvailabilityChecker gwsChecker,
+                RemindersAvailabilityChecker remindersChecker,
                 boolean webSearchAvailable, WeatherFetcher weatherFetcher) {
         this.config = config;
         this.gwsChecker = gwsChecker;
+        this.remindersChecker = remindersChecker;
         this.webSearchAvailable = webSearchAvailable;
         this.weatherFetcher = weatherFetcher;
     }
@@ -91,6 +96,14 @@ public class BriefingJob {
         if (gwsChecker.isAvailable()) {
             sb.append("## Section 4 — Flagged Emails\n");
             sb.append("Use gmail_search to check for flagged or important unread emails and summarize them.\n\n");
+        }
+
+        // Apple Reminders — only when reminders-cli available on macOS
+        if (remindersChecker != null && remindersChecker.isAvailable()) {
+            sb.append("## Section 4b — Apple Reminders\n");
+            sb.append("Use reminders_show (with listName=null to span all lists) to list ")
+                    .append("today's due and overdue reminders, grouped by list. Skip the section ")
+                    .append("if nothing is due.\n\n");
         }
 
         // Adaptive section — always included

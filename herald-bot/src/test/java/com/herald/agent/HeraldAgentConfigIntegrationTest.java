@@ -6,6 +6,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import com.herald.tools.FileSystemTools;
 import com.herald.tools.GwsTools;
 import com.herald.tools.HeraldShellDecorator;
+import com.herald.tools.RemindersAvailabilityChecker;
+import com.herald.tools.RemindersTools;
 import com.herald.tools.TelegramSendTool;
 import com.herald.tools.WebTools;
 import org.junit.jupiter.api.Test;
@@ -68,7 +70,9 @@ class HeraldAgentConfigIntegrationTest {
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
-                Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.of(mock(GwsTools.class)),
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
+                new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -114,7 +118,9 @@ class HeraldAgentConfigIntegrationTest {
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
-                Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.of(mock(GwsTools.class)),
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
+                new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -151,7 +157,9 @@ class HeraldAgentConfigIntegrationTest {
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
-                Optional.of(mock(GwsTools.class)), new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.of(mock(GwsTools.class)),
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
+                new WebTools(""), Optional.of(mock(CronTools.class)),
                 Optional.of(jdbcTemplate),
                 new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
                 tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
@@ -220,6 +228,7 @@ class HeraldAgentConfigIntegrationTest {
                 mock(ObjectProvider.class),
                 Optional.empty(),  // telegramSendTool
                 Optional.empty(),  // gwsTools
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
                 new WebTools(""),
                 Optional.empty(),  // cronTools
                 Optional.empty(),  // jdbcTemplate
@@ -291,6 +300,7 @@ class HeraldAgentConfigIntegrationTest {
                 new FileSystemTools(),
                 todoTool, askTool,
                 Optional.empty(), Optional.empty(),
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
                 new WebTools(""),
                 Optional.empty(),
                 new ValidateSkillTool("skills"));
