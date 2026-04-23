@@ -4,81 +4,47 @@
 
 # Herald
 
-**One JAR, two personalities.** Configure it as an always-on personal assistant with Telegram and persistent memory, or point it at an `agents.md` file and use it as a single-shot task agent. Same engine, different mission.
+**A hackable AI agent that works two ways — a Telegram-native personal assistant that learns over time, or a single-shot task runner that exits when it's done.** Same JAR, same agent loop, same tool system. What changes is what you plug in.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
 ![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--SNAPSHOT-blueviolet.svg)
+![Status](https://img.shields.io/badge/status-active-success)
 
-## Table of Contents
-
-- [About](#about)
-- [Features](#features)
-- [Skills](#skills)
-- [Architecture](#architecture)
-- [Data Flow](#data-flow)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Task Agent Mode](#task-agent-mode)
-- [Telegram Commands](#telegram-commands)
-- [Project Structure](#project-structure)
-- [Agentic Patterns](#agentic-patterns--spring-ai-agent-utils)
-- [Technology Stack](#technology-stack)
-- [Database Schema](#database-schema)
-- [Build Phases](#build-phases)
-- [Contributing](#contributing)
-- [License](#license)
-
-## About
-
-Herald is an AI Agent framework that becomes two different tools depending on how you configure it. It solves the problem of needing separate codebases for persistent, context-aware personal assistants vs single-shot automation agents.
-
-**Personal assistant mode** — set a Telegram bot token and a database path, and Herald becomes an always-on AI assistant that runs 24/7 on your Mac. It connects through Telegram, builds long-term memory of who you are via typed Markdown files, manages your calendar and email, runs scheduled briefings, and delegates complex research to specialized subagents.
-
-**Task agent mode** — pass `--agents=my-agent.md` and Herald becomes a focused task agent. An `agents.md` file defines the agent's personality, tools, and model in a single file. Give it a prompt, get a result, done. No database, no Telegram, no long-running process.
-
-The personality switch is just configuration. The same JAR, the same advisor chain, the same tool system, the same multi-provider model routing. What changes is what you plug in.
-
-## Quick Start
-
-To run Herald as a single-shot task agent immediately (no Telegram or DB required):
-
-```bash
-# 1. Create a simple agent definition
-cat > hello-agent.md << 'EOF'
----
-name: hello-agent
-description: A friendly assistant
-model: sonnet
-tools: [filesystem]
 ---
 
-You are a helpful assistant with filesystem access.
-EOF
+## What can Herald do?
 
-# 2. Set your API key and run the agent interactively
-export ANTHROPIC_API_KEY=sk-ant-...
-java -jar herald-bot.jar --agents=hello-agent.md
+Real interactions, not abstractions:
+
+```
+You:     "What did that Karpathy gist about LLM wikis say?"
+Herald:  Runs wiki-query → grep /sources/, loads 2 pages, answers with
+         citations: "see [sources/karpathy-wiki](sources/karpathy-wiki.md)"
+
+You:     "Ingest this into memory: https://blog.example.com/post"
+Herald:  Runs wiki-ingest → fetches the URL, creates sources/post.md
+         with takeaways, updates related concepts/ and entities/ pages,
+         logs the event to log.md
+
+You:     "Brief me on my week"
+Herald:  (scheduled at 07:00 Mon) — pulls Gmail, Calendar, pending
+         GitHub PRs, synthesizes via the research subagent, sends you
+         a single message
+
+You:     /save phase-e-shipped
+Herald:  Files the current conversation into long-term memory as a
+         wiki note — concepts, entities, takeaways, all cross-linked
+
+$ java -jar herald-bot.jar --agents=cf-analyzer.md \
+    --prompt="analyze this Cloud Foundry manifest and flag risks"
+# Exits with the analysis. No DB, no Telegram, no daemon.
 ```
 
-## Features
+## Herald Console
 
-- **Telegram-native** — chat with your AI assistant where you already message
-- **Long-term memory** — file-based persistent memory via [AutoMemoryTools (Part 6)](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools). Pages carry a `type:` frontmatter (`user`, `feedback`, `project`, `reference`, `concept`, `entity`, `source`), and `MEMORY.md` is a catalog grouped by type. Compaction summaries persist to `log.md` and refresh a `hot.md` session-continuity note.
-- **Skills system** — extensible via Markdown files in `skills/` directory based on [Agent Skills (Part 1)](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/)
-- **Subagent delegation** — routes complex research to specialist agents via [Subagent Orchestration (Part 4)](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents)
-- **Task management** — structured workflows via [TodoWriteTool (Part 3)](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite)
-- **Interactive workflows** — agents that clarify before acting via [AskUserQuestionTool (Part 2)](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool)
-- **Interoperable agents** — connect to remote agents via the [A2A Protocol (Part 5)](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration)
-- **Proactive scheduling** — morning briefings, reminders, and cron-driven outreach
-- **Shell & file access** — executes commands on your Mac with security guardrails
-- **Google Workspace** — Gmail and Google Calendar via `gws` CLI
-- **Multi-provider** — Anthropic, OpenAI, Ollama, and Gemini models, switchable at runtime
-- **Configurable memory storage** — memories directory is configurable, can point to an Obsidian vault for browsable/searchable notes. Opt-in `obsidian-vault` mode switches new memory pages to `[[wikilinks]]` for Graph view / backlinks; default `plain-markdown` mode keeps notes portable across GitHub, VS Code, and other viewers (`HERALD_OBSIDIAN_VAULT_MODE=auto|on|off`). Optional CSS/Bases snippets live under `assets/obsidian-snippets/` — copy in if you want the polished Obsidian UX, ignore otherwise.
-- **Management console** — Vue 3 web UI for skills editing, memory, cron, and status
-
-### Herald Console
+Browse long-term memory grouped by type, edit skills with live reload, and manage cron jobs — all from a Vue 3 web UI.
 
 | System Status | Skills Editor |
 |:---:|:---:|
@@ -88,33 +54,176 @@ java -jar herald-bot.jar --agents=hello-agent.md
 |:---:|:---:|
 | ![Memory](assets/screenshots/herald-ui-memory.png) | ![Settings](assets/screenshots/herald-ui-settings.png) |
 
+## Table of Contents
+
+- [Why Herald](#why-herald)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [The Memory System](#the-memory-system)
+- [Skills](#skills)
+- [Telegram Commands](#telegram-commands)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Task Agent Mode](#task-agent-mode)
+- [Agentic Patterns — Spring AI Agent Utils](#agentic-patterns--spring-ai-agent-utils)
+- [Project Structure](#project-structure)
+- [Technology Stack](#technology-stack)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why Herald
+
+Most agent projects pick one personality: "chatty assistant" **or** "scripted task runner." Herald runs both off the same codebase because the split is just configuration, not architecture:
+
+- **Personal assistant** — Telegram bot token + database path. Runs 24/7, builds long-term memory of who you are via typed Markdown files, manages Gmail and Calendar, delegates deep research to specialist subagents, runs on cron.
+- **Task agent** — `--agents=my-agent.md`. One-shot or REPL, zero persistence, exits when done. The agent file defines the personality, tools, and model.
+- **Hybrid** — turn either dial up or down. Keep the DB but drop Telegram. Add Telegram to a task agent for notifications. Pick what you need, skip what you don't.
+
+The reference implementation of [Spring AI's Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) series, adapted for personal use.
+
+## Quick Start
+
+**Task agent in 60 seconds** — no Telegram, no database required:
+
+```bash
+# 1. Build
+git clone https://github.com/dbbaskette/herald.git && cd herald
+./mvnw package -DskipTests
+
+# 2. Create a minimal agent
+cat > hello-agent.md << 'EOF'
+---
+name: hello-agent
+description: A friendly assistant with filesystem access
+model: sonnet
+tools: [filesystem]
+---
+
+You are a helpful assistant with access to the local filesystem.
+EOF
+
+# 3. Run it
+export ANTHROPIC_API_KEY=sk-ant-...
+java -jar herald-bot/target/herald-bot-*.jar --agents=hello-agent.md \
+    --prompt="What's in the current directory?"
+```
+
+For the full personal-assistant experience with Telegram + memory, jump to [Getting Started](#getting-started).
+
+> **New to Herald?** The [Getting Started 101 guide](docs/getting-started-101.md) walks you from zero to a running task agent in about ten minutes with no Spring/Java prerequisites.
+
+## Features
+
+**Chat surfaces**
+- 🗨️ **Telegram-native** — chat where you already message; streaming replies, inline keyboards for agent-asked questions
+- 💻 **Management console** — Vue 3 web UI for memory browsing, skills editing, cron jobs, live status via SSE
+- ⌨️ **CLI task mode** — `--agents=file.md --prompt="..."` for one-shot execution, or drop the `--prompt` for a REPL
+
+**Compounding long-term memory** (see [The Memory System](#the-memory-system))
+- 📁 File-based memory with a typed taxonomy (`user`, `feedback`, `project`, `reference`, `concept`, `entity`, `source`)
+- 🗂️ `MEMORY.md` is a grouped catalog — not a flat dump
+- 📓 Append-only `log.md` records every memory mutation with timestamps
+- 🔥 `hot.md` session-continuity note, auto-refreshed from compaction summaries
+- 🔍 `wiki-ingest` / `wiki-query` / `wiki-lint` skills for write, read-with-citations, and health checks
+- 📒 Opt-in Obsidian vault mode for `[[wikilinks]]` + Graph view; default stays portable
+
+**Capabilities**
+- 🧩 **Skills** — hot-reloaded Markdown files in `skills/` ([Agent Skills — Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/))
+- 🕵️ **Subagents** — TaskTool delegation for Explore, Plan, Research, Bash ([Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents))
+- 🌐 **A2A protocol** — delegate to remote agents alongside local ones ([Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration))
+- ❓ **Clarify-before-act** — `AskUserQuestionTool` with Telegram inline-keyboard integration ([Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool))
+- ✅ **Structured task tracking** — `TodoWriteTool` with per-step progress messages ([Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite))
+- ⏰ **Proactive scheduling** — morning briefings, reminders, cron-driven outreach
+- 📧 **Google Workspace** — Gmail and Calendar via the `gws` CLI
+- 🐚 **Shell & file access** — with regex-blocked destructive commands, sensitive-value redaction, and confirmation gating
+
+**Models**
+- 🤖 **Multi-provider** — Anthropic, OpenAI, Gemini, Ollama (local), LM Studio (local). Switch at runtime with `/model`
+- 💰 **Tiered routing** — Haiku / Sonnet / Opus tiers for subagents so cheap work stays cheap
+
+## The Memory System
+
+Herald implements the compounding-knowledge pattern from [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — memory that gets *more valuable* over time instead of turning into a scratchpad. Everything is plain Markdown on disk. No database, no lock-in.
+
+```
+$HERALD_MEMORIES_DIR/           # default ~/.herald/memories
+├── MEMORY.md                   # catalog, grouped by type
+├── log.md                      # append-only event log
+├── hot.md                      # session-continuity cache
+├── user_profile.md             # type: user
+├── feedback_testing.md         # type: feedback
+├── concepts/                   # type: concept (subdir convention)
+│   └── hot_path.md
+├── entities/                   # type: entity
+│   └── jamie.md
+└── sources/                    # type: source
+    └── karpathy_wiki.md
+```
+
+**How pages get in:**
+- **Automatically** — the agent calls `MemoryCreate` / `MemoryStrReplace` when it learns something worth keeping (user preferences, project decisions, non-obvious feedback). Every successful mutation auto-logs to `log.md`.
+- **On demand** — `/save [name]` files the current conversation into memory via the `wiki-ingest` skill: extracts concepts/entities/takeaways, creates the right pages, updates the index.
+- **Research auto-save** — the research subagent asks once after each synthesis whether to file the findings (URLs preserved for later citation).
+
+**How pages get used:**
+- **Every turn** — `MEMORY.md` is injected into the system prompt so the agent always sees the catalog. `hot.md` adds a short session-continuity summary.
+- **On demand** — `wiki-query` skill greps the memories dir, loads top-ranked pages, answers with explicit page citations instead of training-data fabrication.
+- **Health checks** — `wiki-lint` skill finds orphan pages, dead wikilinks, index mismatches, and (optionally, LLM-assisted) stale/contradicting claims. Emits a report; never mutates without confirmation. Cron-runnable.
+
+**Obsidian vault mode** — opt-in via `HERALD_OBSIDIAN_VAULT_MODE=auto|on|off`. Point `HERALD_MEMORIES_DIR` at an Obsidian vault folder and new pages use `[[wikilinks]]` for Graph view + backlinks. Default stays `plain-markdown` so notes render correctly in GitHub, VS Code, and `cat`. Optional CSS and Bases-dashboard snippets under `assets/obsidian-snippets/` — copy in if you want, ignore otherwise.
+
 ## Skills
 
 Skills are Markdown files with YAML front matter that teach Herald new capabilities without code changes. Drop a file into `skills/` and Herald picks it up immediately — no restart required.
 
 ```
 skills/
-├── broadcom/SKILL.md        # VMware/Broadcom knowledge base
-├── github/SKILL.md          # GitHub workflow automation
-├── gmail/SKILL.md           # Email composition & search
-├── google-calendar/SKILL.md # Calendar management
-├── google-drive/SKILL.md    # Drive file operations
-└── weather/SKILL.md         # Weather lookups
+├── wiki-ingest/       # Ingest URL/file/text → sources + concepts + entities
+├── wiki-query/        # Search memory, answer with page citations
+├── wiki-lint/         # Orphan/dead-link/stale-claim audit
+├── skill-creator/     # Meta — create and iterate on skills
+├── github/            # GitHub PR review and workflow helpers
+├── gmail/             # Email composition and search (via gws CLI)
+├── google-calendar/   # Calendar management (via gws CLI)
+├── google-drive/      # Drive file operations (via gws CLI)
+├── obsidian/          # Obsidian vault search (via obsidian CLI)
+├── weather/           # Weather lookups (wttr.in)
+└── broadcom/          # VMware / Broadcom knowledge base
 ```
 
-Each skill file follows this format:
+Each skill follows this format:
 
 ```markdown
 ---
 name: skill-name
-description: What this skill does (shown to the LLM for selection)
+description: When to use this skill (shown to the LLM for selection)
 ---
 
-Instructions, context, and examples that guide Herald's behavior
-when this skill is activated by the agent.
+Instructions, shell recipes, examples, and guardrails.
 ```
 
 Herald's `ReloadableSkillsTool` wraps the upstream `SkillsTool` with a `WatchService`-based filesystem watcher (`SkillsWatcher`) that triggers a 250ms debounced reload on any file change. The Herald Console also provides a web-based skills editor with live reload status via SSE.
+
+## Telegram Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/help` | Show all available commands |
+| `/status` | System status: uptime, model, active tools |
+| `/save [name]` | File the current conversation into long-term memory |
+| `/memory` | Pointer — memory is managed by the agent via long-term memory files |
+| `/debug` | Context size, memory count, tools count |
+| `/reset` | Clear conversation history (long-term memory preserved) |
+| `/model status` | Show current provider and model + daily token usage |
+| `/model <provider> <model>` | Switch model at runtime |
+| `/skills list` | Show all loaded skills |
+| `/skills reload` | Force reload skills from disk |
+| `/cron list` | List all cron jobs with schedules |
+| `/cron enable <name>` | Enable a cron job |
+| `/cron disable <name>` | Disable a cron job |
+| `/cron edit <name> schedule <expr>` | Update a cron schedule |
+| `/confirm <id> yes\|no` | Approve or deny a pending action |
 
 ## Architecture
 
@@ -125,29 +234,31 @@ flowchart LR
     B -->|TaskTool| D["Subagents<br/>(Research, Explore, Plan)"]
     B -->|MCP Client| E["Google Calendar<br/>Gmail"]
     B -->|JDBC| F[("SQLite<br/>~/.herald/herald.db")]
+    B -->|fs| M[("Memories dir<br/>MEMORY.md + pages")]
     G["Herald Console<br/>(Vue 3)"] -->|REST API| H["herald-ui<br/>(Spring Boot)"]
     H -->|read| F
+    H -->|read| M
     I["CLI"] -->|--agents| B
 ```
 
 Herald is a modular Spring Boot monorepo. One JAR (`herald-bot.jar`) does everything — what it does depends on what you configure:
 
-| Module | Role | Dependency |
+| Module | Role | Depends on |
 |--------|------|------------|
 | **herald-core** | Agentic loop, advisors, tools, AgentFactory, CLI runner | Spring AI |
-| **herald-persistence** | SQLite, memory, cron, persistence advisors | herald-core + JDBC |
+| **herald-persistence** | SQLite, memory advisors, cron, compaction | herald-core + JDBC |
 | **herald-telegram** | Telegram transport, commands, question handler | herald-core + herald-persistence |
-| **herald-bot** | Thin wiring: assembles all modules into one executable | All modules |
+| **herald-bot** | Thin wiring — assembles all modules into one executable | All modules |
 | **herald-ui** | Management console (REST API + Vue 3) | herald-persistence |
 
-| Configuration | What Herald Becomes |
+| Configuration | What Herald becomes |
 |---------------|-------------------|
 | `bot-token` + `db-path` | Personal assistant (Telegram + memory + cron) |
 | `db-path` only | Persistent agent without Telegram (REST API) |
 | `--agents=file.md` | Task agent (one-shot or REPL, no persistence) |
 | `--agents=file.md --prompt="..."` | Single-prompt execution, exits when done |
 
-## Data Flow
+### Data Flow
 
 ```mermaid
 sequenceDiagram
@@ -155,50 +266,50 @@ sequenceDiagram
     participant P as TelegramPoller
     participant A as ChatClient (Herald)
     participant Tools as Tools & Skills
+    participant Mem as Memory files
     participant DB as SQLite
 
     T->>P: Incoming message
     P->>P: Auth check (allowed_chat_id)
-    P->>A: User message + memory + history
-    A->>Tools: Tool calls (shell, memory, web, etc.)
+    P->>A: User message + MEMORY.md + hot.md + history
+    A->>Tools: Tool calls (shell, memory, web, subagents)
+    Tools->>Mem: MemoryCreate/StrReplace → auto-log to log.md
     Tools-->>A: Tool results
     A->>A: Loop until end_turn
-    A-->>P: Final response
+    A-->>P: Final response (streamed)
     P-->>T: Send reply
     A->>DB: Persist conversation history
 ```
 
 ## Getting Started
 
-This guide walks you through setting up Herald from scratch — from creating a Telegram bot to running your first conversation.
+This guide walks you through setting up the full Telegram + memory + cron experience.
 
-> **Brand new to Herald?** Start with the [Getting Started 101 guide](docs/getting-started-101.md) — it gets you to a working task agent in about ten minutes without Telegram, a database, or prior Spring/Java experience.
+> **Brand new to Herald?** Start with the [Getting Started 101 guide](docs/getting-started-101.md) — task agent in ten minutes, no Telegram, no DB, no Spring/Java experience required.
 
 ### Prerequisites
 
-Before you begin, make sure you have the following installed:
-
-| Requirement | Version | Check Command |
-|-------------|---------|---------------|
-| **macOS** | Any recent version | — |
+| Requirement | Version | Check |
+|-------------|---------|-------|
+| **macOS** | Any recent | — |
 | **Java JDK** | 21+ | `java -version` |
-| **Maven** | 3.9+ (or use included wrapper) | `./mvnw -version` |
+| **Maven** | 3.9+ (wrapper included) | `./mvnw -version` |
 | **Node.js** | 20+ | `node -v` |
 | **npm** | 10+ | `npm -v` |
 
 You will also need:
 
-- **Anthropic API Key** — sign up at [console.anthropic.com](https://console.anthropic.com)
-- **Telegram Bot Token** — create one via [@BotFather](https://t.me/BotFather) on Telegram
+- **Anthropic API key** — [console.anthropic.com](https://console.anthropic.com)
+- **Telegram bot token** — via [@BotFather](https://t.me/BotFather)
 
-### Step 1: Create a Telegram Bot
+### Step 1 — Create a Telegram bot
 
-1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
-2. Send `/newbot` and follow the prompts to name your bot
-3. Copy the **bot token** BotFather gives you (you'll need this later)
-4. Send a message to your new bot, then visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` to find your **chat ID** in the response JSON
+1. Open Telegram and message [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow the prompts
+3. Copy the **bot token** BotFather gives you
+4. Message your new bot, then visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` to find your **chat ID** in the response JSON
 
-### Step 2: Clone and Build
+### Step 2 — Clone and build
 
 ```bash
 git clone https://github.com/dbbaskette/herald.git
@@ -206,15 +317,15 @@ cd herald
 ./mvnw package -DskipTests
 ```
 
-This builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-bot`, and `herald-ui`.
+Builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-bot`, `herald-ui`.
 
-### Step 3: Configure Environment
+### Step 3 — Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the three required values:
+Fill in the three required values:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
@@ -222,78 +333,55 @@ HERALD_TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ```
 
-The `.env.example` file documents all optional variables (additional AI providers, Google Workspace, agent behavior, etc.). The `.env` file is gitignored so your secrets stay local.
+`.env.example` documents all optional variables. `.env` is gitignored.
 
-### Step 4: Run Herald
-
-**Using the run script** (recommended — auto-loads `.env`):
+### Step 4 — Run
 
 ```bash
 ./run.sh          # starts both bot + ui (default)
-./run.sh bot      # starts herald-bot only (port 8081)
-./run.sh ui       # starts herald-ui only (port 8080)
-./run.sh stop     # stops all herald services
+./run.sh bot      # bot only (port 8081)
+./run.sh ui       # ui only (port 8080)
+./run.sh stop     # stops all services
 ./run.sh build    # builds all modules
 ```
 
-**Or manually:**
+Send your bot a message on Telegram — you should get a response from Claude.
+
+**Sanity checks:**
+
+- `/status` — shows uptime, active model, active tools
+- `/help` — lists every command
+- "What can you do?" — free-text message gets a normal agent reply
+
+### Step 5 — Install as a macOS service (optional)
+
+To run 24/7 as a background `launchd` agent:
 
 ```bash
-source .env
-make dev
+make check-env   # verify required env vars
+make install     # build, install, start the service
 ```
 
-Herald will start polling Telegram for messages. Open your bot in Telegram and send a message — you should get a response from Claude.
-
-**Verify it's working:**
-
-- Send `/status` in Telegram to see system info
-- Send `/help` to see all available commands
-- Try a natural language message like "What can you do?"
-
-### Step 5: Install as a Service (Optional)
-
-To run Herald 24/7 as a background service:
+Manage it with:
 
 ```bash
-# Check that required env vars are set
-make check-env
-
-# Build, install, and start the launchd service
-make install
+make start | stop | restart | logs | uninstall
 ```
 
-This installs Herald as a macOS `launchd` agent that starts automatically on login.
+Logs land in `~/Library/Logs/herald.log`.
 
-Manage the service with:
-
-```bash
-make start       # Start the service
-make stop        # Stop the service
-make restart     # Restart the service
-make logs        # Tail the log file
-make uninstall   # Remove the service
-```
-
-Logs are written to `~/Library/Logs/herald.log`.
-
-### Step 6: Set Up the Management Console (Optional)
-
-The Herald Console provides a web UI for managing skills, memory, cron jobs, and viewing conversation history:
+### Step 6 — Start the console (optional)
 
 ```bash
-# Build the Vue 3 frontend
 cd herald-ui/frontend && npm install && npm run build && cd ../..
-
-# Run the console
 ./mvnw -pl herald-ui spring-boot:run
 ```
 
-Open [http://localhost:8080](http://localhost:8080) in your browser.
+Then open [http://localhost:8080](http://localhost:8080).
 
-### Step 7: Add Google Workspace Integration (Optional)
+### Step 7 — Google Workspace (optional)
 
-Herald supports Gmail and Google Calendar via the [Google Workspace CLI (`gws`)](https://www.npmjs.com/package/@googleworkspace/cli). See **[docs/gws-setup.md](docs/gws-setup.md)** for installation and authentication instructions.
+Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup.md](docs/gws-setup.md).
 
 ## Environment Variables
 
@@ -367,69 +455,13 @@ The only required env var is `ANTHROPIC_API_KEY` (or the key for whichever provi
 | `herald.telegram.bot-token` | Adds Telegram transport |
 | Both | Full personal assistant mode |
 
-See `examples/` for ready-to-use agent definitions.
-
-## Telegram Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show all available commands |
-| `/status` | System status: uptime, model, MCP connections |
-| `/memory` | Memory info — managed by the agent via long-term memory files |
-| `/skills list` | Show all loaded skills |
-| `/skills reload` | Force reload skills from disk |
-| `/cron list` | List all cron jobs with schedules |
-| `/cron enable/disable <name>` | Toggle a cron job |
-| `/model <provider> <model>` | Switch model at runtime |
-| `/model status` | Show current provider and model |
-| `/debug` | Context size, memory count, tools count |
-| `/reset` | Clear conversation history (not memory) |
-
-## Project Structure
-
-```
-herald/
-├── pom.xml                          # Parent POM — Spring AI BOM, 6 modules
-├── Makefile                         # Build, install, service management
-├── herald-core/                     # Agentic loop foundation (zero persistence deps)
-│   └── src/main/java/com/herald/
-│       ├── agent/                   # AgentFactory, AgentService, ModelSwitcher
-│       │   ├── profile/             # AgentProfile record, AgentProfileParser
-│       │   └── subagent/            # HeraldSubagentReferences
-│       ├── tools/                   # FileSystemTools, WebTools, ShellSecurityConfig
-│       └── config/                  # HeraldConfig, ModelProviderConfig
-├── herald-persistence/              # SQLite, cron, persistence advisors
-│   └── src/main/java/com/herald/
-│       ├── cron/                    # CronService, CronTools, BriefingJob
-│       ├── agent/                   # Persistence advisors, AgentMetrics
-│       ├── tools/                   # HeraldShellDecorator, GwsTools
-│       └── config/                  # DataSourceConfig, JsonChatMemoryRepository
-├── herald-telegram/                 # Telegram transport
-│   └── src/main/java/com/herald/
-│       ├── telegram/                # Poller, sender, commands, question handler
-│       └── tools/                   # TelegramSendTool
-├── herald-bot/                      # Thin wiring module — the single executable JAR
-│   └── src/main/java/com/herald/
-│       ├── HeraldApplication.java   # Spring Boot entry point
-│       ├── agent/                   # HeraldAgentConfig (wiring)
-│       └── api/                     # ChatController, ModelController
-├── herald-ui/                       # Management console
-│   ├── src/main/java/com/herald/ui/ # REST controllers, SSE
-│   └── frontend/                    # Vue 3 + Vite
-├── examples/                        # Example agents.md files
-├── skills/                          # Reloadable skill definitions
-├── .claude/agents/                  # Custom subagent definitions
-└── docs/
-    ├── agents-md-spec.md            # agents.md format specification
-    ├── herald-patterns-comparison.md
-    └── gws-setup.md
-```
+See [`examples/`](examples/) for ready-to-use agent definitions (`cf-analyzer.md`, `code-reviewer.md`, `csv-reporter.md`, `report-writer.md`) and [`docs/agents-md-spec.md`](docs/agents-md-spec.md) for the full format.
 
 ## Agentic Patterns — Spring AI Agent Utils
 
-Herald is a reference implementation of the architectural patterns described in the [Spring AI Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) blog series by Christian Tzolov. The series documents the [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils) toolkit — a set of composable building blocks for AI agents, inspired by Claude Code's architecture. Herald adopts all seven patterns, adapting each for a Telegram-native, always-on personal assistant.
+Herald is a reference implementation of the architectural patterns in the [Spring AI Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) blog series by Christian Tzolov. The series documents the [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils) toolkit — composable building blocks for AI agents, inspired by Claude Code's architecture. Herald adopts all seven patterns, adapting each for a Telegram-native, always-on personal assistant.
 
-### Blog Series: Spring AI Agentic Patterns
+### Blog Series
 
 1. **Part 1**: [Agent Skills — Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/)
 2. **Part 2**: [AskUserQuestionTool — Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/)
@@ -439,16 +471,16 @@ Herald is a reference implementation of the architectural patterns described in 
 6. **Part 6**: [AutoMemoryTools — Persistent Agent Memory Across Sessions](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/)
 7. **Part 7**: [Session API — Event-Sourced Short-Term Memory with Context Compaction](https://spring.io/blog/2026/04/15/spring-ai-session-management/)
 
-|> **Deep dive:** See **[docs/herald-patterns-comparison.md](docs/herald-patterns-comparison.md)** for a feature-by-feature comparison of every blog pattern against Herald's implementation, including what's adopted, what's customized, and what's planned.
+> **Deep dive:** See [docs/herald-patterns-comparison.md](docs/herald-patterns-comparison.md) for a feature-by-feature comparison of every blog pattern against Herald's implementation.
 
 ### The Pattern
 
-The core idea is that truly agentic behavior emerges from composition — not from a single monolithic prompt, but from a set of small, focused tools and advisors that the LLM orchestrates through its tool-calling loop:
+Truly agentic behavior emerges from composition — not a single monolithic prompt, but a set of small, focused tools and advisors the LLM orchestrates through its tool-calling loop:
 
 ```mermaid
 flowchart TB
     subgraph Agent Loop
-        A["ChatClient.prompt()"] --> B["Advisor Chain<br/>(DateTime → Context → MEMORY.md → History)"]
+        A["ChatClient.prompt()"] --> B["Advisor Chain<br/>(DateTime → Context → HotMd → AutoMemory → Compaction)"]
         B --> C["LLM Call"]
         C --> D{Tool calls?}
         D -->|yes| E["Execute Tools"]
@@ -457,12 +489,12 @@ flowchart TB
     end
 
     subgraph Tools
-        G["SkillsTool"]
+        G["SkillsTool (hot-reload)"]
         H["TaskTool / TaskOutputTool"]
         I["AskUserQuestionTool"]
         J["TodoWriteTool"]
         K["Shell / FileSystem / Web"]
-        L["AutoMemoryTools"]
+        L["AutoMemoryTools (logged)"]
     end
 
     E --> Tools
@@ -472,35 +504,103 @@ flowchart TB
 
 | Pattern | Blog Post | Status | Herald Implementation |
 |---------|-----------|--------|----------------------|
-| **Agent Skills** | [Part 1: Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | ✅ + ↗ | `ReloadableSkillsTool` wraps upstream `SkillsTool` with hot-reload via `WatchService` — an intentional divergence since upstream has no live-reload support. Skills live in `skills/` as Markdown with YAML front matter. File changes trigger a 250ms debounced reload. |
-| **AskUserQuestion** | [Part 2: Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as Telegram inline keyboard buttons; multi-select and free-text use text messaging. Blocks on `CompletableFuture` with 5-minute timeout. |
-| **TodoWrite** | [Part 3: Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with structured states (`pending` → `in_progress` → `completed`). A `todoEventHandler` dispatches formatted progress directly to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
-| **Subagent Orchestration** | [Part 4: Subagent Orchestration](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus one custom **research** agent (Opus, deep analysis with web search) in `.claude/agents/`. |
-| **A2A Protocol** | [Part 5: Agent2Agent Interoperability](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Configure remote A2A agents under `herald.a2a.agents` in `herald.yaml`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — the agent card is fetched on first delegation. See the A2A agents section below for config shape. |
-| **AutoMemoryTools** | [Part 6: Persistent Agent Memory](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/) | ✅ | Upstream `AutoMemoryTools` (Option B — manual setup) with `MemoryMdAdvisor` injecting the `MEMORY.md` index each turn. Six sandboxed operations (View/Create/StrReplace/Insert/Delete/Rename) manage typed Markdown files with YAML frontmatter. Replaces the former SQLite hot memory + Obsidian cold memory with a single file-based system. |
-| **Session API** | [Part 7: Event-Sourced Short-Term Memory](https://spring.io/blog/2026/04/15/spring-ai-session-management/) | ⏳ | Targets Spring AI 2.1 (Nov 2026) where `ChatMemory` will be deprecated in favor of `SessionService` + `SessionMemoryAdvisor`. Herald currently uses a custom `OneShotMemoryAdvisor` + `ContextCompactionAdvisor` over `ChatMemory`/`MessageWindowChatMemory` with JDBC-backed SQLite persistence — functionally similar (windowed history + auto-compaction) but lacks turn-safe boundaries, pluggable compaction strategies, multi-agent branch isolation, and `conversation_search` recall. Migration tracked per sub-section in the comparison doc. |
+| **Agent Skills** | [Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | ✅ ↗ | `ReloadableSkillsTool` wraps upstream `SkillsTool` with a `WatchService`-based hot-reload (`SkillsWatcher`, 250ms debounce). Skills live in `skills/` as Markdown + YAML front matter. |
+| **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 5-minute timeout. |
+| **TodoWrite** | [Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with `pending → in_progress → completed` states. A `todoEventHandler` dispatches formatted progress to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
+| **Subagent Orchestration** | [Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model tier routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus a custom **research** agent (Opus, deep analysis + web search) in `.claude/agents/`. |
+| **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Remote A2A agents configured under `herald.a2a.agents`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — `AgentCard` fetched on first delegation. |
+| **AutoMemoryTools** | [Part 6](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/) | ✅ ↗ | Herald-owned `HeraldAutoMemoryAdvisor` replaces the upstream advisor and decorates each mutating `ToolCallback` so successful ops append to `log.md`. Extended taxonomy (`concept`, `entity`, `source`) beyond the blog's four types. `MEMORY.md` is a type-grouped catalog. Sibling `wiki-ingest` / `wiki-query` / `wiki-lint` skills close the compounding-knowledge loop. Optional `obsidian-vault` mode switches new pages to `[[wikilinks]]`. |
+| **Session API** | [Part 7](https://spring.io/blog/2026/04/15/spring-ai-session-management/) | ⏳ | Targets Spring AI 2.1 (Nov 2026). Today Herald uses `OneShotMemoryAdvisor` + `ContextCompactionAdvisor` over `ChatMemory`/`MessageWindowChatMemory` — functionally similar (windowed history + auto-compaction) but lacks turn-safe boundaries, pluggable compaction strategies, and `conversation_search`. Migration tracked in the comparison doc. |
 
 **Legend:** ✅ Adopted — ↗ Herald extension beyond upstream — ⏳ Planned
 
 ### Herald-Specific Extensions
 
-Beyond the five blog patterns, Herald adds capabilities specific to an always-on personal assistant:
+Beyond the seven blog patterns, Herald adds capabilities specific to an always-on personal assistant:
 
 | Extension | Description |
 |-----------|-------------|
-| **Advisor Chain** | 5-layer `CallAdvisor` chain: `DateTimePromptAdvisor` → `ContextMdAdvisor` (standing brief from `~/.herald/CONTEXT.md`) → `MemoryMdAdvisor` (long-term memory index from `MEMORY.md`) → `ContextCompactionAdvisor` (auto-compacts near token limits) → `OneShotMemoryAdvisor` (conversation history, fixes exponential growth bug in Spring AI's built-in advisor) |
-| **Proactive Scheduling** | `CronService` runs agent prompts on schedules — morning briefings, reminders, outreach without user input |
-| **Shell Security** | `HeraldShellDecorator` with regex blocklist, Telegram confirmation gate for `sudo`/system writes, sensitive value redaction, and configurable timeouts |
-| **Runtime Model Switching** | `/model` command switches between Anthropic, OpenAI, Ollama, and Gemini at runtime; persisted in `settings` table |
-| **Management Console** | Vue 3 web UI (`herald-ui`) for skills editing, memory, cron jobs, conversation history, and live status via SSE |
+| **Advisor chain** | Layered `CallAdvisor` pipeline: `DateTimePromptAdvisor` → `ContextMdAdvisor` (standing brief from `~/.herald/CONTEXT.md`) → `HotMdAdvisor` (session-continuity note) → `HeraldAutoMemoryAdvisor` (memory tools + MEMORY.md) → `ContextCompactionAdvisor` (compacts near token limits; writes summary to `log.md` + refreshes `hot.md`) → `OneShotMemoryAdvisor` (conversation history) |
+| **Compounding wiki skills** | `wiki-ingest` / `wiki-query` / `wiki-lint` turn the memories dir into a first-class knowledge base — ingest URLs/files/conversations, answer with citations, audit for orphans/staleness |
+| **/save command** | Files the current Telegram conversation into long-term memory as a wiki note, with slug hint support |
+| **Proactive scheduling** | `CronService` runs agent prompts on schedules — briefings, reminders, outreach with no user input |
+| **Shell security** | `HeraldShellDecorator` with regex blocklist, Telegram confirmation gate for `sudo`/system writes, sensitive-value redaction, configurable timeouts |
+| **Runtime model switching** | `/model` command switches between Anthropic, OpenAI, Ollama, Gemini, LM Studio at runtime; persisted in the `settings` table |
+| **Management console** | Vue 3 web UI for skills editing, file-based memory browsing grouped by type, cron jobs, conversation history, live status via SSE |
 | **Google Workspace** | Gmail and Calendar via `gws` CLI |
+| **Multi-tier model routing** | Haiku / Sonnet / Opus tiers configured per subagent type so cheap work uses cheap models |
 
 ### Tool Registration Architecture
 
 Herald separates tools into two categories matching how Spring AI handles them:
 
-- **`@Tool`-annotated POJOs** (via `.defaultTools()`) — `AutoMemoryTools` (upstream), `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool` (upstream), `TodoWriteTool` (upstream), `CronTools`, `GwsTools`, `TelegramSendTool`
-- **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool` from spring-ai-agent-utils
+- **`@Tool`-annotated POJOs** (via `.defaultTools()`) — `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool` (upstream), `TodoWriteTool` (upstream), `CronTools`, `GwsTools`, `TelegramSendTool`
+- **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool`, and the logging-decorated memory callbacks from `HeraldAutoMemoryAdvisor`
+
+## A2A Agents (remote subagents)
+
+Herald can delegate to remote A2A-compliant agents alongside its local subagents. Declare each remote agent under `herald.a2a.agents` in `herald.yaml`:
+
+```yaml
+herald:
+  a2a:
+    agents:
+      - name: airbnb-agent
+        url: http://localhost:10001/airbnb
+        metadata:
+          authorization: "Bearer some-token"
+      - name: weather-agent
+        url: http://localhost:10002/weather
+```
+
+- `name` is a local label used in startup logs. The real display name comes from the resolved `AgentCard`.
+- `metadata` is an optional map passed verbatim to the underlying `SubagentReference`.
+- Resolution is **lazy** — Herald does not fetch `/.well-known/agent-card.json` at startup. A misconfigured or unreachable URL surfaces only on the first delegation to that agent.
+
+## Project Structure
+
+```
+herald/
+├── pom.xml                          # Parent POM — Spring AI BOM, 5 modules
+├── Makefile                         # Build, install, service management
+├── herald-core/                     # Agentic loop foundation (zero persistence deps)
+│   └── src/main/java/com/herald/
+│       ├── agent/                   # AgentFactory, AgentService, advisors, ModelSwitcher
+│       │   ├── profile/             # AgentProfile record, AgentProfileParser
+│       │   └── subagent/            # HeraldSubagentReferences
+│       ├── tools/                   # FileSystemTools, WebTools, ShellSecurityConfig
+│       └── config/                  # HeraldConfig, ModelProviderConfig
+├── herald-persistence/              # SQLite, memory advisors, cron
+│   └── src/main/java/com/herald/
+│       ├── agent/                   # HeraldAutoMemoryAdvisor, ContextCompactionAdvisor,
+│       │                            #   MemoryLogWriter, LoggingMemoryToolCallback
+│       ├── cron/                    # CronService, CronTools, BriefingJob
+│       ├── tools/                   # HeraldShellDecorator, GwsTools
+│       └── config/                  # DataSourceConfig, JsonChatMemoryRepository
+├── herald-telegram/                 # Telegram transport
+│   └── src/main/java/com/herald/
+│       ├── telegram/                # Poller, sender, CommandHandler, question handler
+│       └── tools/                   # TelegramSendTool
+├── herald-bot/                      # Thin wiring module — the executable JAR
+│   └── src/main/java/com/herald/
+│       ├── HeraldApplication.java   # Spring Boot entry point
+│       ├── agent/                   # HeraldAgentConfig (wiring)
+│       └── api/                     # ChatController, ModelController
+├── herald-ui/                       # Management console
+│   ├── src/main/java/com/herald/ui/ # REST controllers, FileMemoryController, SSE
+│   └── frontend/                    # Vue 3 + Vite + Tailwind
+├── examples/                        # Example agents.md files
+├── skills/                          # Reloadable skill definitions (see above)
+├── assets/
+│   ├── screenshots/                 # Console screenshots
+│   └── obsidian-snippets/           # Optional CSS + Bases dashboard (vault-mode only)
+├── .claude/agents/                  # Custom subagent definitions (research)
+└── docs/
+    ├── getting-started-101.md       # Ten-minute task-agent walkthrough
+    ├── agents-md-spec.md            # agents.md format specification
+    ├── herald-patterns-comparison.md
+    └── gws-setup.md
+```
 
 ## Technology Stack
 
@@ -516,7 +616,7 @@ Herald separates tools into two categories matching how Spring AI handles them:
 | Console Backend | Spring MVC + SSE |
 | Process Management | macOS launchd |
 
-## Database Schema
+### Database Schema
 
 ```mermaid
 erDiagram
@@ -572,50 +672,17 @@ erDiagram
     }
 ```
 
-## Build Phases
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 1 | Core Loop + Spring AI Foundation | Done |
-| 2 | Subagents + Multi-Provider | Done |
-| 3 | Skills & Memory | Done |
-| 4 | Proactive & MCP | Done |
-| 5 | Herald Console | Done |
-| **Dual-Mode Phase 1** | Extract Core Agent Loop | Done |
-| **Dual-Mode Phase 2** | Ephemeral Runtime (CLI) | Done |
-| **Dual-Mode Phase 3** | Maven Module Split (5 modules) | Done |
-| **Dual-Mode Phase 4** | agents.md Specification | Done |
-| 6 | Polish | Voice, vision, Docker sandbox, dark mode |
-
-## A2A agents (remote subagents)
-
-Herald can delegate to remote A2A-compliant agents alongside its local subagents. Declare each remote agent under `herald.a2a.agents` in `herald.yaml`:
-
-```yaml
-herald:
-  a2a:
-    agents:
-      - name: airbnb-agent
-        url: http://localhost:10001/airbnb
-        metadata:
-          authorization: "Bearer some-token"
-      - name: weather-agent
-        url: http://localhost:10002/weather
-```
-
-- `name` is a local label used in startup logs. The real display name comes from the resolved `AgentCard`.
-- `metadata` is an optional map passed verbatim to the underlying `SubagentReference`.
-- Resolution is **lazy**: Herald does not fetch `/.well-known/agent-card.json` at startup. A misconfigured or unreachable URL surfaces only on the first delegation to that agent.
-
 ## Contributing
 
-Contributions are welcome! To get started:
+Contributions welcome! To get started:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+Before submitting, please run `./mvnw verify` and make sure the test suite is green.
 
 ## License
 
