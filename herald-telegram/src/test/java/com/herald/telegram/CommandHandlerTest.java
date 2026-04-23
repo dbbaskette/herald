@@ -35,6 +35,8 @@ class CommandHandlerTest {
     private ReloadableSkillsTool reloadableSkillsTool;
     private ApprovalGate approvalGate;
     private AgentService agentService;
+    private com.herald.agent.ContextCompactionAdvisor compactionAdvisor;
+    private com.herald.agent.PromptDumpAdvisor promptDumpAdvisor;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -55,9 +57,12 @@ class CommandHandlerTest {
         approvalGate = mock(ApprovalGate.class);
         agentService = mock(AgentService.class);
         when(agentService.streamChat(anyString(), anyString())).thenReturn(Flux.empty());
+        compactionAdvisor = mock(com.herald.agent.ContextCompactionAdvisor.class);
+        promptDumpAdvisor = new com.herald.agent.PromptDumpAdvisor(false);
         handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
-                reloadableSkillsTool, agentService, 200_000, approvalGate);
+                reloadableSkillsTool, agentService, 200_000, approvalGate,
+                java.util.Optional.of(compactionAdvisor), promptDumpAdvisor);
     }
 
     // --- handle() routing ---
@@ -538,5 +543,116 @@ class CommandHandlerTest {
     void helpIncludesSaveCommand() {
         handler.handle("/help");
         verify(sender).sendMessage(argThat(msg -> msg.contains("/save")));
+    }
+
+    // --- /think (#307) ---
+
+    @Test
+    void thinkWithoutArgShowsUsage() {
+        handler.handle("/think");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void thinkStatusShowsCurrentTier() {
+        when(modelSwitcher.getThinkingTier())
+                .thenReturn(com.herald.agent.ModelSwitcher.ThinkingTier.OFF);
+        handler.handle("/think status");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("OFF") && msg.contains("budget")));
+    }
+
+    @Test
+    void thinkHighInvokesModelSwitcher() {
+        handler.handle("/think high");
+        verify(modelSwitcher).setThinkingTier(com.herald.agent.ModelSwitcher.ThinkingTier.HIGH);
+    }
+
+    @Test
+    void thinkOffInvokesModelSwitcher() {
+        handler.handle("/think off");
+        verify(modelSwitcher).setThinkingTier(com.herald.agent.ModelSwitcher.ThinkingTier.OFF);
+    }
+
+    @Test
+    void thinkUnknownTierRejects() {
+        handler.handle("/think ludicrous");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Unknown thinking tier")));
+        verify(modelSwitcher, never()).setThinkingTier(any());
+    }
+
+    @Test
+    void thinkNonAnthropicWarnsButProceeds() {
+        when(modelSwitcher.getActiveProvider()).thenReturn("openai");
+        handler.handle("/think high");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Anthropic-only")));
+        verify(modelSwitcher).setThinkingTier(com.herald.agent.ModelSwitcher.ThinkingTier.HIGH);
+    }
+
+    // --- /compact (#307) ---
+
+    @Test
+    void compactWithoutAdvisorReportsDisabled() {
+        // Rebuild handler with an empty compaction advisor Optional.
+        com.herald.telegram.CommandHandler noCompact = new CommandHandler(
+                cronService, chatMemory, sender, usageTracker, modelSwitcher,
+                List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
+                java.util.Optional.empty(), promptDumpAdvisor);
+
+        noCompact.handle("/compact");
+
+        verify(sender).sendMessage(argThat(msg -> msg.contains("persistence")));
+    }
+
+    @Test
+    void compactNowDelegatesToAdvisor() {
+        when(compactionAdvisor.forceCompact(anyString())).thenReturn("Compacted 10 → 5 messages.");
+        handler.handle("/compact");
+        verify(compactionAdvisor).forceCompact(anyString());
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Forced compaction")));
+    }
+
+    @Test
+    void compactStatusShowsMetrics() {
+        when(compactionAdvisor.getStatus(anyString()))
+                .thenReturn(new com.herald.agent.ContextCompactionAdvisor.CompactionStatus(
+                        42, 5000, 100_000, 80_000));
+        handler.handle("/compact status");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("Messages: 42") && msg.contains("5")));
+    }
+
+    // --- /trace (#307) ---
+
+    @Test
+    void traceWithoutArgShowsUsage() {
+        handler.handle("/trace");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Usage")));
+    }
+
+    @Test
+    void traceOnEnablesDumpAdvisor() {
+        handler.handle("/trace on");
+        assertThat(promptDumpAdvisor.isEnabled()).isTrue();
+    }
+
+    @Test
+    void traceOffDisablesDumpAdvisor() {
+        promptDumpAdvisor.setEnabled(true);
+        handler.handle("/trace off");
+        assertThat(promptDumpAdvisor.isEnabled()).isFalse();
+    }
+
+    @Test
+    void traceStatusReportsCurrentState() {
+        handler.handle("/trace status");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("trace")));
+    }
+
+    @Test
+    void helpIncludesOperatorCommands() {
+        handler.handle("/help");
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("/think") && msg.contains("/compact") && msg.contains("/trace")));
     }
 }

@@ -117,7 +117,8 @@ class HeraldAgentConfigTest {
     @Test
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
-                agentConfig.modelSwitcher(null, configWith(null, null), false,
+                agentConfig.modelSwitcher(null, configWith(null, null),
+                        Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                         Optional.empty(),
                         mock(com.herald.tools.HeraldShellDecorator.class),
                         new com.herald.tools.FileSystemTools(),

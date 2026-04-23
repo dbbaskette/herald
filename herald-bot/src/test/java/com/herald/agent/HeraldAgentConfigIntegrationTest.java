@@ -66,7 +66,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, false, Optional.of(chatMemory),
+                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -115,7 +115,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, false, Optional.of(chatMemory),
+                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -155,7 +155,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockAnthropicModel, config, false, Optional.of(chatMemory),
+                mockAnthropicModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -223,7 +223,7 @@ class HeraldAgentConfigIntegrationTest {
                 new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, false,
+                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                 Optional.empty(),  // chatMemory
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
@@ -260,7 +260,8 @@ class HeraldAgentConfigIntegrationTest {
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
-                mockModel, config, false);
+                mockModel, config,
+                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false));
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
         // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, ToolSearchToolCallAdvisor
@@ -280,7 +281,8 @@ class HeraldAgentConfigIntegrationTest {
         var advisors = agentConfig.buildAdvisorChain(
                 Optional.empty(), contextMdAdvisor, tempDir,
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
-                mockModel, config, false);
+                mockModel, config,
+                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false));
 
         assertThat(advisors)
                 .filteredOn(a -> a instanceof org.springaicommunity.tool.search.ToolSearchToolCallAdvisor)

@@ -27,7 +27,7 @@ import reactor.core.publisher.Flux;
  * to timestamped files under ~/.herald/prompt-dump/ for token analysis.
  * Only active when HERALD_PROMPT_DUMP=true.
  */
-class PromptDumpAdvisor implements CallAdvisor, StreamAdvisor {
+public class PromptDumpAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(PromptDumpAdvisor.class);
     private static final DateTimeFormatter FILE_FMT =
@@ -36,18 +36,46 @@ class PromptDumpAdvisor implements CallAdvisor, StreamAdvisor {
     private static final ThreadLocal<Boolean> DUMPED = ThreadLocal.withInitial(() -> false);
 
     private final Path dumpDir;
-    private final boolean enabled;
+    private volatile boolean enabled;
 
-    PromptDumpAdvisor(boolean enabled) {
+    public PromptDumpAdvisor(boolean enabled) {
         this.enabled = enabled;
         this.dumpDir = Path.of(System.getProperty("user.home"), ".herald", "prompt-dump");
         if (enabled) {
-            try {
-                Files.createDirectories(dumpDir);
-                log.info("Prompt dump enabled — writing to {}", dumpDir);
-            } catch (IOException e) {
-                log.warn("Failed to create prompt dump directory: {}", e.getMessage());
-            }
+            ensureDumpDir();
+        }
+    }
+
+    /**
+     * Toggle runtime tracing. When turned on outside of startup, creates the
+     * dump directory lazily so the {@code /trace on} command works without
+     * requiring {@code HERALD_PROMPT_DUMP=true} at boot. See issue #307.
+     */
+    public void setEnabled(boolean enabled) {
+        boolean wasEnabled = this.enabled;
+        this.enabled = enabled;
+        if (enabled && !wasEnabled) {
+            ensureDumpDir();
+            log.info("Prompt dump enabled at runtime — writing to {}", dumpDir);
+        } else if (!enabled && wasEnabled) {
+            log.info("Prompt dump disabled");
+        }
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public Path getDumpDir() {
+        return dumpDir;
+    }
+
+    private void ensureDumpDir() {
+        try {
+            Files.createDirectories(dumpDir);
+            log.info("Prompt dump directory ready at {}", dumpDir);
+        } catch (IOException e) {
+            log.warn("Failed to create prompt dump directory: {}", e.getMessage());
         }
     }
 

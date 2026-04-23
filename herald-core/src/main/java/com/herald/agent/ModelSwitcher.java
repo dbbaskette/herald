@@ -34,6 +34,33 @@ public class ModelSwitcher {
     private volatile ChatClient activeClient;
     private volatile String activeProvider;
     private volatile String activeModel;
+    private volatile ThinkingTier thinkingTier = ThinkingTier.OFF;
+
+    /**
+     * Extended-thinking budget tier applied to Anthropic models on each turn.
+     * Set via the {@code /think} Telegram command or {@link #setThinkingTier(ThinkingTier)}.
+     * See issue #307.
+     */
+    public enum ThinkingTier {
+        /** Thinking disabled — default. */
+        OFF(0),
+        /** Low budget — short, simple reasoning. */
+        LOW(1024),
+        /** Medium budget — balanced cost / depth. */
+        MEDIUM(4096),
+        /** High budget — deep analysis. */
+        HIGH(16384);
+
+        private final long budgetTokens;
+
+        ThinkingTier(long budgetTokens) {
+            this.budgetTokens = budgetTokens;
+        }
+
+        public long budgetTokens() {
+            return budgetTokens;
+        }
+    }
 
     ModelSwitcher(Map<String, ChatModel> availableModels,
                   Map<String, String> providerDefaultModels,
@@ -94,17 +121,48 @@ public class ModelSwitcher {
                     + "Available providers: " + availableModels.keySet());
         }
 
-        var options = chatOptionsForModel(chatModel, model, anthropicSkills);
+        rebuildClient(chatModel, provider, model);
+        persistOverride(provider, model);
+        log.info("Switched main agent to {}/{}", provider, model);
+    }
+
+    /**
+     * Set the extended-thinking budget tier for subsequent turns. Rebuilds the
+     * active {@link ChatClient} with the new thinking options. A no-op when
+     * the active provider isn't Anthropic — thinking-budget is Anthropic-only.
+     */
+    public void setThinkingTier(ThinkingTier tier) {
+        if (tier == null) {
+            tier = ThinkingTier.OFF;
+        }
+        this.thinkingTier = tier;
+        ChatModel chatModel = availableModels.get(activeProvider);
+        if (chatModel != null) {
+            rebuildClient(chatModel, activeProvider, activeModel);
+        }
+        log.info("Set thinking tier to {} (budget={} tokens)", tier, tier.budgetTokens());
+    }
+
+    public ThinkingTier getThinkingTier() {
+        return thinkingTier;
+    }
+
+    private void rebuildClient(ChatModel chatModel, String provider, String model) {
+        var builder = chatOptionsForModel(chatModel, model, anthropicSkills);
+        if (builder instanceof org.springframework.ai.anthropic.AnthropicChatOptions.Builder anthropicBuilder) {
+            if (thinkingTier == ThinkingTier.OFF) {
+                anthropicBuilder.thinkingDisabled();
+            } else {
+                anthropicBuilder.thinkingEnabled(thinkingTier.budgetTokens());
+            }
+        }
         ChatClient newClient = clientBuilderFactory.apply(chatModel)
-                .defaultOptions(options)
+                .defaultOptions(builder)
                 .build();
 
         this.activeClient = newClient;
         this.activeProvider = provider;
         this.activeModel = model;
-
-        persistOverride(provider, model);
-        log.info("Switched main agent to {}/{}", provider, model);
     }
 
     public ChatClient getActiveClient() {

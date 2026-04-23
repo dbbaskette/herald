@@ -36,7 +36,7 @@ import java.util.Map;
  * <p>Must run before {@code OneShotMemoryAdvisor} so that compaction happens
  * before history is loaded into the prompt.</p>
  */
-class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
+public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(ContextCompactionAdvisor.class);
     static final double CEILING_RATIO = 0.8;
@@ -127,6 +127,49 @@ class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
         }
         return text.length() / CHARS_PER_TOKEN;
     }
+
+    /**
+     * Force a compaction run on the given conversation, bypassing the token-ceiling
+     * check. Useful for the {@code /compact} slash command (#307) when the user
+     * wants to summarize without waiting for the 80% threshold.
+     *
+     * @return a short human-readable report describing what happened
+     */
+    public String forceCompact(String conversationId) {
+        List<Message> history = chatMemory.get(conversationId);
+        if (history == null || history.isEmpty()) {
+            return "No conversation history to compact.";
+        }
+        int before = estimateTokens(history);
+        int msgsBefore = history.size();
+        // Drive the target down so the loop always removes at least the oldest
+        // half. Keeps compaction useful even well under the token ceiling.
+        int target = Math.max(0, before / 2);
+        compactHistory(conversationId, history, target);
+        List<Message> after = chatMemory.get(conversationId);
+        int tokensAfter = estimateTokens(after);
+        return String.format("Compacted %d → %d messages (~%d → %d tokens).",
+                msgsBefore, after == null ? 0 : after.size(), before, tokensAfter);
+    }
+
+    /**
+     * Current token usage estimate and the ceiling that would trigger automatic
+     * compaction. Returned in a small record for the {@code /compact status}
+     * command.
+     */
+    public CompactionStatus getStatus(String conversationId) {
+        List<Message> history = chatMemory.get(conversationId);
+        int tokens = estimateTokens(history);
+        int ceiling = (int) (maxContextTokens * CEILING_RATIO);
+        return new CompactionStatus(
+                history == null ? 0 : history.size(),
+                tokens,
+                maxContextTokens,
+                ceiling);
+    }
+
+    public record CompactionStatus(int messageCount, int estimatedTokens,
+                                   int maxContextTokens, int ceilingTokens) {}
 
     int getMaxContextTokens() {
         return maxContextTokens;
