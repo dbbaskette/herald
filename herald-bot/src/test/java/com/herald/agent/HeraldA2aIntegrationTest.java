@@ -96,7 +96,7 @@ class HeraldA2aIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, false, Optional.of(chatMemory),
+                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),

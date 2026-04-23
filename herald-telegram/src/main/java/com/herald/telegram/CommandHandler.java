@@ -2,7 +2,9 @@ package com.herald.telegram;
 
 import com.herald.agent.AgentService;
 import com.herald.agent.ApprovalGate;
+import com.herald.agent.ContextCompactionAdvisor;
 import com.herald.agent.ModelSwitcher;
+import com.herald.agent.PromptDumpAdvisor;
 import com.herald.agent.UsageTracker;
 import com.herald.cron.CronJob;
 import com.herald.cron.CronService;
@@ -39,6 +41,8 @@ public class CommandHandler {
     private final int activeToolsCount;
     private final int maxContextTokens;
     private final ApprovalGate approvalGate;
+    private final java.util.Optional<ContextCompactionAdvisor> compactionAdvisor;
+    private final PromptDumpAdvisor promptDumpAdvisor;
 
     public CommandHandler(CronService cronService, ChatMemory chatMemory,
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
@@ -46,7 +50,9 @@ public class CommandHandler {
                           ReloadableSkillsTool reloadableSkillsTool,
                           AgentService agentService,
                           @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens,
-                          ApprovalGate approvalGate) {
+                          ApprovalGate approvalGate,
+                          java.util.Optional<ContextCompactionAdvisor> compactionAdvisor,
+                          PromptDumpAdvisor promptDumpAdvisor) {
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -57,6 +63,8 @@ public class CommandHandler {
         this.activeToolsCount = activeToolNames.size();
         this.maxContextTokens = maxContextTokens;
         this.approvalGate = approvalGate;
+        this.compactionAdvisor = compactionAdvisor;
+        this.promptDumpAdvisor = promptDumpAdvisor;
     }
 
     boolean handle(String text) {
@@ -78,6 +86,9 @@ public class CommandHandler {
             case "/cron" -> handleCron(parts);
             case "/confirm" -> handleConfirm(parts);
             case "/save" -> handleSave(text);
+            case "/think" -> handleThink(parts);
+            case "/compact" -> handleCompact(parts);
+            case "/trace" -> handleTrace(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -103,6 +114,9 @@ public class CommandHandler {
                 /skills reload — Reload skills from disk
                 /confirm <id> yes|no — Approve or deny a pending action
                 /save [name] — File this conversation into long-term memory (wiki-ingest)
+                /think low|medium|high|off — Set extended-thinking budget (Anthropic only)
+                /compact [now|status] — Force-compact conversation history
+                /trace on|off|status — Toggle prompt-dump tracing
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
@@ -363,6 +377,93 @@ public class CommandHandler {
                 .append("automatically records each memory mutation in `log.md`, so you don't ")
                 .append("need to write log entries yourself.");
         return sb.toString();
+    }
+
+    private void handleThink(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /think low|medium|high|off | /think status");
+            return;
+        }
+        String arg = parts[1].toLowerCase();
+        if ("status".equals(arg)) {
+            var tier = modelSwitcher.getThinkingTier();
+            sender.sendMessage(String.format(
+                    "Thinking tier: *%s* (budget: %d tokens). Active provider: %s.",
+                    tier.name(), tier.budgetTokens(), modelSwitcher.getActiveProvider()));
+            return;
+        }
+        ModelSwitcher.ThinkingTier tier;
+        try {
+            tier = ModelSwitcher.ThinkingTier.valueOf(arg.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage("Unknown thinking tier: " + parts[1]
+                    + "\nValid: low | medium | high | off | status");
+            return;
+        }
+        if (!"anthropic".equals(modelSwitcher.getActiveProvider()) && tier != ModelSwitcher.ThinkingTier.OFF) {
+            sender.sendMessage("Thinking budget is Anthropic-only. Current provider: "
+                    + modelSwitcher.getActiveProvider() + ". Setting anyway; it takes effect on Anthropic turns.");
+        }
+        modelSwitcher.setThinkingTier(tier);
+        sender.sendMessage(String.format(
+                "Thinking tier set to *%s* (budget: %d tokens).",
+                tier.name(), tier.budgetTokens()));
+    }
+
+    private void handleCompact(String[] parts) {
+        String sub = parts.length >= 2 ? parts[1].toLowerCase() : "now";
+        if (compactionAdvisor.isEmpty()) {
+            sender.sendMessage("Compaction is only available when persistence is enabled "
+                    + "(set `herald.memory.db-path`).");
+            return;
+        }
+        ContextCompactionAdvisor advisor = compactionAdvisor.get();
+        String convo = AgentService.DEFAULT_CONVERSATION_ID;
+        if ("status".equals(sub)) {
+            var status = advisor.getStatus(convo);
+            sender.sendMessage(String.format(
+                    "*Compaction Status*\n\n"
+                            + "Messages: %d\n"
+                            + "Estimated tokens: ~%s (%d%% of %s limit)\n"
+                            + "Auto-compact ceiling: ~%s tokens (80%% of limit)",
+                    status.messageCount(),
+                    formatTokens(status.estimatedTokens()),
+                    status.maxContextTokens() > 0
+                            ? (status.estimatedTokens() * 100) / status.maxContextTokens()
+                            : 0,
+                    formatTokens(status.maxContextTokens()),
+                    formatTokens(status.ceilingTokens())));
+            return;
+        }
+        if (!"now".equals(sub)) {
+            sender.sendMessage("Usage: /compact [now | status]");
+            return;
+        }
+        String report = advisor.forceCompact(convo);
+        sender.sendMessage("Forced compaction — " + report);
+    }
+
+    private void handleTrace(String[] parts) {
+        if (parts.length < 2) {
+            sender.sendMessage("Usage: /trace on | off | status");
+            return;
+        }
+        String arg = parts[1].toLowerCase();
+        switch (arg) {
+            case "on" -> {
+                promptDumpAdvisor.setEnabled(true);
+                sender.sendMessage("Prompt trace enabled. Dumps → `"
+                        + promptDumpAdvisor.getDumpDir() + "`");
+            }
+            case "off" -> {
+                promptDumpAdvisor.setEnabled(false);
+                sender.sendMessage("Prompt trace disabled.");
+            }
+            case "status" -> sender.sendMessage(
+                    "Prompt trace: *" + (promptDumpAdvisor.isEnabled() ? "on" : "off")
+                            + "*. Dump directory: `" + promptDumpAdvisor.getDumpDir() + "`");
+            default -> sender.sendMessage("Usage: /trace on | off | status");
+        }
     }
 
     private void handleModelSwitch(String provider, String model) {

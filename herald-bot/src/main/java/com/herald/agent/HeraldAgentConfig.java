@@ -83,6 +83,23 @@ public class HeraldAgentConfig {
     private static final int MAX_CONVERSATION_MESSAGES = 20;
 
     @Bean
+    @ConditionalOnBean(ChatMemory.class)
+    public ContextCompactionAdvisor contextCompactionAdvisor(
+            ChatMemory chatMemory,
+            @Qualifier("anthropicChatModel") ChatModel chatModel,
+            HeraldConfig config) {
+        Path memoriesDir = resolveTildePath(config.memoriesDir());
+        return new ContextCompactionAdvisor(chatMemory, chatModel, config.maxContextTokens(),
+                memoriesDir.resolve("log.md"), memoriesDir.resolve("hot.md"));
+    }
+
+    @Bean
+    public PromptDumpAdvisor promptDumpAdvisor(
+            @Value("${herald.agent.prompt-dump:false}") boolean promptDump) {
+        return new PromptDumpAdvisor(promptDump);
+    }
+
+    @Bean
     public TaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(4);
@@ -153,7 +170,8 @@ public class HeraldAgentConfig {
     public ModelSwitcher modelSwitcher(
             @Qualifier("anthropicChatModel") ChatModel chatModel,
             HeraldConfig config,
-            @Value("${herald.agent.prompt-dump:false}") boolean promptDump,
+            Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
+            PromptDumpAdvisor promptDumpAdvisor,
             Optional<ChatMemory> chatMemoryOpt,
             HeraldShellDecorator shellDecorator,
             FileSystemTools fsTools,
@@ -334,7 +352,7 @@ public class HeraldAgentConfig {
         // Build advisor chain and tool list dynamically based on available beans
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
                 contextMdAdvisor, memoriesDir, memoryLogPath, hotMdPath,
-                chatModel, config, promptDump);
+                chatModel, config, contextCompactionAdvisorOpt, promptDumpAdvisor);
 
         var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt,
@@ -403,7 +421,8 @@ public class HeraldAgentConfig {
             Path hotMdPath,
             ChatModel chatModel,
             HeraldConfig config,
-            boolean promptDump) {
+            Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
+            PromptDumpAdvisor promptDumpAdvisor) {
 
         List<Advisor> advisors = new ArrayList<>();
 
@@ -424,14 +443,16 @@ public class HeraldAgentConfig {
 
         if (chatMemoryOpt.isPresent()) {
             ChatMemory chatMemory = chatMemoryOpt.get();
-            advisors.add(new ContextCompactionAdvisor(
-                    chatMemory, chatModel, config.maxContextTokens(),
-                    memoryLogPath, hotMdPath));
+            // Use the injected bean when available (persistence enabled); fall back
+            // to an inline instance for task-mode runs without a ChatMemory bean.
+            advisors.add(contextCompactionAdvisorOpt.orElseGet(() ->
+                    new ContextCompactionAdvisor(chatMemory, chatModel, config.maxContextTokens(),
+                            memoryLogPath, hotMdPath)));
             advisors.add(new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES));
         }
 
         // Conditional on property (not persistence)
-        advisors.add(new PromptDumpAdvisor(promptDump));
+        advisors.add(promptDumpAdvisor);
 
         // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — indexes all registered
         // tools via LuceneToolSearcher and exposes a toolSearchTool for on-demand
