@@ -6,6 +6,8 @@
 
 **A hackable AI agent that works two ways — a Telegram-native personal assistant that learns over time, or a single-shot task runner that exits when it's done.** Same JAR, same agent loop, same tool system. What changes is what you plug in.
 
+> Need the "why bother" pitch first? → [**Why Run Herald**](docs/why-herald.md)
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
