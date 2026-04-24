@@ -5,6 +5,7 @@ import com.herald.agent.ApprovalGate;
 import com.herald.agent.ContextCompactionAdvisor;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.PromptDumpAdvisor;
+import com.herald.agent.RetrospectiveService;
 import com.herald.agent.UsageTracker;
 import com.herald.cron.CronJob;
 import com.herald.cron.CronService;
@@ -43,6 +44,7 @@ public class CommandHandler {
     private final ApprovalGate approvalGate;
     private final java.util.Optional<ContextCompactionAdvisor> compactionAdvisor;
     private final PromptDumpAdvisor promptDumpAdvisor;
+    private final java.util.Optional<RetrospectiveService> retrospectiveService;
 
     public CommandHandler(CronService cronService, ChatMemory chatMemory,
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
@@ -52,7 +54,8 @@ public class CommandHandler {
                           @Value("${herald.agent.max-context-tokens:200000}") int maxContextTokens,
                           ApprovalGate approvalGate,
                           java.util.Optional<ContextCompactionAdvisor> compactionAdvisor,
-                          PromptDumpAdvisor promptDumpAdvisor) {
+                          PromptDumpAdvisor promptDumpAdvisor,
+                          java.util.Optional<RetrospectiveService> retrospectiveService) {
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -65,6 +68,7 @@ public class CommandHandler {
         this.approvalGate = approvalGate;
         this.compactionAdvisor = compactionAdvisor;
         this.promptDumpAdvisor = promptDumpAdvisor;
+        this.retrospectiveService = retrospectiveService;
     }
 
     boolean handle(String text) {
@@ -89,6 +93,7 @@ public class CommandHandler {
             case "/think" -> handleThink(parts);
             case "/compact" -> handleCompact(parts);
             case "/trace" -> handleTrace(parts);
+            case "/why" -> handleWhy();
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -117,6 +122,7 @@ public class CommandHandler {
                 /think low|medium|high|off — Set extended-thinking budget (Anthropic only)
                 /compact [now|status] — Force-compact conversation history
                 /trace on|off|status — Toggle prompt-dump tracing
+                /why — Explain the agent's reasoning for the previous turn
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
@@ -463,6 +469,23 @@ public class CommandHandler {
                     "Prompt trace: *" + (promptDumpAdvisor.isEnabled() ? "on" : "off")
                             + "*. Dump directory: `" + promptDumpAdvisor.getDumpDir() + "`");
             default -> sender.sendMessage("Usage: /trace on | off | status");
+        }
+    }
+
+    private void handleWhy() {
+        if (retrospectiveService.isEmpty()) {
+            sender.sendMessage("/why requires persistence — set `herald.memory.db-path` "
+                    + "and restart.");
+            return;
+        }
+        sender.sendTypingAction();
+        try {
+            sender.sendStreamingMessage(
+                    retrospectiveService.get()
+                            .explainLastTurn(AgentService.DEFAULT_CONVERSATION_ID));
+        } catch (Exception e) {
+            log.error("/why failed: {}", e.getMessage(), e);
+            sender.sendMessage("Sorry, couldn't generate the retrospective. Check the logs.");
         }
     }
 

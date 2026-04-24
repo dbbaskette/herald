@@ -186,6 +186,24 @@ public class ModelSwitcher {
     }
 
     /**
+     * Returns the ChatModel currently in use. Exposed for tools that need to
+     * build a one-off {@link ChatClient} with alternate options (e.g. the
+     * {@code /why} retrospective command raises thinking budget temporarily).
+     */
+    public ChatModel getActiveChatModel() {
+        return availableModels.get(activeProvider);
+    }
+
+    /**
+     * Returns a fresh {@link ChatClient.Builder} for the active chat model,
+     * pre-configured via the same factory that built the primary client.
+     * Callers can override options before calling {@code .build()}.
+     */
+    public ChatClient.Builder activeChatClientBuilder() {
+        return clientBuilderFactory.apply(getActiveChatModel());
+    }
+
+    /**
      * Replace the ChatModel for a provider (e.g. after an OAuth token refresh).
      * If this provider is currently active, the ChatClient is rebuilt automatically.
      */
