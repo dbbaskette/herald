@@ -40,13 +40,14 @@ public class TelegramPoller {
     private final String allowedChatId;
     private final TelegramSender sender;
     private final TelegramQuestionHandler questionHandler;
-    private final CommandHandler commandHandler;
+    private final SlashCommandDispatcher commandHandler;
     private final AgentService agentService;
     private final java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy;
     private int offset = 0;
 
     public TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
-                          TelegramQuestionHandler questionHandler, CommandHandler commandHandler,
+                          TelegramQuestionHandler questionHandler,
+                          SlashCommandDispatcher commandHandler,
                           AgentService agentService,
                           java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy) {
         this.bot = bot;
@@ -233,7 +234,9 @@ public class TelegramPoller {
             } else if (localPath != null) {
                 if (text.length() > 0) text.append("\n\n");
                 text.append(String.format(
-                        "[Voice message received (%d seconds) — saved to %s]",
+                        "[Voice message received (%d seconds) — install whisper "
+                                + "(`brew install whisper-cpp`, see the optional-deps skill) "
+                                + "for automatic transcription; file saved to %s]",
                         voice.duration(), localPath));
             } else {
                 if (text.length() > 0) text.append("\n\n");
@@ -266,8 +269,11 @@ public class TelegramPoller {
             text.append(String.format("[Document: %s]%n%s", document.fileName(), inlined));
         } else {
             if (text.length() > 0) text.append("\n\n");
-            text.append(String.format("[File received: %s (%s, %d bytes) — saved to %s]",
-                    document.fileName(), mime, document.fileSize(), localPath));
+            String hint = "application/pdf".equals(mime)
+                    ? " — install pdftotext (`brew install poppler`, see the optional-deps skill) for automatic text extraction"
+                    : "";
+            text.append(String.format("[File received: %s (%s, %d bytes)%s — saved to %s]",
+                    document.fileName(), mime, document.fileSize(), hint, localPath));
         }
         return new UserMessagePayload(text.toString(), List.of());
     }

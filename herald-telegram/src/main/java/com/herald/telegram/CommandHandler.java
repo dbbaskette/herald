@@ -27,7 +27,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Component
-public class CommandHandler {
+public class CommandHandler implements SlashCommandDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
@@ -75,7 +75,8 @@ public class CommandHandler {
         this.budgetPolicy = budgetPolicy;
     }
 
-    boolean handle(String text) {
+    @Override
+    public boolean handle(String text) {
         if (text == null || !text.startsWith("/")) {
             return false;
         }
