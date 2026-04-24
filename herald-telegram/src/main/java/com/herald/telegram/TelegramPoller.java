@@ -21,6 +21,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
@@ -111,13 +113,15 @@ public class TelegramPoller {
             return;
         }
 
-        // Build the text to send to the agent — may include file context
-        String text = buildMessageText(message);
+        // Build the text + any media attachments to send to the agent.
+        UserMessagePayload payload = buildMessagePayload(message);
+        String text = payload == null ? null : payload.text();
         if (text == null || text.isBlank()) {
             return;
         }
 
-        log.info("Received message from authorized chat: {}", text.substring(0, Math.min(text.length(), 80)));
+        log.info("Received message from authorized chat ({} attachments): {}",
+                payload.attachments().size(), text.substring(0, Math.min(text.length(), 80)));
 
         // Handle slash commands before anything else (only for pure text messages)
         if (message.text() != null && commandHandler.handle(message.text())) {
@@ -151,71 +155,248 @@ public class TelegramPoller {
         // Pass message to agent loop, streaming the response back
         try {
             sender.sendStreamingMessage(
-                    agentService.streamChat(text, com.herald.agent.AgentService.DEFAULT_CONVERSATION_ID));
+                    agentService.streamChat(text, payload.attachments(),
+                            com.herald.agent.AgentService.DEFAULT_CONVERSATION_ID));
         } catch (Exception e) {
             log.error("Agent loop error: {}", e.getMessage(), e);
             sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");
         }
     }
 
+    /** Payload record returned to the main dispatcher. */
+    record UserMessagePayload(String text, List<com.herald.agent.MediaAttachment> attachments) {}
+
+    /** Max file size accepted from Telegram. Tunable via {@code herald.telegram.media.max-file-size-mb}. */
+    private static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+
     /**
-     * Builds the text message to send to the agent. For plain text messages, returns
-     * the text directly. For file/photo/voice messages, downloads the file and returns
-     * a description with the local file path so the agent can access it.
+     * Builds the agent payload from a Telegram message. Photos become native
+     * multimodal attachments (Anthropic / OpenAI / Gemini vision), while
+     * voice + PDF + text documents are best-effort inlined or fall back to
+     * the legacy "file saved to ... " descriptor the agent can reach via
+     * shell tools. See issue #320.
      */
-    private String buildMessageText(Message message) {
+    UserMessagePayload buildMessagePayload(Message message) {
         String caption = message.caption();
 
         // Plain text message
         if (message.text() != null) {
-            return message.text();
+            return new UserMessagePayload(message.text(), List.of());
         }
 
-        // Document (PDF, spreadsheet, text file, etc.)
-        Document document = message.document();
-        if (document != null) {
-            Path localPath = downloadTelegramFile(document.fileId(), document.fileName());
-            if (localPath != null) {
-                String desc = String.format("[File received: %s (%s, %d bytes) — saved to %s]",
-                        document.fileName(), document.mimeType(), document.fileSize(), localPath);
-                return caption != null ? caption + "\n\n" + desc : desc;
-            }
-            return caption != null ? caption + "\n\n[File upload failed]" : null;
+        List<com.herald.agent.MediaAttachment> attachments = new java.util.ArrayList<>();
+        StringBuilder text = new StringBuilder();
+        if (caption != null && !caption.isBlank()) {
+            text.append(caption);
         }
 
-        // Photo (sent as image, not as file)
+        // Photo — native multimodal attachment for vision-capable providers.
         PhotoSize[] photos = message.photo();
         if (photos != null && photos.length > 0) {
-            // Use the largest photo (last in array)
             PhotoSize largest = photos[photos.length - 1];
-            Path localPath = downloadTelegramFile(largest.fileId(), "photo_" + largest.fileId() + ".jpg");
-            if (localPath != null) {
-                String desc = String.format("[Photo received (%dx%d) — saved to %s]",
-                        largest.width(), largest.height(), localPath);
-                return caption != null ? caption + "\n\n" + desc : desc;
+            FetchedFile fetched = fetchBytes(largest.fileId(),
+                    "photo_" + largest.fileId() + ".jpg");
+            if (fetched != null) {
+                attachments.add(new com.herald.agent.MediaAttachment(
+                        "image/jpeg", fetched.bytes(),
+                        String.format("photo %dx%d", largest.width(), largest.height())));
+                if (text.length() == 0) {
+                    text.append("[Photo attached]");
+                }
+                return new UserMessagePayload(text.toString(), attachments);
             }
-            return caption != null ? caption + "\n\n[Photo upload failed]" : null;
+            return new UserMessagePayload(
+                    text.length() == 0 ? "[Photo upload failed]"
+                            : text.toString() + "\n\n[Photo upload failed]",
+                    List.of());
         }
 
-        // Voice message
+        // Document — inline text for small text/* and PDF (if extractable),
+        // otherwise fall back to the legacy "saved to ... " descriptor.
+        Document document = message.document();
+        if (document != null) {
+            return buildDocumentPayload(document, caption);
+        }
+
+        // Voice — transcribe locally if the helper is available; otherwise
+        // fall back to saving the file and letting the agent reach for it
+        // via shell tools (matches pre-#320 behavior).
         Voice voice = message.voice();
         if (voice != null) {
-            Path localPath = downloadTelegramFile(voice.fileId(), "voice_" + voice.fileId() + ".ogg");
-            if (localPath != null) {
-                String desc = String.format("[Voice message received (%d seconds) — saved to %s]",
-                        voice.duration(), localPath);
-                return caption != null ? caption + "\n\n" + desc : desc;
+            Path localPath = downloadTelegramFile(voice.fileId(),
+                    "voice_" + voice.fileId() + ".ogg");
+            String transcription = tryTranscribeVoice(localPath);
+            if (transcription != null && !transcription.isBlank()) {
+                if (text.length() > 0) text.append("\n\n");
+                text.append("[Voice transcription (").append(voice.duration())
+                        .append("s)]: ").append(transcription);
+            } else if (localPath != null) {
+                if (text.length() > 0) text.append("\n\n");
+                text.append(String.format(
+                        "[Voice message received (%d seconds) — saved to %s]",
+                        voice.duration(), localPath));
+            } else {
+                if (text.length() > 0) text.append("\n\n");
+                text.append("[Voice upload failed]");
             }
-            return caption != null ? caption + "\n\n[Voice upload failed]" : null;
+            return new UserMessagePayload(text.toString(), List.of());
         }
 
-        // Unsupported message type with caption
-        if (caption != null) {
-            return caption;
+        if (caption != null && !caption.isBlank()) {
+            return new UserMessagePayload(caption, List.of());
         }
-
         return null;
     }
+
+    private UserMessagePayload buildDocumentPayload(Document document, String caption) {
+        StringBuilder text = new StringBuilder();
+        if (caption != null && !caption.isBlank()) {
+            text.append(caption);
+        }
+        Path localPath = downloadTelegramFile(document.fileId(), document.fileName());
+        if (localPath == null) {
+            if (text.length() > 0) text.append("\n\n");
+            text.append("[File upload failed]");
+            return new UserMessagePayload(text.toString(), List.of());
+        }
+        String mime = document.mimeType() == null ? "" : document.mimeType();
+        String inlined = tryExtractDocumentText(localPath, mime);
+        if (inlined != null) {
+            if (text.length() > 0) text.append("\n\n");
+            text.append(String.format("[Document: %s]%n%s", document.fileName(), inlined));
+        } else {
+            if (text.length() > 0) text.append("\n\n");
+            text.append(String.format("[File received: %s (%s, %d bytes) — saved to %s]",
+                    document.fileName(), mime, document.fileSize(), localPath));
+        }
+        return new UserMessagePayload(text.toString(), List.of());
+    }
+
+    /**
+     * Inline-extract text from common document types. Returns null when the
+     * format isn't supported or the extractor isn't available — caller falls
+     * back to the saved-path descriptor.
+     */
+    static String tryExtractDocumentText(Path localPath, String mimeType) {
+        if (localPath == null) return null;
+        try {
+            long size = Files.size(localPath);
+            if (size > MAX_FILE_BYTES) {
+                return null; // too big to inline safely
+            }
+            // Plain-text family → read directly.
+            if (mimeType.startsWith("text/")
+                    || mimeType.equals("application/json")
+                    || mimeType.equals("application/xml")) {
+                return Files.readString(localPath, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            // PDF → shell to `pdftotext` if available.
+            if (mimeType.equals("application/pdf")
+                    && isCommandAvailable("pdftotext")) {
+                return runCommandCaptureStdout(
+                        new String[]{"pdftotext", localPath.toString(), "-"});
+            }
+        } catch (Exception e) {
+            log.debug("Inline document extraction failed: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Best-effort voice transcription. Tries a `whisper` command (openai-
+     * whisper or whisper.cpp) on PATH; returns null when unavailable so the
+     * caller falls back to the legacy file-path descriptor. Users who want
+     * voice-mode should install whisper or wait for issue #308.
+     */
+    static String tryTranscribeVoice(Path audioPath) {
+        if (audioPath == null) return null;
+        if (!isCommandAvailable("whisper")) return null;
+        try {
+            // `whisper <file> --model tiny --output_format txt --output_dir <tmp>`
+            // writes `<basename>.txt` next to the file. Simplest: capture stdout
+            // via `--output_format txt --fp16 False` and filter the output lines.
+            String[] cmd = {"whisper", audioPath.toString(),
+                    "--model", "tiny", "--output_format", "txt",
+                    "--output_dir", audioPath.getParent().toString(),
+                    "--language", "en", "--fp16", "False"};
+            int exit = runCommandWithTimeout(cmd, 60);
+            if (exit != 0) return null;
+            String base = audioPath.getFileName().toString();
+            int dot = base.lastIndexOf('.');
+            Path txt = audioPath.getParent().resolve(
+                    (dot >= 0 ? base.substring(0, dot) : base) + ".txt");
+            if (Files.exists(txt)) {
+                return Files.readString(txt, java.nio.charset.StandardCharsets.UTF_8).trim();
+            }
+        } catch (Exception e) {
+            log.debug("Voice transcription failed: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private static boolean isCommandAvailable(String cmd) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", "command -v " + cmd);
+            Process p = pb.start();
+            return p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String runCommandCaptureStdout(String[] cmd) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectErrorStream(false);
+        Process p = pb.start();
+        String out;
+        try (var br = new java.io.BufferedReader(new java.io.InputStreamReader(
+                p.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+            out = br.lines().collect(java.util.stream.Collectors.joining("\n"));
+        }
+        if (!p.waitFor(30, TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            return null;
+        }
+        return p.exitValue() == 0 ? out : null;
+    }
+
+    private static int runCommandWithTimeout(String[] cmd, int timeoutSec) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            return -1;
+        }
+        return p.exitValue();
+    }
+
+    /** Downloads Telegram file bytes directly (no local path). Used for Media attachments. */
+    private FetchedFile fetchBytes(String fileId, String fileName) {
+        try {
+            GetFileResponse fileResponse = bot.execute(new GetFile(fileId));
+            if (!fileResponse.isOk() || fileResponse.file() == null) {
+                log.warn("Failed to get file info from Telegram: {}", fileResponse.description());
+                return null;
+            }
+            if (fileResponse.file().fileSize() != null
+                    && fileResponse.file().fileSize() > MAX_FILE_BYTES) {
+                log.warn("Telegram file exceeds {} bytes cap — rejecting",
+                        MAX_FILE_BYTES);
+                return null;
+            }
+            String downloadUrl = bot.getFullFilePath(fileResponse.file());
+            try (InputStream in = URI.create(downloadUrl).toURL().openStream()) {
+                byte[] bytes = in.readAllBytes();
+                return new FetchedFile(bytes, fileName);
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch Telegram file {}: {}", fileName, e.getMessage());
+            return null;
+        }
+    }
+
+    private record FetchedFile(byte[] bytes, String fileName) {}
 
     /**
      * Downloads a file from Telegram servers to ~/.herald/uploads/.
