@@ -37,6 +37,7 @@ class CommandHandlerTest {
     private AgentService agentService;
     private com.herald.agent.ContextCompactionAdvisor compactionAdvisor;
     private com.herald.agent.PromptDumpAdvisor promptDumpAdvisor;
+    private com.herald.agent.RetrospectiveService retrospectiveService;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -59,10 +60,13 @@ class CommandHandlerTest {
         when(agentService.streamChat(anyString(), anyString())).thenReturn(Flux.empty());
         compactionAdvisor = mock(com.herald.agent.ContextCompactionAdvisor.class);
         promptDumpAdvisor = new com.herald.agent.PromptDumpAdvisor(false);
+        retrospectiveService = mock(com.herald.agent.RetrospectiveService.class);
+        when(retrospectiveService.explainLastTurn(anyString())).thenReturn(Flux.empty());
         handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
                 reloadableSkillsTool, agentService, 200_000, approvalGate,
-                java.util.Optional.of(compactionAdvisor), promptDumpAdvisor);
+                java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
+                java.util.Optional.of(retrospectiveService));
     }
 
     // --- handle() routing ---
@@ -597,7 +601,8 @@ class CommandHandlerTest {
         com.herald.telegram.CommandHandler noCompact = new CommandHandler(
                 cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
-                java.util.Optional.empty(), promptDumpAdvisor);
+                java.util.Optional.empty(), promptDumpAdvisor,
+                java.util.Optional.of(retrospectiveService));
 
         noCompact.handle("/compact");
 
@@ -654,5 +659,45 @@ class CommandHandlerTest {
         handler.handle("/help");
         verify(sender).sendMessage(argThat(msg ->
                 msg.contains("/think") && msg.contains("/compact") && msg.contains("/trace")));
+    }
+
+    // --- /why (#318) ---
+
+    @Test
+    void whyDelegatesToRetrospectiveService() {
+        handler.handle("/why");
+        verify(sender).sendTypingAction();
+        verify(retrospectiveService).explainLastTurn(anyString());
+        verify(sender).sendStreamingMessage(any(Flux.class));
+    }
+
+    @Test
+    void whyWithoutServiceReportsMissingPersistence() {
+        com.herald.telegram.CommandHandler noRetro = new CommandHandler(
+                cronService, chatMemory, sender, usageTracker, modelSwitcher,
+                List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
+                java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
+                java.util.Optional.empty());
+
+        noRetro.handle("/why");
+
+        verify(sender).sendMessage(argThat(msg -> msg.contains("persistence")));
+        verifyNoInteractions(retrospectiveService);
+    }
+
+    @Test
+    void whyHandlesStreamDispatchErrorGracefully() {
+        when(retrospectiveService.explainLastTurn(anyString()))
+                .thenThrow(new RuntimeException("boom"));
+
+        handler.handle("/why");
+
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Sorry")));
+    }
+
+    @Test
+    void helpIncludesWhyCommand() {
+        handler.handle("/help");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("/why")));
     }
 }
