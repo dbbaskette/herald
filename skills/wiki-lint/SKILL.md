@@ -88,7 +88,30 @@ Report each dead link with the source file, the line number, and the missing tar
 
 Also check that every `MEMORY.md` entry sits under a `## <Type>` heading that matches the target page's `type:` frontmatter. A `concepts/…` pointer under `## Entities` is a misplacement.
 
-### 4. Stale-claim / contradiction scan (LLM-assisted)
+### 4. Cache-stability violations in `MEMORY.md`
+
+`MEMORY.md` ships in every turn's system prompt, so its byte layout matters for Anthropic prompt-cache hit rates. Flag (but don't auto-fix):
+
+- **Section order drift.** The sections must appear in this order: `User → Feedback → Projects → References → Concepts → Entities → Sources`. Any other order is a cache-miss hazard.
+- **Non-alphabetical entries within a section.** Each `- [title](path)` line should sort ahead of the line below it (case-insensitive title compare). Out-of-order entries mean the index got shuffled, which invalidates the cache even when the content is semantically the same.
+
+```bash
+# Quick check: extract section order and compare to expected
+cd "$HERALD_MEMORIES_DIR"
+rg -n '^## ' MEMORY.md | awk -F'##' '{print $2}' | tr -d ' '
+# Expected output:
+#   User
+#   Feedback
+#   Projects
+#   References
+#   Concepts
+#   Entities
+#   Sources
+```
+
+When reporting these, phrase them as "cache-stability warning" rather than "error" — the wiki still works, it's just expensive.
+
+### 5. Stale-claim / contradiction scan (LLM-assisted)
 
 This check is optional and runs the summary model over page contents to surface claims that are likely outdated or contradicted by another page. Keep the scope narrow to avoid blowing context:
 
@@ -120,6 +143,10 @@ Emit a single Markdown report. Structure:
 ## Index mismatches (<count>)
 - `MEMORY.md` points to missing: `<path>`
 - Misplaced: `<path>` (type: `<actual>`) is under `## <wrong-section>`
+
+## Cache-stability warnings (<count>)
+- Section order drifted (expected User/Feedback/Projects/References/Concepts/Entities/Sources)
+- Out-of-order entry in `## <section>`: `<title>` should sort before `<title>`
 
 ## Possible stale / contradicting claims (<count>)
 - `<path>` — <one-line suspicion> (suggest review against `<other-path>`)

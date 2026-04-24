@@ -320,10 +320,17 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
 
     /**
      * Returns the configured A2A agents, or an empty list if none are configured.
+     * Agents are returned sorted by name (case-insensitive) so their order in the
+     * system prompt is stable across restarts and YAML-map shuffles — critical
+     * for Anthropic prompt-cache hits. See issue #313.
      */
     public List<A2aAgent> a2aAgents() {
         if (a2a != null && a2a.agents() != null) {
-            return a2a.agents();
+            return a2a.agents().stream()
+                    .sorted(java.util.Comparator.comparing(
+                            A2aAgent::name,
+                            java.util.Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)))
+                    .toList();
         }
         return List.of();
     }
