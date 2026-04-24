@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -25,7 +26,7 @@ class TelegramPollerTest {
     private TelegramBot bot;
     private TelegramSender sender;
     private TelegramQuestionHandler questionHandler;
-    private CommandHandler commandHandler;
+    private CommandHandlerStub commandHandler;
     private AgentService agentService;
     private TelegramPoller poller;
 
@@ -34,7 +35,11 @@ class TelegramPollerTest {
         bot = mock(TelegramBot.class);
         sender = mock(TelegramSender.class);
         questionHandler = mock(TelegramQuestionHandler.class);
-        commandHandler = mock(CommandHandler.class);
+        // Lightweight stub — Mockito's inline mock fails on CommandHandler in
+        // some JVMs once the class's transitive type graph gets complex
+        // (record nests in BudgetPolicy). A test double is both simpler and
+        // portable.
+        commandHandler = new CommandHandlerStub();
         agentService = mock(AgentService.class);
         HeraldConfig config = new HeraldConfig(
                 null,
@@ -108,16 +113,16 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(questionHandler).resolveAnswer("B");
-        verify(agentService, never()).streamChat(anyString(), anyString());
+        verify(agentService, never()).streamChat(anyString(), any(), anyString());
     }
 
     @Test
     void pollFallsThroughToAgentWhenResolveAnswerFails() throws Exception {
         when(questionHandler.hasPendingQuestion()).thenReturn(true);
         when(questionHandler.resolveAnswer("B")).thenReturn(false);
-        when(commandHandler.handle("B")).thenReturn(false);
+        commandHandler.when("B", false);
         Flux<String> streamReply = Flux.just("agent reply");
-        when(agentService.streamChat(eq("B"), anyString())).thenReturn(streamReply);
+        when(agentService.streamChat(eq("B"), any(), anyString())).thenReturn(streamReply);
 
         Update update = createUpdate(12345L, "B");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -128,7 +133,7 @@ class TelegramPollerTest {
         poller.poll();
 
         verify(questionHandler).resolveAnswer("B");
-        verify(agentService).streamChat(eq("B"), anyString());
+        verify(agentService).streamChat(eq("B"), any(), anyString());
         verify(sender).sendStreamingMessage(streamReply);
     }
 
@@ -152,7 +157,7 @@ class TelegramPollerTest {
         TelegramBot botMock = mock(TelegramBot.class);
         TelegramSender senderMock = mock(TelegramSender.class);
         TelegramQuestionHandler handlerMock = mock(TelegramQuestionHandler.class);
-        CommandHandler cmdMock = mock(CommandHandler.class);
+        CommandHandler cmdMock = new CommandHandlerStub();
         AgentService agentMock = mock(AgentService.class);
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
@@ -168,7 +173,7 @@ class TelegramPollerTest {
 
     @Test
     void pollRoutesSlashCommandToCommandHandler() throws Exception {
-        when(commandHandler.handle("/help")).thenReturn(true);
+        commandHandler.when("/help", true);
 
         Update update = createUpdate(12345L, "/help");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -178,16 +183,16 @@ class TelegramPollerTest {
 
         poller.poll();
 
-        verify(commandHandler).handle("/help");
+        assertThat(commandHandler.calls()).contains("/help");
         // Command should NOT trigger typing action or reach agent loop
         verify(sender, never()).sendTypingAction();
     }
 
     @Test
     void pollPassesNonCommandToAgentLoop() throws Exception {
-        when(commandHandler.handle("hello")).thenReturn(false);
+        commandHandler.when("hello", false);
         Flux<String> streamReply = Flux.just("Hi ", "there!");
-        when(agentService.streamChat(eq("hello"), anyString())).thenReturn(streamReply);
+        when(agentService.streamChat(eq("hello"), any(), anyString())).thenReturn(streamReply);
 
         Update update = createUpdate(12345L, "hello");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -197,16 +202,16 @@ class TelegramPollerTest {
 
         poller.poll();
 
-        verify(commandHandler).handle("hello");
+        assertThat(commandHandler.calls()).contains("hello");
         verify(sender).sendTypingAction();
-        verify(agentService).streamChat(eq("hello"), anyString());
+        verify(agentService).streamChat(eq("hello"), any(), anyString());
         verify(sender).sendStreamingMessage(streamReply);
     }
 
     @Test
     void pollSendsErrorMessageWhenAgentThrows() throws Exception {
-        when(commandHandler.handle("hello")).thenReturn(false);
-        when(agentService.streamChat(eq("hello"), anyString()))
+        commandHandler.when("hello", false);
+        when(agentService.streamChat(eq("hello"), any(), anyString()))
                 .thenThrow(new RuntimeException("model error"));
 
         Update update = createUpdate(12345L, "hello");

@@ -118,7 +118,7 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 ## Features
 
 **Chat surfaces**
-- 🗨️ **Telegram-native** — chat where you already message; streaming replies, inline keyboards for agent-asked questions
+- 🗨️ **Telegram-native** — chat where you already message; streaming replies, inline keyboards for agent-asked questions. Multimodal: send photos (Claude/GPT/Gemini vision), voice memos (transcribed locally via `whisper` if installed), and documents (PDFs via `pdftotext`).
 - 💻 **Management console** — Vue 3 web UI for memory browsing, skills editing, cron jobs, live status via SSE
 - ⌨️ **CLI task mode** — `--agents=file.md --prompt="..."` for one-shot execution, or drop the `--prompt` for a REPL
 

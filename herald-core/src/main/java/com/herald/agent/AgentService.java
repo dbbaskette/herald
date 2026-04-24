@@ -13,8 +13,10 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MimeType;
 
 import reactor.core.publisher.Flux;
 
@@ -119,8 +121,23 @@ public class AgentService {
      * final reply. Chunks may contain partial text of a {@code <think>...</think>} block.</p>
      */
     public Flux<String> streamChat(String userMessage, String conversationId) {
-        log.info("Agent streaming message (conversation={}): {}",
-                conversationId, userMessage.substring(0, Math.min(userMessage.length(), 50)));
+        return streamChat(userMessage, Collections.emptyList(), conversationId);
+    }
+
+    /**
+     * Overload that attaches media (images, audio, etc.) to the user message
+     * so multimodal models can see/hear the content natively rather than
+     * receiving a text description of a file path. See issue #320.
+     *
+     * <p>For text-only providers the attachments are dropped silently; the
+     * caller is expected to have rendered any extractable text into
+     * {@code userMessage} upstream.</p>
+     */
+    public Flux<String> streamChat(String userMessage, List<MediaAttachment> attachments,
+                                   String conversationId) {
+        log.info("Agent streaming message (conversation={}, attachments={}): {}",
+                conversationId, attachments == null ? 0 : attachments.size(),
+                userMessage.substring(0, Math.min(userMessage.length(), 50)));
 
         long startTime = System.nanoTime();
         AtomicReference<String> modelRef = new AtomicReference<>("unknown");
@@ -131,8 +148,17 @@ public class AgentService {
         AtomicReference<List<String>> toolCallsRef = new AtomicReference<>(Collections.emptyList());
         AtomicLong totalChars = new AtomicLong(0);
 
+        final List<MediaAttachment> safeAttachments = attachments == null
+                ? Collections.emptyList() : attachments;
+
         Flux<ChatResponse> responses = modelSwitcher.getActiveClient().prompt()
-                .user(userMessage)
+                .user(userSpec -> {
+                    userSpec.text(userMessage);
+                    for (MediaAttachment att : safeAttachments) {
+                        userSpec.media(MimeType.valueOf(att.mimeType()),
+                                new ByteArrayResource(att.data()));
+                    }
+                })
                 .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
                 .stream()
                 .chatResponse();
