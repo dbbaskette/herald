@@ -38,10 +38,12 @@ public class CronService {
     private final ZoneId timezone;
     private final TaskScheduler scheduler;
     private final Map<Long, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
+    private final Optional<com.herald.agent.BudgetPolicy> budgetPolicy;
 
     public CronService(CronRepository cronRepository, ObjectProvider<AgentService> agentServiceProvider,
                        Optional<MessageSender> messageSender, ChatMemory chatMemory,
-                       HeraldConfig config, BriefingJob briefingJob, TaskScheduler taskScheduler) {
+                       HeraldConfig config, BriefingJob briefingJob, TaskScheduler taskScheduler,
+                       Optional<com.herald.agent.BudgetPolicy> budgetPolicy) {
         this.cronRepository = cronRepository;
         this.agentServiceProvider = agentServiceProvider;
         this.messageSender = messageSender.orElse(null);
@@ -49,6 +51,7 @@ public class CronService {
         this.briefingJob = briefingJob;
         this.timezone = ZoneId.of(config.cronTimezone());
         this.scheduler = taskScheduler;
+        this.budgetPolicy = budgetPolicy;
     }
 
     @PostConstruct
@@ -170,6 +173,15 @@ public class CronService {
         String conversationId = "cron-" + job.name();
         try {
             log.info("Executing cron job '{}'", job.name());
+            // Budget gate (#319): skip the job silently when blocked.
+            if (budgetPolicy.isPresent()) {
+                var decision = budgetPolicy.get().evaluate();
+                if (decision.isBlocked()) {
+                    log.info("Cron job '{}' skipped — budget policy: {}",
+                            job.name(), decision.message());
+                    return;
+                }
+            }
             String prompt;
             if (BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())) {
                 prompt = briefingJob.buildMorningPrompt();

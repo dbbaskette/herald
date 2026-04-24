@@ -71,12 +71,44 @@ public class UsageTracker {
     }
 
     /**
+     * Get per-agent breakdown of token usage for the current calendar month.
+     */
+    public List<AgentUsage> getMonthlyUsageByAgent() {
+        return jdbcTemplate.query(
+                "SELECT COALESCE(subagent_id, 'main') as agent, provider, model, "
+                        + "SUM(tokens_in) as total_in, SUM(tokens_out) as total_out, "
+                        + "COALESCE(SUM(cache_read_tokens), 0) as cache_read, "
+                        + "COALESCE(SUM(cache_write_tokens), 0) as cache_write "
+                        + "FROM model_usage WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now') "
+                        + "GROUP BY subagent_id, provider, model ORDER BY total_in DESC",
+                (rs, rowNum) -> new AgentUsage(
+                        rs.getString("agent"),
+                        rs.getString("provider"),
+                        rs.getString("model"),
+                        rs.getLong("total_in"),
+                        rs.getLong("total_out"),
+                        rs.getLong("cache_read"),
+                        rs.getLong("cache_write")));
+    }
+
+    /**
+     * Estimate total cost for the current calendar month. Uses the same
+     * pricing model as {@link #estimateDailyCost()}.
+     */
+    public BigDecimal estimateMonthlyCost() {
+        return estimateCostFromUsage(getMonthlyUsageByAgent());
+    }
+
+    /**
      * Estimate total cost for today based on published pricing. For Anthropic,
      * applies the cache-pricing multipliers: cache reads are charged at 10% of
      * base input price, cache writes at 125%.
      */
     public BigDecimal estimateDailyCost() {
-        List<AgentUsage> usageByAgent = getDailyUsageByAgent();
+        return estimateCostFromUsage(getDailyUsageByAgent());
+    }
+
+    private BigDecimal estimateCostFromUsage(List<AgentUsage> usageByAgent) {
         BigDecimal totalCost = BigDecimal.ZERO;
         for (AgentUsage usage : usageByAgent) {
             double[] prices = PRICING.getOrDefault(usage.model(), DEFAULT_PRICING);

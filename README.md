@@ -232,6 +232,7 @@ Herald's `ReloadableSkillsTool` wraps the upstream `SkillsTool` with a `WatchSer
 | `/compact [now\|status]` | Force-compact conversation history or show current token usage |
 | `/trace on\|off\|status` | Toggle prompt-dump tracing (dumps to `~/.herald/prompt-dump/`) |
 | `/why` | Explain the agent's reasoning for the previous turn (high-budget thinking) |
+| `/budget [daily $X \| monthly $X \| model-ceiling haiku\|sonnet\|opus\|off \| clear <field> \| pause \| resume \| status]` | Spending rails — caps, model ceiling, pause/resume |
 
 ## Architecture
 

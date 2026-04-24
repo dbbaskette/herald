@@ -2,6 +2,7 @@ package com.herald.telegram;
 
 import com.herald.agent.AgentService;
 import com.herald.agent.ApprovalGate;
+import com.herald.agent.BudgetPolicy;
 import com.herald.agent.ContextCompactionAdvisor;
 import com.herald.agent.ModelSwitcher;
 import com.herald.agent.PromptDumpAdvisor;
@@ -45,6 +46,7 @@ public class CommandHandler {
     private final java.util.Optional<ContextCompactionAdvisor> compactionAdvisor;
     private final PromptDumpAdvisor promptDumpAdvisor;
     private final java.util.Optional<RetrospectiveService> retrospectiveService;
+    private final java.util.Optional<BudgetPolicy> budgetPolicy;
 
     public CommandHandler(CronService cronService, ChatMemory chatMemory,
                           TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
@@ -55,7 +57,8 @@ public class CommandHandler {
                           ApprovalGate approvalGate,
                           java.util.Optional<ContextCompactionAdvisor> compactionAdvisor,
                           PromptDumpAdvisor promptDumpAdvisor,
-                          java.util.Optional<RetrospectiveService> retrospectiveService) {
+                          java.util.Optional<RetrospectiveService> retrospectiveService,
+                          java.util.Optional<BudgetPolicy> budgetPolicy) {
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -69,6 +72,7 @@ public class CommandHandler {
         this.compactionAdvisor = compactionAdvisor;
         this.promptDumpAdvisor = promptDumpAdvisor;
         this.retrospectiveService = retrospectiveService;
+        this.budgetPolicy = budgetPolicy;
     }
 
     boolean handle(String text) {
@@ -94,6 +98,7 @@ public class CommandHandler {
             case "/compact" -> handleCompact(parts);
             case "/trace" -> handleTrace(parts);
             case "/why" -> handleWhy();
+            case "/budget" -> handleBudget(parts);
             default -> {
                 sender.sendMessage("Unknown command: " + parts[0]
                         + "\nType /help to see available commands.");
@@ -123,6 +128,7 @@ public class CommandHandler {
                 /compact [now|status] — Force-compact conversation history
                 /trace on|off|status — Toggle prompt-dump tracing
                 /why — Explain the agent's reasoning for the previous turn
+                /budget [daily $X|monthly $X|model-ceiling haiku|sonnet|opus|off|clear <field>|pause|resume|status] — Spending rails
                 /cron list — List all scheduled cron jobs
                 /cron enable <name> — Enable a cron job
                 /cron disable <name> — Disable a cron job
@@ -472,6 +478,99 @@ public class CommandHandler {
         }
     }
 
+    private void handleBudget(String[] parts) {
+        if (budgetPolicy.isEmpty()) {
+            sender.sendMessage("/budget requires persistence — set `herald.memory.db-path` and restart.");
+            return;
+        }
+        BudgetPolicy policy = budgetPolicy.get();
+        if (parts.length < 2 || "status".equalsIgnoreCase(parts[1])) {
+            sendBudgetStatus(policy);
+            return;
+        }
+        String sub = parts[1].toLowerCase();
+        try {
+            switch (sub) {
+                case "daily" -> {
+                    if (parts.length < 3) { sender.sendMessage("Usage: /budget daily $5.00"); return; }
+                    policy.setDailyCap(parseDollars(parts[2]));
+                    sender.sendMessage("Daily budget set to $" + parseDollars(parts[2]).toPlainString());
+                }
+                case "monthly" -> {
+                    if (parts.length < 3) { sender.sendMessage("Usage: /budget monthly $100"); return; }
+                    policy.setMonthlyCap(parseDollars(parts[2]));
+                    sender.sendMessage("Monthly budget set to $" + parseDollars(parts[2]).toPlainString());
+                }
+                case "model-ceiling" -> {
+                    if (parts.length < 3) { sender.sendMessage("Usage: /budget model-ceiling haiku|sonnet|opus|off"); return; }
+                    policy.setModelCeiling(parts[2]);
+                    String tierLabel = "off".equalsIgnoreCase(parts[2]) ? "removed" : parts[2].toLowerCase();
+                    sender.sendMessage("Model ceiling " + tierLabel + ".");
+                }
+                case "clear" -> {
+                    if (parts.length < 3) { sender.sendMessage("Usage: /budget clear daily|monthly|model-ceiling|all"); return; }
+                    policy.clear(parts[2]);
+                    sender.sendMessage("Cleared budget field: " + parts[2]);
+                }
+                case "pause" -> {
+                    policy.pauseUntil(null);
+                    sender.sendMessage("Herald paused. /budget resume to reactivate.");
+                }
+                case "resume" -> {
+                    policy.resume();
+                    sender.sendMessage("Herald resumed.");
+                }
+                default -> sender.sendMessage(
+                        "Unknown /budget subcommand: " + parts[1]
+                                + "\nUsage: /budget [status|daily $X|monthly $X|model-ceiling <tier>|clear <field>|pause|resume]");
+            }
+        } catch (IllegalArgumentException e) {
+            sender.sendMessage("Budget error: " + e.getMessage());
+        }
+    }
+
+    private void sendBudgetStatus(BudgetPolicy policy) {
+        var settings = policy.current();
+        BigDecimal dailyCost = usageTracker.estimateDailyCost();
+        BigDecimal monthlyCost = usageTracker.estimateMonthlyCost();
+        var sb = new StringBuilder("*Budget Status*\n\n");
+        sb.append("Today spent: $").append(dailyCost.toPlainString());
+        if (settings.dailyCap() != null) {
+            double pct = dailyCost.doubleValue() / settings.dailyCap().doubleValue() * 100.0;
+            sb.append(" / $").append(settings.dailyCap().toPlainString())
+                    .append(String.format(" (%.0f%%)", pct));
+        } else {
+            sb.append(" (no daily cap)");
+        }
+        sb.append("\nThis month: $").append(monthlyCost.toPlainString());
+        if (settings.monthlyCap() != null) {
+            double pct = monthlyCost.doubleValue() / settings.monthlyCap().doubleValue() * 100.0;
+            sb.append(" / $").append(settings.monthlyCap().toPlainString())
+                    .append(String.format(" (%.0f%%)", pct));
+        } else {
+            sb.append(" (no monthly cap)");
+        }
+        sb.append("\nModel ceiling: ")
+                .append(settings.modelCeiling() != null ? settings.modelCeiling() : "none");
+        if (settings.pausedUntil() != null) {
+            sb.append("\n✋ Paused until ").append(settings.pausedUntil());
+        }
+        sender.sendMessage(sb.toString());
+    }
+
+    static BigDecimal parseDollars(String input) {
+        String cleaned = input.replace("$", "").replace(",", "").trim();
+        try {
+            var value = new BigDecimal(cleaned);
+            if (value.signum() < 0) {
+                throw new IllegalArgumentException("Amount must be non-negative: " + input);
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid dollar amount: " + input);
+        }
+    }
+
     private void handleWhy() {
         if (retrospectiveService.isEmpty()) {
             sender.sendMessage("/why requires persistence — set `herald.memory.db-path` "
@@ -490,6 +589,14 @@ public class CommandHandler {
     }
 
     private void handleModelSwitch(String provider, String model) {
+        // Budget model-ceiling gate (#319): reject switches above the configured tier.
+        if (budgetPolicy.isPresent()) {
+            String blockReason = budgetPolicy.get().checkModelSwitch(provider, model);
+            if (blockReason != null) {
+                sender.sendMessage("Budget: " + blockReason);
+                return;
+            }
+        }
         try {
             modelSwitcher.switchModel(provider, model);
             sender.sendMessage("Switched to *" + provider + "/" + model

@@ -40,17 +40,20 @@ public class TelegramPoller {
     private final TelegramQuestionHandler questionHandler;
     private final CommandHandler commandHandler;
     private final AgentService agentService;
+    private final java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy;
     private int offset = 0;
 
     public TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
                           TelegramQuestionHandler questionHandler, CommandHandler commandHandler,
-                          AgentService agentService) {
+                          AgentService agentService,
+                          java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
         this.questionHandler = questionHandler;
         this.commandHandler = commandHandler;
         this.agentService = agentService;
+        this.budgetPolicy = budgetPolicy;
     }
 
     @PostConstruct
@@ -129,6 +132,19 @@ public class TelegramPoller {
             if (questionHandler.resolveAnswer(answerText)) {
                 log.info("User reply resolved pending question");
                 return;
+            }
+        }
+
+        // Budget gate (#319): block or warn before invoking the agent.
+        if (budgetPolicy.isPresent()) {
+            var decision = budgetPolicy.get().evaluate();
+            if (decision.isBlocked()) {
+                sender.sendMessage("✋ " + decision.message());
+                return;
+            }
+            if (decision.verdict() == com.herald.agent.BudgetPolicy.Verdict.WARN) {
+                sender.sendMessage("⚠ " + decision.message());
+                // warning is fire-once-per-day and non-blocking; fall through
             }
         }
 
