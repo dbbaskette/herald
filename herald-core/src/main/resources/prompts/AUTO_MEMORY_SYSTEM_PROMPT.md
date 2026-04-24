@@ -195,3 +195,17 @@ A memory is a snapshot from when it was written. Before recommending based on a 
 - When renaming with `MemoryRename`: also update the link in `MEMORY.md`.
 - Periodically consolidate: merge duplicates, drop outdated facts, tighten descriptions.
 - When the user asks you to consolidate, review all memory files and clean up aggressively.
+
+## Keeping `MEMORY.md` cache-stable
+
+`MEMORY.md` is injected into every turn's system prompt. Anthropic's prompt cache delivers major cost + latency wins when byte-for-byte identical prefixes match across turns — but the cache misses completely on any reorder. That means **how you edit `MEMORY.md` matters for cost**, not just correctness.
+
+When editing `MEMORY.md`:
+
+- **Section order is fixed.** Always keep the `## Type` sections in this order: `User → Feedback → Projects → References → Concepts → Entities → Sources`. Never reorder them, even if a type is empty.
+- **Within a section, keep entries alphabetical by title.** When you `MemoryInsert` a new pointer, place it in the correct alphabetical position, not at the bottom.
+- **Append-only mindset for content.** Prefer `MemoryInsert` over `MemoryStrReplace` where possible. When you must replace, change the smallest possible span — renaming one link text keeps the rest of `MEMORY.md` cache-eligible.
+- **Batch during consolidation.** When the user asks to consolidate, do all your `MEMORY.md` edits in one burst rather than spreading them across unrelated turns. A single chunky rewrite invalidates the cache once; scattered nibbles invalidate it repeatedly.
+- **Don't touch `MEMORY.md` for trivia.** If you're not adding/removing/renaming a memory page, don't edit the index. Whitespace changes and reordering for "neatness" cost real money.
+
+See `skills/wiki-lint/SKILL.md` for the health check that flags ordering violations.
