@@ -41,7 +41,8 @@ class CronServiceTest {
                 new HeraldConfig.Cron("America/New_York"), null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         cronService = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler,
+                Optional.empty());
         cronService.loadJobs();
     }
 
@@ -136,7 +137,8 @@ class CronServiceTest {
                 new HeraldConfig.Cron("America/New_York"), null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler,
+                Optional.empty());
         service.loadJobs();
 
         // findEnabled called at least twice: once in setUp, once here
@@ -267,7 +269,8 @@ class CronServiceTest {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
-                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler);
+                Optional.of(messageSender), chatMemory, config, briefingJob, scheduler,
+                Optional.empty());
         assertThat(service).isNotNull();
     }
 
@@ -277,7 +280,8 @@ class CronServiceTest {
                 new HeraldConfig.Cron("America/New_York"), null, null, null, null, null);
         TaskScheduler scheduler = createTaskScheduler();
         CronService service = new CronService(cronRepository, objectProvider(agentService),
-                Optional.empty(), chatMemory, config, briefingJob, scheduler);
+                Optional.empty(), chatMemory, config, briefingJob, scheduler,
+                Optional.empty());
 
         CronJob job = new CronJob(1, "test-job", "0 0 9 * * *", "hello", null, true, false);
         when(agentService.chat("hello", "cron-test-job")).thenReturn("result");

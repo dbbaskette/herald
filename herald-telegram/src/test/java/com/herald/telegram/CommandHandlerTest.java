@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class CommandHandlerTest {
@@ -38,6 +39,7 @@ class CommandHandlerTest {
     private com.herald.agent.ContextCompactionAdvisor compactionAdvisor;
     private com.herald.agent.PromptDumpAdvisor promptDumpAdvisor;
     private com.herald.agent.RetrospectiveService retrospectiveService;
+    private com.herald.agent.BudgetPolicy budgetPolicy;
     private CommandHandler handler;
 
     @org.junit.jupiter.api.io.TempDir
@@ -62,11 +64,16 @@ class CommandHandlerTest {
         promptDumpAdvisor = new com.herald.agent.PromptDumpAdvisor(false);
         retrospectiveService = mock(com.herald.agent.RetrospectiveService.class);
         when(retrospectiveService.explainLastTurn(anyString())).thenReturn(Flux.empty());
+        budgetPolicy = mock(com.herald.agent.BudgetPolicy.class);
+        when(budgetPolicy.current()).thenReturn(new com.herald.agent.BudgetPolicy.BudgetSettings(
+                null, null, null, null, null));
+        when(budgetPolicy.evaluate()).thenReturn(com.herald.agent.BudgetPolicy.Decision.allow());
         handler = new CommandHandler(cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of("memory", "shell", "filesystem", "todo", "ask", "task", "taskOutput", "skills", "cron"),
                 reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
-                java.util.Optional.of(retrospectiveService));
+                java.util.Optional.of(retrospectiveService),
+                java.util.Optional.of(budgetPolicy));
     }
 
     // --- handle() routing ---
@@ -602,7 +609,8 @@ class CommandHandlerTest {
                 cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.empty(), promptDumpAdvisor,
-                java.util.Optional.of(retrospectiveService));
+                java.util.Optional.of(retrospectiveService),
+                java.util.Optional.of(budgetPolicy));
 
         noCompact.handle("/compact");
 
@@ -677,7 +685,7 @@ class CommandHandlerTest {
                 cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
-                java.util.Optional.empty());
+                java.util.Optional.empty(), java.util.Optional.of(budgetPolicy));
 
         noRetro.handle("/why");
 
@@ -699,5 +707,111 @@ class CommandHandlerTest {
     void helpIncludesWhyCommand() {
         handler.handle("/help");
         verify(sender).sendMessage(argThat(msg -> msg.contains("/why")));
+    }
+
+    // --- /budget (#319) ---
+
+    @Test
+    void budgetStatusShowsUsageAndNoCaps() {
+        when(usageTracker.estimateDailyCost()).thenReturn(new java.math.BigDecimal("1.23"));
+        when(usageTracker.estimateMonthlyCost()).thenReturn(new java.math.BigDecimal("45.67"));
+
+        handler.handle("/budget");
+
+        verify(sender).sendMessage(argThat(msg ->
+                msg.contains("$1.23")
+                        && msg.contains("$45.67")
+                        && msg.contains("no daily cap")
+                        && msg.contains("no monthly cap")));
+    }
+
+    @Test
+    void budgetDailySetsCap() {
+        handler.handle("/budget daily $5.00");
+        verify(budgetPolicy).setDailyCap(new java.math.BigDecimal("5.00"));
+    }
+
+    @Test
+    void budgetMonthlySetsCap() {
+        handler.handle("/budget monthly $100");
+        verify(budgetPolicy).setMonthlyCap(new java.math.BigDecimal("100"));
+    }
+
+    @Test
+    void budgetModelCeilingPersists() {
+        handler.handle("/budget model-ceiling sonnet");
+        verify(budgetPolicy).setModelCeiling("sonnet");
+    }
+
+    @Test
+    void budgetModelCeilingOff() {
+        handler.handle("/budget model-ceiling off");
+        verify(budgetPolicy).setModelCeiling("off");
+    }
+
+    @Test
+    void budgetClearDelegates() {
+        handler.handle("/budget clear daily");
+        verify(budgetPolicy).clear("daily");
+    }
+
+    @Test
+    void budgetPauseResume() {
+        handler.handle("/budget pause");
+        verify(budgetPolicy).pauseUntil(null);
+
+        handler.handle("/budget resume");
+        verify(budgetPolicy).resume();
+    }
+
+    @Test
+    void budgetInvalidAmountRejected() {
+        handler.handle("/budget daily not-a-number");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("Budget error")));
+        verify(budgetPolicy, never()).setDailyCap(any());
+    }
+
+    @Test
+    void budgetWithoutPolicyReportsMissingPersistence() {
+        com.herald.telegram.CommandHandler noBudget = new CommandHandler(
+                cronService, chatMemory, sender, usageTracker, modelSwitcher,
+                List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
+                java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
+                java.util.Optional.of(retrospectiveService),
+                java.util.Optional.empty());
+
+        noBudget.handle("/budget");
+
+        verify(sender).sendMessage(argThat(msg -> msg.contains("persistence")));
+    }
+
+    @Test
+    void parseDollarsStripsDollarSignAndCommas() {
+        assertThat(CommandHandler.parseDollars("$5")).isEqualByComparingTo("5");
+        assertThat(CommandHandler.parseDollars("$1,234.56")).isEqualByComparingTo("1234.56");
+        assertThat(CommandHandler.parseDollars("0.25")).isEqualByComparingTo("0.25");
+    }
+
+    @Test
+    void parseDollarsRejectsNegatives() {
+        assertThatThrownBy(() -> CommandHandler.parseDollars("-5"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void modelSwitchBlockedByBudgetCeiling() {
+        when(budgetPolicy.checkModelSwitch(eq("anthropic"), eq("claude-opus-4-5")))
+                .thenReturn("Model ceiling blocks opus");
+
+        handler.handle("/model anthropic claude-opus-4-5");
+
+        verify(sender).sendMessage(argThat(msg -> msg.contains("ceiling")));
+        verify(modelSwitcher, never()).switchModel(anyString(), anyString());
+    }
+
+    @Test
+    void helpIncludesBudgetCommand() {
+        handler.handle("/help");
+        verify(sender).sendMessage(argThat(msg -> msg.contains("/budget")));
     }
 }

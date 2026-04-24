@@ -40,7 +40,8 @@ class TelegramPollerTest {
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
                 null, null, null, null, null, null, null, null);
-        poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler, agentService);
+        poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler, agentService,
+                java.util.Optional.empty());
     }
 
     @Test
@@ -157,7 +158,8 @@ class TelegramPollerTest {
                 null,
                 new HeraldConfig.Telegram("test-token", ""),
                 null, null, null, null, null, null, null, null);
-        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock, agentMock);
+        TelegramPoller blankPoller = new TelegramPoller(botMock, blankConfig, senderMock, handlerMock, cmdMock, agentMock,
+                java.util.Optional.empty());
 
         assertThatThrownBy(blankPoller::validateConfig)
                 .isInstanceOf(IllegalStateException.class)
