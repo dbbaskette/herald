@@ -26,7 +26,7 @@ class TelegramPollerTest {
     private TelegramBot bot;
     private TelegramSender sender;
     private TelegramQuestionHandler questionHandler;
-    private CommandHandlerStub commandHandler;
+    private SlashCommandDispatcher commandHandler;
     private AgentService agentService;
     private TelegramPoller poller;
 
@@ -35,11 +35,11 @@ class TelegramPollerTest {
         bot = mock(TelegramBot.class);
         sender = mock(TelegramSender.class);
         questionHandler = mock(TelegramQuestionHandler.class);
-        // Lightweight stub — Mockito's inline mock fails on CommandHandler in
-        // some JVMs once the class's transitive type graph gets complex
-        // (record nests in BudgetPolicy). A test double is both simpler and
-        // portable.
-        commandHandler = new CommandHandlerStub();
+        // Depend on the narrow SlashCommandDispatcher interface rather than
+        // the full CommandHandler — Mockito can instrument one-method
+        // functional interfaces cleanly, and tests don't need the rest of
+        // CommandHandler's surface area.
+        commandHandler = mock(SlashCommandDispatcher.class);
         agentService = mock(AgentService.class);
         HeraldConfig config = new HeraldConfig(
                 null,
@@ -120,7 +120,7 @@ class TelegramPollerTest {
     void pollFallsThroughToAgentWhenResolveAnswerFails() throws Exception {
         when(questionHandler.hasPendingQuestion()).thenReturn(true);
         when(questionHandler.resolveAnswer("B")).thenReturn(false);
-        commandHandler.when("B", false);
+        when(commandHandler.handle("B")).thenReturn(false);
         Flux<String> streamReply = Flux.just("agent reply");
         when(agentService.streamChat(eq("B"), any(), anyString())).thenReturn(streamReply);
 
@@ -157,7 +157,7 @@ class TelegramPollerTest {
         TelegramBot botMock = mock(TelegramBot.class);
         TelegramSender senderMock = mock(TelegramSender.class);
         TelegramQuestionHandler handlerMock = mock(TelegramQuestionHandler.class);
-        CommandHandler cmdMock = new CommandHandlerStub();
+        SlashCommandDispatcher cmdMock = mock(SlashCommandDispatcher.class);
         AgentService agentMock = mock(AgentService.class);
         HeraldConfig blankConfig = new HeraldConfig(
                 null,
@@ -173,7 +173,7 @@ class TelegramPollerTest {
 
     @Test
     void pollRoutesSlashCommandToCommandHandler() throws Exception {
-        commandHandler.when("/help", true);
+        when(commandHandler.handle("/help")).thenReturn(true);
 
         Update update = createUpdate(12345L, "/help");
         GetUpdatesResponse response = mock(GetUpdatesResponse.class);
@@ -183,14 +183,14 @@ class TelegramPollerTest {
 
         poller.poll();
 
-        assertThat(commandHandler.calls()).contains("/help");
+        verify(commandHandler).handle("/help");
         // Command should NOT trigger typing action or reach agent loop
         verify(sender, never()).sendTypingAction();
     }
 
     @Test
     void pollPassesNonCommandToAgentLoop() throws Exception {
-        commandHandler.when("hello", false);
+        when(commandHandler.handle("hello")).thenReturn(false);
         Flux<String> streamReply = Flux.just("Hi ", "there!");
         when(agentService.streamChat(eq("hello"), any(), anyString())).thenReturn(streamReply);
 
@@ -202,7 +202,7 @@ class TelegramPollerTest {
 
         poller.poll();
 
-        assertThat(commandHandler.calls()).contains("hello");
+        verify(commandHandler).handle("hello");
         verify(sender).sendTypingAction();
         verify(agentService).streamChat(eq("hello"), any(), anyString());
         verify(sender).sendStreamingMessage(streamReply);
@@ -210,7 +210,7 @@ class TelegramPollerTest {
 
     @Test
     void pollSendsErrorMessageWhenAgentThrows() throws Exception {
-        commandHandler.when("hello", false);
+        when(commandHandler.handle("hello")).thenReturn(false);
         when(agentService.streamChat(eq("hello"), any(), anyString()))
                 .thenThrow(new RuntimeException("model error"));
 
