@@ -197,6 +197,7 @@ public class HeraldAgentConfig {
             @Value("${herald.agent.model.gemini:gemini-2.5-flash}") String geminiModel,
             @Value("${herald.agent.model.lmstudio:qwen/qwen3.5-35b-a3b}") String lmstudioModel,
             @Value("${herald.agent.anthropic.cache-strategy:system_and_tools}") String anthropicCacheStrategyName,
+            @Value("${herald.agent.memory.consolidation-trigger:daily}") String memoryConsolidationMode,
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
             @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
@@ -349,10 +350,16 @@ public class HeraldAgentConfig {
                 })
                 .build();
 
+        boolean memoryConsolidationEnabled = "daily".equalsIgnoreCase(memoryConsolidationMode);
+        log.info("Memory consolidation trigger: {} ({})",
+                memoryConsolidationEnabled ? "enabled (daily)" : "disabled",
+                memoryConsolidationMode);
+
         // Build advisor chain and tool list dynamically based on available beans
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
                 contextMdAdvisor, memoriesDir, memoryLogPath, hotMdPath,
-                chatModel, config, contextCompactionAdvisorOpt, promptDumpAdvisor);
+                chatModel, config, contextCompactionAdvisorOpt, promptDumpAdvisor,
+                jdbcTemplateOpt, memoryConsolidationEnabled);
 
         var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt,
@@ -422,7 +429,9 @@ public class HeraldAgentConfig {
             ChatModel chatModel,
             HeraldConfig config,
             Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
-            PromptDumpAdvisor promptDumpAdvisor) {
+            PromptDumpAdvisor promptDumpAdvisor,
+            Optional<JdbcTemplate> jdbcTemplateOpt,
+            boolean memoryConsolidationEnabled) {
 
         List<Advisor> advisors = new ArrayList<>();
 
@@ -433,12 +442,20 @@ public class HeraldAgentConfig {
 
         // Long-term memory — Herald-owned advisor mirrors upstream AutoMemoryToolsAdvisor
         // but wraps each memory tool callback so mutations land in log.md.
+        java.util.function.BiPredicate<org.springframework.ai.chat.client.ChatClientRequest, java.time.Instant>
+                consolidationTrigger;
+        if (memoryConsolidationEnabled && jdbcTemplateOpt.isPresent()) {
+            consolidationTrigger = new DailyConsolidationTrigger(jdbcTemplateOpt.get());
+        } else {
+            consolidationTrigger = (req, instant) -> false;
+        }
+
         advisors.add(HeraldAutoMemoryAdvisor.builder()
                 .memoriesRootDirectory(memoriesDir)
                 .logFile(memoryLogPath)
                 .memorySystemPrompt(new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"))
                 .order(Ordered.HIGHEST_PRECEDENCE + 100)
-                .memoryConsolidationTrigger((req, instant) -> false)
+                .memoryConsolidationTrigger(consolidationTrigger)
                 .build());
 
         if (chatMemoryOpt.isPresent()) {

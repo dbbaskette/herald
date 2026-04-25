@@ -135,6 +135,7 @@ class HeraldAgentConfigTest {
                         "claude-sonnet-4-5", "claude-opus-4-5",
                         "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b",
                         "system_and_tools",
+                        "daily",
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                         List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web")))
                 .isInstanceOf(UncheckedIOException.class)

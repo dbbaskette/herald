@@ -80,6 +80,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 "system_and_tools",
+                "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
@@ -129,6 +130,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 "system_and_tools",
+                "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
@@ -169,6 +171,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 "system_and_tools",
+                "daily",
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
@@ -242,6 +245,7 @@ class HeraldAgentConfigIntegrationTest {
                 SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
                 OPENAI_MODEL, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
                 "system_and_tools",
+                "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
 
@@ -261,7 +265,8 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), contextMdAdvisor, tempDir,
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config,
-                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false));
+                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
+                Optional.empty(), false);
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
         // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, ToolSearchToolCallAdvisor
@@ -282,7 +287,8 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), contextMdAdvisor, tempDir,
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config,
-                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false));
+                Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
+                Optional.empty(), false);
 
         assertThat(advisors)
                 .filteredOn(a -> a instanceof org.springaicommunity.tool.search.ToolSearchToolCallAdvisor)
