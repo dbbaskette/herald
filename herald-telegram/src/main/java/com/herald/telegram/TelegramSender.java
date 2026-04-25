@@ -23,6 +23,10 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -35,6 +39,18 @@ public class TelegramSender implements MessageSender {
     private static final long RETRY_BASE_DELAY_MS = 1000;
     /** Telegram allows ~1 edit/sec per message; keep a small safety margin. */
     static final long EDIT_THROTTLE_MS = 1100;
+    /** Refresh the typing indicator this often while the agent is working.
+     *  Telegram caches typing for 5s; 4s keeps it continuous. */
+    static final long TYPING_REFRESH_MS = 4_000;
+    /** Safety cap so a hung turn can't schedule forever. */
+    static final int TYPING_MAX_REFRESHES = 30;
+
+    private static final ScheduledExecutorService TYPING_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "telegram-typing-refresh");
+                t.setDaemon(true);
+                return t;
+            });
 
     private final TelegramBot bot;
     private final String chatId;
@@ -72,6 +88,12 @@ public class TelegramSender implements MessageSender {
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
+        // Keep the "typing..." indicator alive during tool-call phases that
+        // produce no text chunks for many seconds. See issue #282. The scheduled
+        // task is cancelled as soon as the first chunk arrives (below) or the
+        // turn completes.
+        ScheduledFuture<?> typingRefresher = scheduleTypingRefresh();
+
         Disposable subscription = stream.subscribe(
                 chunk -> {
                     accumulator.append(chunk);
@@ -80,6 +102,9 @@ public class TelegramSender implements MessageSender {
                         return;
                     }
                     if (messageIdRef.get() == null) {
+                        // First real chunk arrived — stop refreshing the
+                        // "typing" indicator; the agent is now replying.
+                        cancelTypingRefresher(typingRefresher);
                         // Create the placeholder message with the first real content so we
                         // don't leave an empty "..." hanging if the stream is empty.
                         String first = truncateForDisplay(current);
@@ -112,8 +137,11 @@ public class TelegramSender implements MessageSender {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             subscription.dispose();
+            cancelTypingRefresher(typingRefresher);
             return;
         }
+        // Stream is done (success or error) — typing refresher must stop.
+        cancelTypingRefresher(typingRefresher);
 
         if (errorRef.get() != null) {
             log.error("Stream error: {}", errorRef.get().getMessage());
@@ -188,6 +216,33 @@ public class TelegramSender implements MessageSender {
             bot.execute(new SendChatAction(chatId, ChatAction.typing));
         } catch (Exception e) {
             log.warn("Failed to send typing action: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Schedule a recurring typing-action refresh so the "..." indicator stays
+     * visible during long tool-call phases (issue #282). Returns the
+     * {@link ScheduledFuture} so the caller can cancel it once real output
+     * starts flowing.
+     */
+    ScheduledFuture<?> scheduleTypingRefresh() {
+        java.util.concurrent.atomic.AtomicInteger ticks = new java.util.concurrent.atomic.AtomicInteger();
+        return TYPING_SCHEDULER.scheduleAtFixedRate(() -> {
+            if (ticks.getAndIncrement() >= TYPING_MAX_REFRESHES) {
+                // Runaway safety — give up silently.
+                return;
+            }
+            try {
+                sendTypingAction();
+            } catch (Exception ignore) {
+                // swallow; the scheduler will try again next tick
+            }
+        }, TYPING_REFRESH_MS, TYPING_REFRESH_MS, TimeUnit.MILLISECONDS);
+    }
+
+    static void cancelTypingRefresher(ScheduledFuture<?> refresher) {
+        if (refresher != null && !refresher.isDone()) {
+            refresher.cancel(false);
         }
     }
 
