@@ -1,5 +1,9 @@
 package com.herald.agent;
 
+import com.herald.agent.failover.FailoverChatModel;
+import com.herald.agent.failover.FailoverCircuitBreaker;
+import com.herald.agent.failover.FailoverEntry;
+import com.herald.agent.failover.FailoverReason;
 import com.herald.config.HeraldConfig;
 import com.herald.cron.CronTools;
 import com.herald.telegram.TelegramQuestionHandler;
@@ -70,6 +74,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -406,6 +411,17 @@ public class HeraldAgentConfig {
 
         // Build the initial client from the resolved provider (apply Anthropic skills for main agent)
         ChatModel initialChatModel = availableModels.get(initialProvider);
+        // Opt-in: wrap the initial ChatModel in a FailoverChatModel when herald.agent.model-failover
+        // is enabled — transparent retry against the chain on 429 / 5xx / timeout / unavailable.
+        if (config.modelFailoverEnabled()) {
+            FailoverChatModel failover = buildFailoverChatModel(config, availableModels,
+                    providerDefaultModels, initialProvider, initialModel);
+            if (failover != null) {
+                log.info("Model failover enabled — chain: {}", failover.chain().stream()
+                        .map(FailoverEntry::label).toList());
+                initialChatModel = failover;
+            }
+        }
         AnthropicCacheStrategy cacheStrategy = parseCacheStrategy(anthropicCacheStrategyName);
         log.info("Anthropic cache strategy: {} (configured: {})", cacheStrategy, anthropicCacheStrategyName);
         ChatClient initialClient = clientBuilderFactory.apply(initialChatModel)
@@ -521,6 +537,77 @@ public class HeraldAgentConfig {
     // Used for subagent ChatClient builders — skills not needed for subagents
     static org.springframework.ai.chat.prompt.ChatOptions.Builder<?> chatOptionsForModel(ChatModel chatModel, String modelId) {
         return ModelSwitcher.chatOptionsForModel(chatModel, modelId, List.of());
+    }
+
+    /**
+     * Build a {@link FailoverChatModel} from the configured chain. Each chain
+     * entry must reference a provider that has a {@link ChatModel} registered
+     * in {@code availableModels}; entries that reference unconfigured providers
+     * are skipped with a warning. Returns {@code null} if fewer than two usable
+     * entries remain, in which case the caller falls back to the non-failover path.
+     */
+    static FailoverChatModel buildFailoverChatModel(HeraldConfig config,
+                                                    Map<String, ChatModel> availableModels,
+                                                    Map<String, String> providerDefaultModels,
+                                                    String initialProvider,
+                                                    String initialModel) {
+        HeraldConfig.ModelFailover mf = config.modelFailover();
+        if (mf == null || mf.chain() == null || mf.chain().isEmpty()) {
+            return null;
+        }
+        List<FailoverEntry> entries = new ArrayList<>();
+        for (HeraldConfig.FailoverChainEntry ce : mf.chain()) {
+            String provider = ce.provider() == null ? null : ce.provider().toLowerCase();
+            if (provider == null || !availableModels.containsKey(provider)) {
+                log.warn("Failover chain entry skipped: provider '{}' not configured", ce.provider());
+                continue;
+            }
+            String modelId = ce.model() == null || ce.model().isBlank()
+                    ? providerDefaultModels.getOrDefault(provider, initialModel)
+                    : ce.model();
+            entries.add(new FailoverEntry(provider, modelId, availableModels.get(provider)));
+        }
+        if (entries.size() < 2) {
+            log.warn("Failover disabled — chain resolved to {} usable entry(ies); need >= 2", entries.size());
+            return null;
+        }
+        // Reorder so the currently-active (provider, model) is entry 0 — respects
+        // `/model switch` preferences and any persisted override the user set.
+        for (int i = 0; i < entries.size(); i++) {
+            FailoverEntry e = entries.get(i);
+            if (e.provider().equals(initialProvider) && e.model().equals(initialModel)) {
+                if (i > 0) {
+                    entries.add(0, entries.remove(i));
+                }
+                break;
+            }
+        }
+        Set<FailoverReason> retryOn = parseRetryOn(mf.retryOn());
+        int threshold = mf.failureThreshold() == null || mf.failureThreshold() < 1
+                ? 3 : mf.failureThreshold();
+        int openForSec = mf.openForSeconds() == null || mf.openForSeconds() < 1
+                ? 60 : mf.openForSeconds();
+        FailoverCircuitBreaker breaker = new FailoverCircuitBreaker(threshold,
+                java.time.Duration.ofSeconds(openForSec));
+        return new FailoverChatModel(entries, retryOn, breaker, null, null);
+    }
+
+    static Set<FailoverReason> parseRetryOn(List<String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null; // FailoverChatModel applies its sensible default.
+        }
+        Set<FailoverReason> result = java.util.EnumSet.noneOf(FailoverReason.class);
+        for (String token : raw) {
+            if (token == null || token.isBlank()) continue;
+            String normalized = token.trim().toUpperCase().replace('-', '_');
+            try {
+                result.add(FailoverReason.valueOf(normalized));
+            } catch (IllegalArgumentException e) {
+                log.warn("Unknown herald.agent.model-failover.retry-on value '{}' — ignoring. "
+                        + "Valid values: rate-limit, server-error, timeout, unavailable, other", token);
+            }
+        }
+        return result.isEmpty() ? null : result;
     }
 
     static AnthropicCacheStrategy parseCacheStrategy(String name) {

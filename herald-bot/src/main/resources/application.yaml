@@ -82,6 +82,22 @@ herald:
     prompt-dump: ${HERALD_PROMPT_DUMP:false}
     approval-timeout-seconds: ${HERALD_APPROVAL_TIMEOUT_SECONDS:60}
     skills-requiring-approval: ${HERALD_SKILLS_REQUIRING_APPROVAL:}
+    model-failover:
+      # Opt-in: transparently retry the next chain entry on 429 / 5xx / timeout / unavailable.
+      # Off by default — single-provider users see no change. Enable by setting
+      # HERALD_MODEL_FAILOVER_ENABLED=true and populating the chain below (or via env).
+      # See docs for examples; minimum chain size is 2.
+      enabled: ${HERALD_MODEL_FAILOVER_ENABLED:false}
+      # chain:
+      #   - provider: anthropic
+      #     model: claude-sonnet-4-5
+      #   - provider: anthropic
+      #     model: claude-haiku-4-5     # cheap same-provider fallback
+      #   - provider: openai
+      #     model: gpt-4o               # cross-provider fallback
+      # retry-on: [rate-limit, server-error, timeout, unavailable]
+      # failure-threshold: 3            # consecutive fails before circuit-open
+      # open-for-seconds: 60            # how long to skip an open entry
     anthropic:
       # Prompt-cache strategy for Anthropic requests. Anthropic charges 25% of
       # input price on cache hits and ~1.25× on misses, so caching the system
