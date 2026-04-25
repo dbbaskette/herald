@@ -357,7 +357,14 @@ HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ./run.sh ui       # ui only (port 8080)
 ./run.sh stop     # stops all services
 ./run.sh build    # builds all modules
+./run.sh doctor   # diagnose common misconfig (--json, --quiet)
 ```
+
+**If something breaks, run `./run.sh doctor` first.** It checks Java, API keys,
+the SQLite file, memory dir, skills, optional CLIs (gws, reminders, whisper,
+pdftotext, gh), and ports — prints a concise pass/warn/fail report with fix
+hints. Exit codes `0` / `1` / `2` make it safe to wire into CI or `pre-start`
+hooks.
 
 Send your bot a message on Telegram — you should get a response from Claude.
 

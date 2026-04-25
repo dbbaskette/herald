@@ -274,6 +274,21 @@ case "$cmd" in
         cd "$SCRIPT_DIR"
         ./mvnw package -DskipTests
         ;;
+    doctor)
+        # Fast diagnostic — checks runtime, API keys, DB, memory dir, skills,
+        # external CLIs, ports. Exit code: 0 clean / 1 warnings / 2 failures.
+        cd "$SCRIPT_DIR"
+        shift || true
+        JAR="$SCRIPT_DIR/herald-bot/target/herald-bot-1.0.0-SNAPSHOT.jar"
+        if [ ! -f "$JAR" ]; then
+            # Run via mvnw exec so a fresh clone doesn't need to build first.
+            ./mvnw -pl herald-bot -q exec:java \
+                -Dexec.mainClass=com.herald.doctor.Doctor \
+                -Dexec.args="$*"
+        else
+            java -cp "$JAR" com.herald.doctor.Doctor "$@"
+        fi
+        ;;
     restart)
         module="${2:-all}"
         case "$module" in
@@ -309,6 +324,7 @@ case "$cmd" in
         echo "  status         Show running services"
         echo "  logs [mod]     Tail logs for bot, ui, or all"
         echo "  build          Build all modules"
+        echo "  doctor [flags] Run diagnostic checks (--json | --quiet)"
         exit 1
         ;;
 esac
