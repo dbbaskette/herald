@@ -16,28 +16,66 @@ The CLI communicates with the running Obsidian desktop app via IPC.
 
 **IMPORTANT: The Obsidian desktop app must be running with CLI enabled (Settings → General → Command line interface → Toggle ON).**
 
-## Prerequisites
+## Critical rules
 
-**Three critical rules:**
 1. **The command is `obsidian`, NOT `obsidian-cli`.** The CLI is built into the Obsidian desktop app (v1.12+).
 2. **ALWAYS include the vault name from CONTEXT.md on every command.** Check the "Obsidian Configuration" section of CONTEXT.md for the vault name and Herald folder path. Without `vault=`, the CLI targets whichever vault is open in the app.
 3. **Prefix all paths with the Herald folder from CONTEXT.md.** Herald notes live in a subfolder, not at the vault root.
 
-The Obsidian app must be running with CLI enabled. Test with:
+## Step 0 — ensure the Obsidian CLI is reachable
+
+**Run this before any vault command.** Unlike other skills, Obsidian's CLI ships inside the desktop app — there's no `brew install`. The setup is a detection + guided-fix flow.
+
+### Detect
+
+```bash
+command -v obsidian
+```
+
+### If missing — walk the user through setup
+
+Stop and guide the user through whichever step they're missing. Don't try to auto-install the app — it's a consumer desktop install with a license check.
+
+**Is the Obsidian desktop app installed?**
+
+```bash
+ls /Applications/Obsidian.app 2>/dev/null && echo OK || echo MISSING
+```
+
+- **MISSING** → tell the user: "Install Obsidian 1.12+ from [obsidian.md](https://obsidian.md/download) first, then try again."
+- **OK** but the `obsidian` command still isn't on `PATH` → the installer sometimes forgets to update the shell rc. Tell the user:
+
+  ```bash
+  echo 'export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"' >> ~/.zprofile
+  source ~/.zprofile
+  command -v obsidian
+  ```
+
+  (Use `~/.zprofile` for zsh, `~/.bash_profile` for bash. Confirm the user's shell with `echo $SHELL` if unsure.)
+
+**Is the CLI toggle on?**
+
+The user has to flip this manually — Herald can't poke Obsidian's settings. Tell the user:
+
+> Open Obsidian → Settings → General → Command line interface → toggle ON. Then send your message again.
+
+**Is the app running?**
+
+The CLI talks to the running Obsidian process via IPC. If the app is closed, CLI commands hang or fail. Probe with a cheap command:
+
+```bash
+obsidian vault 2>&1 | head -3
+```
+
+A response within 3 seconds = app is up. Timeout or "connection refused" = app isn't running. Tell the user to open Obsidian.
+
+### Smoke-test once everything's aligned
 
 ```bash
 obsidian vault vault="<vault-name-from-CONTEXT.md>"
 ```
 
-If this fails, tell the user: "The Obsidian CLI is not available. Make sure Obsidian 1.12+ is installed, running, and CLI is enabled in Settings → General → Command line interface → Toggle ON. See https://help.obsidian.md/cli for setup."
-
-### macOS PATH
-
-On macOS, the CLI is at `/Applications/Obsidian.app/Contents/MacOS/obsidian`. The installer adds this to `~/.zprofile`. If it's not on PATH, the user needs:
-
-```bash
-export PATH="$PATH:/Applications/Obsidian.app/Contents/MacOS"
-```
+Should list the open vault. If it errors on an unknown vault name, check CONTEXT.md — the Obsidian Configuration section should have the right vault name.
 
 ## Herald-Memory Vault
 

@@ -10,15 +10,53 @@ description: >
 
 Manage Google Calendar using the `gws` CLI tool (Google Workspace CLI). All commands use `--format json` for parseable output and `calendarId: "primary"` unless the user specifies a different calendar.
 
-## Prerequisites
+## Step 0 — ensure gws is installed and authenticated for Calendar
 
-The `gws` CLI must be installed and authenticated with Calendar scopes. Test with:
+**Run this before any recipe in this skill.** Idempotent.
+
+### Detect install
 
 ```bash
-gws calendar events list --params '{"calendarId": "primary", "timeMin": "'$(date -u +%Y-%m-%dT00:00:00Z)'", "maxResults": 3}' --format json
+command -v gws
 ```
 
-If this fails with an auth error, tell the user: "Google Workspace CLI (`gws`) is not authenticated for Calendar. Run `source .env && gws auth login -s calendar` — see docs/gws-setup.md."
+### If missing — install
+
+Confirm via `askUserQuestion`:
+
+> To reach Google Calendar I need the Google Workspace CLI (`gws`, ~30 MB).
+> Run `brew install googleworkspace-cli`?
+
+Then:
+
+```bash
+brew install googleworkspace-cli
+gws --version
+```
+
+### Check auth + Calendar scope
+
+```bash
+gws auth status
+```
+
+- If it reports "no auth methods" or Calendar isn't in the authorized scopes, prompt the user:
+
+  > gws isn't authenticated for Calendar yet. I need you to run:
+  > ```
+  > source .env && gws auth login -s calendar
+  > ```
+  > in your terminal — it opens a browser for OAuth. Once done, send your message again.
+
+  Don't try to run the login flow yourself — it needs browser interaction + OAuth credentials from `.env`. The setup doc at [docs/gws-setup.md](../../docs/gws-setup.md) has the full walkthrough.
+
+- If auth looks good, smoke-test:
+
+  ```bash
+  gws calendar events list --params '{"calendarId": "primary", "timeMin": "'$(date -u +%Y-%m-%dT00:00:00Z)'", "maxResults": 3}' --format json
+  ```
+
+  A successful response (even empty) confirms scope + auth. A 401/403 → re-auth needed.
 
 ## Date/Time Handling
 

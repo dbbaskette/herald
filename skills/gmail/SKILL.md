@@ -12,15 +12,53 @@ Manage Gmail using the `gws` CLI tool (Google Workspace CLI). All commands use `
 
 **SAFETY: The agent NEVER sends emails directly — only creates drafts. Always confirm draft content with the user before creating.**
 
-## Prerequisites
+## Step 0 — ensure gws is installed and authenticated for Gmail
 
-The `gws` CLI must be installed and authenticated with Gmail scopes. Test with:
+**Run this before any recipe in this skill.** Idempotent.
+
+### Detect install
 
 ```bash
-gws gmail users threads list --params '{"userId": "me", "maxResults": 1}' --format json
+command -v gws
 ```
 
-If this fails with an auth error, tell the user: "Google Workspace CLI (`gws`) is not authenticated for Gmail. Run `source .env && gws auth login -s gmail` — see docs/gws-setup.md."
+### If missing — install
+
+Confirm via `askUserQuestion`:
+
+> To reach Gmail I need the Google Workspace CLI (`gws`, ~30 MB).
+> Run `brew install googleworkspace-cli`?
+
+Then:
+
+```bash
+brew install googleworkspace-cli
+gws --version
+```
+
+### Check auth + Gmail scope
+
+```bash
+gws auth status
+```
+
+- If it reports "no auth methods" or Gmail isn't in the authorized scopes, prompt the user:
+
+  > gws isn't authenticated for Gmail yet. I need you to run:
+  > ```
+  > source .env && gws auth login -s gmail
+  > ```
+  > in your terminal — it opens a browser for OAuth. Once done, send your message again.
+
+  Don't try to run the login flow yourself — it needs browser interaction + the user's OAuth credentials (`GOOGLE_WORKSPACE_CLI_CLIENT_ID` / `_SECRET` in `.env`). The setup doc at [docs/gws-setup.md](../../docs/gws-setup.md) has the full walkthrough.
+
+- If auth looks good, smoke-test with a tiny list:
+
+  ```bash
+  gws gmail users threads list --params '{"userId": "me", "maxResults": 1}' --format json
+  ```
+
+  Any successful response (even an empty list) confirms scope + auth. A 401/403 → re-auth needed.
 
 ## Commands
 

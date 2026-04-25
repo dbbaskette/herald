@@ -13,13 +13,51 @@ description: >
 
 Herald's `RemindersTools` wraps the CLI with five `@Tool` methods. This skill tells you when to use each one and the common patterns.
 
-## Prerequisites
+## Step 0 — ensure reminders-cli is installed and authorized
 
-Before first use: the Terminal (or the process Herald runs under) needs **Reminders access** granted in `System Settings → Privacy & Security → Reminders`. The CLI will prompt for it on the first invocation.
+**Run this before any other recipe in this skill.** Idempotent.
 
-If `reminders_list_names()` returns `{"error": "Apple Reminders CLI (reminders) is not available..."}`, tell the user:
+### Detect
 
-> Herald can't reach Reminders. Install with `brew install keith/formulae/reminders-cli` and grant Reminders access in System Settings → Privacy & Security → Reminders.
+```bash
+command -v reminders
+```
+
+### If missing — install
+
+Confirm via `askUserQuestion`:
+
+> To read/write Apple Reminders, I need the `reminders` CLI by Keith Smiley (~2 MB).
+> Run `brew install keith/formulae/reminders-cli`?
+
+Then:
+
+```bash
+brew install keith/formulae/reminders-cli
+reminders --version
+```
+
+macOS only — if `os.name` doesn't start with "Mac", stop here and tell the user reminders-cli isn't available on their platform.
+
+### Check Reminders access (Privacy grant)
+
+The CLI needs Reminders access granted in System Settings → Privacy & Security → Reminders. Probe it:
+
+```bash
+reminders show-lists
+```
+
+- **Succeeds** → access is granted, proceed to Step 1.
+- **Empty output + no error** → possibly no lists exist yet; prompt the user to confirm.
+- **Error mentioning "permissions" / "denied" / "authorization"** → the Privacy grant is missing. Tell the user:
+
+  > macOS is blocking access to Reminders. Open **System Settings → Privacy & Security → Reminders** and toggle on the entry for Terminal (or whichever app is running Herald). Then send your message again.
+
+  Don't keep retrying automatically — the user has to flip the toggle manually.
+
+### If `RemindersTools` returns an "unavailable" error
+
+If a Herald `reminders_*` tool call returns `{"error": "Apple Reminders CLI (reminders) is not available..."}`, it means the RemindersAvailabilityChecker at startup didn't find the CLI. The user installed it after Herald booted — tell them Herald needs a restart to pick up the new CLI, or re-run the check manually with `command -v reminders`.
 
 ## Tools
 
