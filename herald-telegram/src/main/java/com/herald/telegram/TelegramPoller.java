@@ -234,9 +234,10 @@ public class TelegramPoller {
             } else if (localPath != null) {
                 if (text.length() > 0) text.append("\n\n");
                 text.append(String.format(
-                        "[Voice message received (%d seconds) — install whisper "
-                                + "(`brew install whisper-cpp`, see the optional-deps skill) "
-                                + "for automatic transcription; file saved to %s]",
+                        "[Voice message received (%d seconds) — file saved to %s. "
+                                + "For automatic transcription, run a voice-handling skill "
+                                + "(it will install whisper if needed) or read the file via "
+                                + "shell tools.]",
                         voice.duration(), localPath));
             } else {
                 if (text.length() > 0) text.append("\n\n");
@@ -270,10 +271,9 @@ public class TelegramPoller {
         } else {
             if (text.length() > 0) text.append("\n\n");
             String hint = "application/pdf".equals(mime)
-                    ? " — for structure-preserving extraction (tables, headings, reading order) "
-                            + "install opendataloader-pdf (`pip install -U opendataloader-pdf`) "
-                            + "and run the pdf-extract skill on the saved file. The simpler "
-                            + "`brew install poppler` (pdftotext) is a faster fallback for short PDFs"
+                    ? " — run the `pdf-extract` skill to get structure-preserving Markdown "
+                            + "(headings, tables, reading order); it'll install "
+                            + "opendataloader-pdf if needed"
                     : "";
             text.append(String.format("[File received: %s (%s, %d bytes)%s — saved to %s]",
                     document.fileName(), mime, document.fileSize(), hint, localPath));
