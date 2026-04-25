@@ -1,19 +1,19 @@
 ---
 name: optional-deps
 description: >
-  Detect and install optional command-line tools that unlock Herald features —
-  whisper (voice transcription), pdftotext (PDF extraction), gws (Gmail +
-  Calendar), reminders-cli (Apple Reminders), ffmpeg (audio conversion), jq
-  (JSON processing). Use whenever a fallback message mentions a missing CLI,
-  whenever the user says things like "install what's missing", "what do I
-  need", "can Herald do X yet", or whenever you hit a "not available" error
-  that traces to a missing brew package. Also use proactively at the end of
-  `herald onboard` (#306) or when `herald doctor` (#309) flags missing tools.
+  Inventory of optional command-line tools Herald can use — whisper, pdftotext,
+  opendataloader-pdf, gws, reminders-cli, obsidian, ffmpeg, jq. Use when the
+  user asks "what do I have", "what am I missing", "what can Herald do yet",
+  or wants a one-shot "install everything missing" sweep. For installing a
+  single tool to unlock a specific feature (PDF extraction, voice memos,
+  etc.), prefer the dedicated skill — it knows the install path inline.
 ---
 
 # Optional Dependencies
 
-Herald has a handful of optional CLIs that unlock extra capabilities. The core works without any of them; they're strictly additive. This skill is the agent's knowledge of **which tool unlocks which feature** and **how to install each one**.
+Herald has a handful of optional CLIs that unlock extra capabilities. The core works without any of them; they're strictly additive. This skill is the **inventory and bulk-install path** — for "what do I have, what am I missing, install all the missing ones."
+
+For single-tool installs scoped to a specific task ("the user just sent a PDF; install the PDF extractor"), the relevant feature skill (e.g. `pdf-extract`) handles its own install inline. Don't bounce the user through this skill for a single-tool install — too many hops.
 
 **This is NOT a tool you call directly.** Use `shell` + `askUserQuestion` to drive detection, confirmation, and installation.
 

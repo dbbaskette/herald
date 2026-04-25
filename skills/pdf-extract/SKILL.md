@@ -17,16 +17,52 @@ Wraps the `opendataloader-pdf` CLI. Produces Markdown that keeps the document's 
 
 **This is NOT a tool you call directly.** Use `shell` to drive the CLI, then optionally hand the output to `wiki-ingest` or surface it to the user.
 
-## Prerequisites
+## Step 0 — ensure the CLI is installed
 
-`opendataloader-pdf` requires Java 11+ (Herald's runtime already satisfies this) and pip:
+**Always run this before extracting.** It's idempotent — fast no-op when already installed, helpful prompt when not.
 
 ```bash
-pip install -U opendataloader-pdf
-opendataloader-pdf --version
+command -v opendataloader-pdf
 ```
 
-If unavailable, see the `optional-deps` skill — it knows how to install this and what features it unlocks. The fallback message Herald sends when a PDF arrives will name this CLI explicitly.
+### If it's missing
+
+Herald's Java runtime satisfies the Java 11+ requirement; the CLI ships via pip. Install path:
+
+1. **Confirm with the user** via `askUserQuestion`:
+   > To extract structured Markdown from PDFs (heading hierarchy, tables, reading order, OCR for scans), I need the `opendataloader-pdf` CLI. Run `pip install -U opendataloader-pdf`? (~15 MB; takes ~30 seconds)
+
+2. **Pick the right pip** — try in this order:
+   ```bash
+   # Homebrew Python (preferred on macOS)
+   if command -v pipx >/dev/null 2>&1; then
+       pipx install opendataloader-pdf
+   elif python3 -m pip --version >/dev/null 2>&1; then
+       python3 -m pip install --user -U opendataloader-pdf
+   else
+       echo "Need pipx or pip3 — install Python 3.10+ first"
+       exit 1
+   fi
+   ```
+
+   Prefer `pipx` (isolated) over a global `pip install` so the user's Python environment stays clean. Fall back to `python3 -m pip --user` if neither pipx nor an active venv is around.
+
+3. **Verify**:
+   ```bash
+   opendataloader-pdf --version
+   ```
+
+   On `command not found` after install: the install location may not be on `PATH`. For `pip install --user` on macOS that usually means `~/Library/Python/3.X/bin` — point this out to the user and tell them how to add it (`export PATH="$HOME/Library/Python/3.11/bin:$PATH"` in their shell rc), then proceed in the same shell session if possible.
+
+4. **Report success + proceed.** Don't stop here — the user asked for a PDF to be processed; carry on with the extraction once the CLI verifies.
+
+### If the user declines the install
+
+Tell them their fallback options:
+- `pdftotext` (`brew install poppler`) — flat text, fine for short PDFs.
+- Saved file at `~/.herald/uploads/...` — the agent can still reach it via shell tools.
+
+Do NOT silently fall back without surfacing the choice — the user might genuinely prefer the simpler tool, but they should pick.
 
 ## Inputs
 
@@ -40,6 +76,8 @@ The CLI supports `json`, `markdown`, `html`, `txt`, and annotated PDF. For Heral
 ## Common recipes
 
 ### "Extract this PDF" — the default path
+
+After Step 0 (verify or install the CLI):
 
 ```bash
 PDF_PATH="$1"          # e.g. ~/.herald/uploads/1729800000_paper.pdf
