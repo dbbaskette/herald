@@ -62,7 +62,41 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record Agent(String persona, String systemPromptExtra, String contextFile,
                         Integer maxContextTokens, String defaultProvider,
                         List<String> anthropicSkills,
-                        List<String> skillsRequiringApproval) {
+                        List<String> skillsRequiringApproval,
+                        ModelFailover modelFailover) {
+        /**
+         * Backwards-compatible constructor predating the model-failover block.
+         * Keeps existing test fixtures + wiring code working without churn.
+         */
+        public Agent(String persona, String systemPromptExtra, String contextFile,
+                     Integer maxContextTokens, String defaultProvider,
+                     List<String> anthropicSkills,
+                     List<String> skillsRequiringApproval) {
+            this(persona, systemPromptExtra, contextFile, maxContextTokens, defaultProvider,
+                    anthropicSkills, skillsRequiringApproval, null);
+        }
+    }
+
+    /**
+     * Opt-in model-failover chain. When {@code enabled} and {@code chain} has
+     * two or more entries, the main agent's {@code ChatModel} is replaced by a
+     * {@code FailoverChatModel} that retries against the next entry on
+     * rate-limit / server-error / timeout / unavailable.
+     *
+     * @param enabled          off by default — existing single-provider users see no change
+     * @param chain            ordered list; entry 0 is primary, rest are fallbacks
+     * @param retryOn          canonical reason names ({@code rate-limit}, {@code server-error},
+     *                         {@code timeout}, {@code unavailable}, {@code other}).
+     *                         Null / empty defaults to the first four.
+     * @param failureThreshold consecutive failures per entry before it gets circuit-opened (default 3)
+     * @param openForSeconds   how long to skip a circuit-open entry (default 60)
+     */
+    public record ModelFailover(Boolean enabled, List<FailoverChainEntry> chain,
+                                List<String> retryOn,
+                                Integer failureThreshold, Integer openForSeconds) {
+    }
+
+    public record FailoverChainEntry(String provider, String model) {
     }
 
     public record Providers(ProviderConfig anthropic, OpenAiProviderConfig openai,
@@ -124,6 +158,24 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return agent.skillsRequiringApproval();
         }
         return List.of();
+    }
+
+    /** @return the configured failover block, or {@code null} when unset. */
+    public ModelFailover modelFailover() {
+        return agent == null ? null : agent.modelFailover();
+    }
+
+    /**
+     * @return {@code true} only when the failover block is present, explicitly
+     *         enabled, and has at least two chain entries. One-entry chains
+     *         degenerate to a plain {@link org.springframework.ai.chat.model.ChatModel}.
+     */
+    public boolean modelFailoverEnabled() {
+        ModelFailover mf = modelFailover();
+        if (mf == null || mf.enabled() == null || !mf.enabled()) {
+            return false;
+        }
+        return mf.chain() != null && mf.chain().size() >= 2;
     }
 
     public record Cron(String timezone) {
