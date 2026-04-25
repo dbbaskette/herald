@@ -270,7 +270,10 @@ public class TelegramPoller {
         } else {
             if (text.length() > 0) text.append("\n\n");
             String hint = "application/pdf".equals(mime)
-                    ? " — install pdftotext (`brew install poppler`, see the optional-deps skill) for automatic text extraction"
+                    ? " — for structure-preserving extraction (tables, headings, reading order) "
+                            + "install opendataloader-pdf (`pip install -U opendataloader-pdf`) "
+                            + "and run the pdf-extract skill on the saved file. The simpler "
+                            + "`brew install poppler` (pdftotext) is a faster fallback for short PDFs"
                     : "";
             text.append(String.format("[File received: %s (%s, %d bytes)%s — saved to %s]",
                     document.fileName(), mime, document.fileSize(), hint, localPath));
