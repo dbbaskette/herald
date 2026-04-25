@@ -19,6 +19,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class HeraldApplication {
 
     public static void main(String[] args) {
+        // `--doctor` short-circuits the Spring boot path and runs the diagnostic
+        // battery. Keeps doctor startup under a second so `run.sh doctor` feels
+        // like the terminal CLI it pretends to be, not a slow JVM.
+        for (String arg : args) {
+            if ("--doctor".equals(arg)) {
+                com.herald.doctor.Doctor.main(stripArg(args, "--doctor"));
+                return;
+            }
+        }
+
         String apiKey = System.getenv("ANTHROPIC_API_KEY");
         if (apiKey != null && !apiKey.isBlank()) {
             System.out.println("[Herald] Using ANTHROPIC_API_KEY from environment");
@@ -28,5 +38,11 @@ public class HeraldApplication {
         }
 
         SpringApplication.run(HeraldApplication.class, args);
+    }
+
+    private static String[] stripArg(String[] args, String toRemove) {
+        return java.util.Arrays.stream(args)
+                .filter(a -> !toRemove.equals(a))
+                .toArray(String[]::new);
     }
 }
