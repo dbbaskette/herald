@@ -88,6 +88,12 @@ herald:
       # prompt + tool catalog is a big win for Herald's steady-state load.
       # Values: none | tools_only | system_only | system_and_tools | conversation_history
       cache-strategy: ${HERALD_ANTHROPIC_CACHE_STRATEGY:system_and_tools}
+    memory:
+      # When "daily" (default), the first turn each UTC day injects a
+      # <system-reminder> telling the model to consolidate MEMORY.md — merge
+      # duplicates, drop stale facts, tighten descriptions. Set "off" to
+      # disable (consolidation still happens on explicit request).
+      consolidation-trigger: ${HERALD_MEMORY_CONSOLIDATION_TRIGGER:daily}
     model:
       haiku: ${HERALD_MODEL_HAIKU:claude-haiku-4-5}
       sonnet: ${HERALD_MODEL_SONNET:claude-sonnet-4-5}
