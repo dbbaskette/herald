@@ -29,6 +29,7 @@ For single-tool installs scoped to a specific task ("the user just sent a PDF; i
 | `obsidian` | Install the Obsidian desktop app 1.12+ and enable CLI in Settings → General | `obsidian vault` | Obsidian vault search via the `obsidian` skill. Without it: vault queries fail. |
 | `ffmpeg` | `brew install ffmpeg` | `ffmpeg -version` | Voice codec conversion fallback. Some iOS Telegram voice memos ship in codecs `whisper` can't read directly; `ffmpeg` bridges the gap. |
 | `jq` | `brew install jq` | `jq --version` | Clean JSON parsing in shell recipes. Multiple skills assume it's on `PATH`. |
+| `claude` | `npm install -g @anthropic-ai/claude-code` | `claude --version` | Delegate coding tasks to Claude Code via the `code-writer` skill — write scripts, fix bugs, refactor, add tests. Requires Node 18+ and an Anthropic API key or Claude.ai login. |
 
 If a feature the user wants depends on something NOT in this catalog, don't guess — tell the user to file an issue so we can add it properly.
 

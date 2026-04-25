@@ -187,6 +187,7 @@ skills/
 ├── wiki-lint/         # Orphan/dead-link/stale-claim audit
 ├── pdf-extract/       # Structure-preserving PDF → Markdown via opendataloader-pdf
 ├── voice-handling/    # Local audio → text via whisper (self-installing)
+├── code-writer/       # Delegate coding tasks to Claude Code via `claude -p`
 ├── optional-deps/     # Detect/install optional CLIs (whisper, pdftotext, ...)
 ├── skill-creator/     # Meta — create and iterate on skills
 ├── github/            # GitHub PR review and workflow helpers
