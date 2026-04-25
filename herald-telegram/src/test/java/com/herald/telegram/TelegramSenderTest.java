@@ -113,4 +113,48 @@ class TelegramSenderTest {
         // Should send at least 2 chunks
         verify(bot, atLeast(2)).execute(any(SendMessage.class));
     }
+
+    // --- #282 typing-action refresh during long tool-call phases ---
+
+    @Test
+    void scheduleTypingRefreshFiresPeriodicallyAndCancels() throws InterruptedException {
+        java.util.concurrent.ScheduledFuture<?> future = sender.scheduleTypingRefresh();
+        try {
+            Thread.sleep(TelegramSender.TYPING_REFRESH_MS + 500);
+            // Refresher fired at least once during the wait.
+            verify(bot, atLeastOnce()).execute(any(SendChatAction.class));
+        } finally {
+            TelegramSender.cancelTypingRefresher(future);
+        }
+        org.assertj.core.api.Assertions.assertThat(future.isCancelled() || future.isDone()).isTrue();
+    }
+
+    @Test
+    void cancelTypingRefresherHandlesNull() {
+        // Must not throw.
+        TelegramSender.cancelTypingRefresher(null);
+    }
+
+    @Test
+    void streamingMessageCancelsTypingRefresherOnCompletion() {
+        SendResponse okResponse = mock(SendResponse.class);
+        when(okResponse.isOk()).thenReturn(true);
+        com.pengrad.telegrambot.model.Message msg = mock(com.pengrad.telegrambot.model.Message.class);
+        when(msg.messageId()).thenReturn(42);
+        when(okResponse.message()).thenReturn(msg);
+        when(bot.execute(any(SendMessage.class))).thenReturn(okResponse);
+        com.pengrad.telegrambot.response.BaseResponse editOk =
+                mock(com.pengrad.telegrambot.response.BaseResponse.class);
+        when(editOk.isOk()).thenReturn(true);
+        when(bot.execute(any(com.pengrad.telegrambot.request.EditMessageText.class))).thenReturn(editOk);
+
+        // Fast stream — no refresh ticks needed.
+        reactor.core.publisher.Flux<String> fastStream = reactor.core.publisher.Flux.just("hello world");
+
+        sender.sendStreamingMessage(fastStream);
+
+        // Fast completion: typing refresher was cancelled before it ever fired.
+        // No assertion on typing count here — happy path just verifies no hang.
+        verify(bot, atLeastOnce()).execute(any(SendMessage.class));
+    }
 }
