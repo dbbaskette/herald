@@ -235,9 +235,8 @@ public class TelegramPoller {
                 if (text.length() > 0) text.append("\n\n");
                 text.append(String.format(
                         "[Voice message received (%d seconds) — file saved to %s. "
-                                + "For automatic transcription, run a voice-handling skill "
-                                + "(it will install whisper if needed) or read the file via "
-                                + "shell tools.]",
+                                + "Run the `voice-handling` skill to transcribe it "
+                                + "locally; it will install whisper if needed.]",
                         voice.duration(), localPath));
             } else {
                 if (text.length() > 0) text.append("\n\n");

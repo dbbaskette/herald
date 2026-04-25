@@ -9,15 +9,51 @@ description: >
 
 Manage Google Drive using the `gws` CLI tool (Google Workspace CLI). All commands use `--format json` for parseable output.
 
-## Prerequisites
+## Step 0 — ensure gws is installed and authenticated for Drive
 
-The `gws` CLI must be installed and authenticated with Drive scopes. Test with:
+**Run this before any recipe in this skill.** Idempotent.
+
+### Detect install
 
 ```bash
-gws drive files list --params '{"pageSize": 5}' --format json
+command -v gws
 ```
 
-If this fails with an auth error, tell the user: "Google Workspace CLI (`gws`) is not authenticated for Drive. Run `source .env && gws auth login -s drive` — see docs/gws-setup.md."
+### If missing — install
+
+Confirm via `askUserQuestion`:
+
+> To reach Google Drive I need the Google Workspace CLI (`gws`, ~30 MB).
+> Run `brew install googleworkspace-cli`?
+
+Then:
+
+```bash
+brew install googleworkspace-cli
+gws --version
+```
+
+### Check auth + Drive scope
+
+```bash
+gws auth status
+```
+
+- If it reports "no auth methods" or Drive isn't in the authorized scopes, prompt the user:
+
+  > gws isn't authenticated for Drive yet. I need you to run:
+  > ```
+  > source .env && gws auth login -s drive
+  > ```
+  > in your terminal — it opens a browser for OAuth. Once done, send your message again.
+
+  Don't try to run the login flow yourself — it needs browser interaction + OAuth credentials from `.env`. See [docs/gws-setup.md](../../docs/gws-setup.md).
+
+- If auth looks good, smoke-test:
+
+  ```bash
+  gws drive files list --params '{"pageSize": 5}' --format json
+  ```
 
 ## Commands
 
