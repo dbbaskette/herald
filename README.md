@@ -144,6 +144,13 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 **Models**
 - 🤖 **Multi-provider** — Anthropic, OpenAI, Gemini, Ollama (local), LM Studio (local). Switch at runtime with `/model`
 - 💰 **Tiered routing** — Haiku / Sonnet / Opus tiers for subagents so cheap work stays cheap
+- 🔁 **Model failover chain** — opt-in `FailoverChatModel` transparently retries the next chain entry on 429 / 5xx / timeout / unavailable, with a per-entry circuit breaker
+
+**Operational health**
+- 🩺 **`./run.sh doctor`** — fast diagnostic battery (Java, API keys, DB integrity + WAL mode, memory dir, skills, optional CLIs, ports). Human / `--json` / `--quiet` output; exit `0` clean / `1` warnings / `2` failures
+- 💸 **`/budget`** — daily and monthly spend caps, model ceiling, auto-pause when exceeded
+- 📦 **Anthropic prompt caching** — `system_and_tools` strategy by default; large skills + tool catalog cached across turns for ~75% cost reduction on cache hits
+- 🧹 **Daily memory consolidation** — once per UTC day, the first turn injects a reminder for the model to merge duplicate / drop stale memory pages
 
 ## The Memory System
 
@@ -431,6 +438,9 @@ Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup
 | `HERALD_WEATHER_LOCATION` | Location for weather tool | No | — |
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_ANTHROPIC_CACHE_STRATEGY` | Anthropic prompt-cache strategy: `none` / `tools_only` / `system_only` / `system_and_tools` / `conversation_history` | No | `system_and_tools` |
+| `HERALD_MEMORY_CONSOLIDATION_TRIGGER` | First-turn-of-day memory consolidation reminder: `daily` / `off` | No | `daily` |
+| `HERALD_MODEL_FAILOVER_ENABLED` | Enable opt-in failover chain (configure chain in `application.yaml`) | No | `false` |
+| `HERALD_SERVER_PORT` | Port for the bot's actuator / health endpoint | No | `8081` |
 | `HERALD_MEMORIES_DIR` | Long-term memory directory (can be an Obsidian vault folder) | No | `~/.herald/memories` |
 | `HERALD_OBSIDIAN_VAULT_PATH` | Obsidian vault path for vault-aware tools/skills | No | — |
 | `HERALD_OBSIDIAN_VAULT_MODE` | Link style for new memory pages: `auto` / `on` / `off` | No | `auto` |
