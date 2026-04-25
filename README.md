@@ -185,6 +185,7 @@ skills/
 ├── wiki-ingest/       # Ingest URL/file/text → sources + concepts + entities
 ├── wiki-query/        # Search memory, answer with page citations
 ├── wiki-lint/         # Orphan/dead-link/stale-claim audit
+├── pdf-extract/       # Structure-preserving PDF → Markdown via opendataloader-pdf
 ├── optional-deps/     # Detect/install optional CLIs (whisper, pdftotext, ...)
 ├── skill-creator/     # Meta — create and iterate on skills
 ├── github/            # GitHub PR review and workflow helpers

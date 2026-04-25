@@ -38,7 +38,7 @@ Accept any of these as a source:
 
 | Input | Handling |
 |---|---|
-| Local file path (`.md`, `.txt`, `.pdf`, `.docx`) | Read with the appropriate tool. For PDF/DOCX, fall back to `shell` + `pdftotext` / `pandoc` if no direct tool. |
+| Local file path (`.md`, `.txt`, `.pdf`, `.docx`) | Read with the appropriate tool. **For PDFs, run the `pdf-extract` skill first** — it produces structured Markdown with heading hierarchy and tables intact, which dramatically improves the takeaways you'll pull. Fall back to `shell` + `pdftotext` / `pandoc` only when the structured extractor isn't installed. |
 | URL (http/https) | Fetch with the web tool. If it fails or returns bot-block HTML, tell the user; do NOT silently invent content. |
 | Pasted text in the conversation | Use the text directly, ask for a title and source attribution if unclear. |
 
@@ -204,5 +204,6 @@ When handed N > 1 sources in one turn:
 
 ## Related skills
 
+- `pdf-extract` — run this **first** for any PDF source. Gives structure-preserving Markdown that produces much sharper takeaways than a flat text dump.
 - `wiki-query` — the read path over the same files.
 - `wiki-lint` — periodic health check for orphans and dead links.
