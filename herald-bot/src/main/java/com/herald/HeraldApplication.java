@@ -29,13 +29,11 @@ public class HeraldApplication {
             }
         }
 
-        String apiKey = System.getenv("ANTHROPIC_API_KEY");
-        if (apiKey != null && !apiKey.isBlank()) {
-            System.out.println("[Herald] Using ANTHROPIC_API_KEY from environment");
-        } else {
-            System.err.println("[Herald] WARNING: No ANTHROPIC_API_KEY set. "
-                    + "Run 'claude setup-token' and add the token to .env");
-        }
+        // Preflight (#283): friendly one-line errors for common misconfig before
+        // Spring boots, so we never surface a 40-line BeanCreationException for
+        // things like "no API key" or "JDK 17". On any fatal issue, prints the
+        // hint + docs link and exits 1.
+        com.herald.doctor.Preflight.runOrExit(args);
 
         SpringApplication.run(HeraldApplication.class, args);
     }

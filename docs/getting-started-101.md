@@ -125,9 +125,52 @@ Once the task-agent loop makes sense, here's the ladder:
 
 ## Troubleshooting
 
-- **`Could not find or load main class`** — you didn't build yet, or you're pointing at the wrong JAR path. Re-run `./mvnw package -DskipTests` and use the exact path `herald-bot/target/herald-bot.jar`.
-- **`ANTHROPIC_API_KEY is not set`** — `export` it in the same shell before running, or put it in a `.env` file and use `./run.sh`.
-- **The agent keeps apologizing instead of reading files** — you probably forgot `tools: [filesystem]` in the frontmatter, or the path you asked about doesn't exist.
-- **Compile or Maven errors** — make sure `java -version` says 21 or higher. Older JDKs will not build Herald.
+Herald does a **preflight check before Spring even boots** (issue #283), so common
+misconfigurations surface as one-line errors with fix hints — not 40-line stack traces.
+The exact text below is what Herald prints; the fixes match what it tells you to do.
 
-If you get stuck, open an issue at [github.com/dbbaskette/herald/issues](https://github.com/dbbaskette/herald/issues).
+### `Herald can't start: ANTHROPIC_API_KEY is not set.`
+
+```text
+Fix: `export ANTHROPIC_API_KEY=sk-ant-...` or add it to .env.
+See: docs/getting-started-101.md#prerequisites
+```
+
+`export` it in the same shell before running, or put it in a `.env` file at the
+repo root and use `./run.sh` (which sources `.env` automatically).
+
+### `Herald can't start: Java N is too old (need 21+).`
+
+```text
+Fix: Install JDK 21 — `brew install openjdk@21` on macOS, or use SDKMAN: `sdk install java 21-tem`.
+```
+
+After installing, confirm with `java -version` — it should report 21 or newer.
+
+### `Herald can't start: HERALD_TELEGRAM_BOT_TOKEN is not set.`
+
+```text
+Fix: Create a bot via @BotFather and put the token in .env.
+     For task-agent mode (no Telegram), pass `--agents=path.md`.
+```
+
+Personal-assistant mode requires a Telegram bot. **Task-agent mode** (the path
+this guide walks you through) skips this check — pass `--agents=hello-agent.md`
+on the command line and Herald drops the Telegram requirement.
+
+### `Herald can't start: Database directory not writable: <path>.`
+
+```text
+Fix: `chmod u+w <path>`, or override the location via HERALD_DB_PATH=/some/writable/path/herald.db.
+```
+
+Usually means `~/.herald/` is owned by another user (a sudo accident from way back)
+or sits on a read-only mount.
+
+### Other issues (no preflight match)
+
+- **`Could not find or load main class`** — you didn't build yet, or you're pointing at the wrong JAR path. Re-run `./mvnw package -DskipTests` and use the exact path `herald-bot/target/herald-bot.jar`.
+- **The agent keeps apologizing instead of reading files** — you probably forgot `tools: [filesystem]` in the frontmatter, or the path you asked about doesn't exist.
+- **Anything else weird** — run `./run.sh doctor` for the full diagnostic battery (~15 checks: API keys, DB integrity, memory dir layout, skills, optional CLIs, ports). Exit codes: `0` clean / `1` warnings / `2` failures.
+
+If you're still stuck, open an issue at [github.com/dbbaskette/herald/issues](https://github.com/dbbaskette/herald/issues) — and paste the doctor output if you have it.
