@@ -82,7 +82,8 @@ class HeraldAgentConfigIntegrationTest {
                 "system_and_tools",
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
+                Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -132,7 +133,8 @@ class HeraldAgentConfigIntegrationTest {
                 "system_and_tools",
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
+                Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -173,7 +175,8 @@ class HeraldAgentConfigIntegrationTest {
                 "system_and_tools",
                 "daily",
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
+                Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -247,7 +250,8 @@ class HeraldAgentConfigIntegrationTest {
                 "system_and_tools",
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
+                Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -266,7 +270,7 @@ class HeraldAgentConfigIntegrationTest {
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config,
                 Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
-                Optional.empty(), false);
+                Optional.empty(), false, Optional.empty());
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
         // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, ToolSearchToolCallAdvisor
@@ -288,7 +292,7 @@ class HeraldAgentConfigIntegrationTest {
                 tempDir.resolve("log.md"), tempDir.resolve("hot.md"),
                 mockModel, config,
                 Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
-                Optional.empty(), false);
+                Optional.empty(), false, Optional.empty());
 
         assertThat(advisors)
                 .filteredOn(a -> a instanceof org.springaicommunity.tool.search.ToolSearchToolCallAdvisor)

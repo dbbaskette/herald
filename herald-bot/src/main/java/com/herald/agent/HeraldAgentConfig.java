@@ -152,6 +152,29 @@ public class HeraldAgentConfig {
                 .build();
     }
 
+    /**
+     * Bean for the per-type memory approval gate (#317). When no
+     * {@link MessageSender} is configured (task-agent mode), the gate evaluates
+     * everything as APPLY so the agent loop never blocks. Otherwise, the
+     * resolved {@link com.herald.agent.MemoryApprovalPolicy} from
+     * {@code herald.memory.approval} drives confirm-diff vs auto.
+     */
+    @Bean
+    public com.herald.agent.MemoryApprovalGate memoryApprovalGate(
+            Optional<MessageSender> messageSenderOpt,
+            HeraldConfig config) {
+        Path memoriesDir = resolveTildePath(config.memoriesDir());
+        Path memoryLogPath = memoriesDir.resolve("log.md");
+        com.herald.agent.MemoryApprovalGate.MessageSenderLike sink = messageSenderOpt
+                .<com.herald.agent.MemoryApprovalGate.MessageSenderLike>map(s -> s::sendMessage)
+                .orElse(null);
+        com.herald.agent.MemoryApprovalPolicy policy = config.resolveMemoryApprovalPolicy();
+        log.info("Memory approval gate: {} (timeout={}s)",
+                sink == null ? "disabled (no MessageSender)" : "enabled",
+                policy.timeoutSeconds());
+        return new com.herald.agent.MemoryApprovalGate(sink, policy, memoriesDir, memoryLogPath);
+    }
+
     @Bean
     public ReloadableSkillsTool reloadableSkillsTool(
             @Value("${herald.agent.skills-directory:skills}") String skillsDirectory,
@@ -207,7 +230,8 @@ public class HeraldAgentConfig {
             @Qualifier("ollamaChatModel") Optional<ChatModel> ollamaChatModel,
             @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
-            @Qualifier("activeToolNames") List<String> activeToolNames) {
+            @Qualifier("activeToolNames") List<String> activeToolNames,
+            Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGateOpt) {
 
         // Set up long-term memory (HeraldAutoMemoryAdvisor owns the tools)
         Path memoriesDir = resolveTildePath(config.memoriesDir());
@@ -364,7 +388,7 @@ public class HeraldAgentConfig {
         var advisorChain = buildAdvisorChain(chatMemoryOpt,
                 contextMdAdvisor, memoriesDir, memoryLogPath, hotMdPath,
                 chatModel, config, contextCompactionAdvisorOpt, promptDumpAdvisor,
-                jdbcTemplateOpt, memoryConsolidationEnabled);
+                jdbcTemplateOpt, memoryConsolidationEnabled, memoryApprovalGateOpt);
 
         var toolList = buildToolList(shellDecorator, fsTools,
                 todoTool, askTool, telegramSendToolOpt, gwsToolsOpt,
@@ -447,7 +471,8 @@ public class HeraldAgentConfig {
             Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
             PromptDumpAdvisor promptDumpAdvisor,
             Optional<JdbcTemplate> jdbcTemplateOpt,
-            boolean memoryConsolidationEnabled) {
+            boolean memoryConsolidationEnabled,
+            Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGateOpt) {
 
         List<Advisor> advisors = new ArrayList<>();
 
@@ -472,6 +497,7 @@ public class HeraldAgentConfig {
                 .memorySystemPrompt(new ClassPathResource("prompts/AUTO_MEMORY_SYSTEM_PROMPT.md"))
                 .order(Ordered.HIGHEST_PRECEDENCE + 100)
                 .memoryConsolidationTrigger(consolidationTrigger)
+                .approvalGate(memoryApprovalGateOpt.orElse(null))
                 .build());
 
         if (chatMemoryOpt.isPresent()) {

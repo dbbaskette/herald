@@ -137,7 +137,8 @@ class HeraldAgentConfigTest {
                         "system_and_tools",
                         "daily",
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                        List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web")))
+                        List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"),
+                        Optional.empty()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load system prompt template");
     }

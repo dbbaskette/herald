@@ -144,6 +144,7 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
         private Resource memorySystemPrompt = DEFAULT_SYSTEM_PROMPT;
         private BiPredicate<ChatClientRequest, Instant> memoryConsolidationTrigger =
                 (req, instant) -> false;
+        private MemoryApprovalGate approvalGate;
 
         private Builder() {}
 
@@ -178,6 +179,16 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
             return this;
         }
 
+        /**
+         * Wire a {@link MemoryApprovalGate} so mutating tool calls go through
+         * per-type approval (issue #317). When unset, all mutations apply
+         * silently — preserving the pre-#317 behavior.
+         */
+        public Builder approvalGate(MemoryApprovalGate approvalGate) {
+            this.approvalGate = approvalGate;
+            return this;
+        }
+
         public HeraldAutoMemoryAdvisor build() {
             Objects.requireNonNull(memoriesRootDirectory, "memoriesRootDirectory is required");
 
@@ -194,7 +205,7 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
             for (ToolCallback cb : raw) {
                 String name = cb.getToolDefinition().name();
                 if (logFile != null && LoggingMemoryToolCallback.isMutatingMemoryTool(name)) {
-                    wrapped.add(new LoggingMemoryToolCallback(cb, logFile));
+                    wrapped.add(new LoggingMemoryToolCallback(cb, logFile, approvalGate));
                 } else {
                     wrapped.add(cb);
                 }

@@ -50,7 +50,31 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
         }
     }
 
-    public record Memory(String dbPath) {
+    public record Memory(String dbPath, MemoryApproval approval) {
+        /** Backwards-compatible 1-arg ctor predating the approval block. */
+        public Memory(String dbPath) {
+            this(dbPath, null);
+        }
+    }
+
+    /**
+     * Per-type approval policy for memory mutations (issue #317). When the
+     * resolved mode is {@code confirm-diff}, the agent's
+     * {@code MemoryStrReplace} / {@code MemoryCreate} / {@code MemoryDelete} /
+     * etc. tool calls are gated on a Telegram {@code /confirm} reply.
+     *
+     * <p>YAML keys map to memory page types from frontmatter: {@code concept},
+     * {@code entity}, {@code source}, {@code user}, {@code feedback},
+     * {@code project}, {@code reference}. {@code delete-any} and
+     * {@code rename-any} apply to those operations regardless of type.</p>
+     *
+     * <p>Defaults (when this block is absent or {@code enabled=null}): trust
+     * the agent on user/feedback/project/reference; gate concept/entity/source
+     * + every delete/rename. See {@link com.herald.agent.MemoryApprovalPolicy#defaults()}.</p>
+     */
+    public record MemoryApproval(Boolean enabled, Map<String, String> byType,
+                                 String deleteAny, String renameAny,
+                                 String defaultMode, Integer timeoutSeconds) {
     }
 
     public record LongTermMemory(String memoriesDir) {
@@ -163,6 +187,46 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     /** @return the configured failover block, or {@code null} when unset. */
     public ModelFailover modelFailover() {
         return agent == null ? null : agent.modelFailover();
+    }
+
+    /**
+     * Resolve the per-type memory approval policy.
+     *
+     * @return a fully-populated {@link com.herald.agent.MemoryApprovalPolicy};
+     *         falls back to {@link com.herald.agent.MemoryApprovalPolicy#defaults()}
+     *         when the {@code herald.memory.approval} block is absent or has
+     *         {@code enabled: false}, and to
+     *         {@link com.herald.agent.MemoryApprovalPolicy#disabled()} when the
+     *         block is explicitly disabled by the user.
+     */
+    public com.herald.agent.MemoryApprovalPolicy resolveMemoryApprovalPolicy() {
+        MemoryApproval ma = (memory == null) ? null : memory.approval();
+        if (ma == null) {
+            return com.herald.agent.MemoryApprovalPolicy.defaults();
+        }
+        if (ma.enabled() != null && !ma.enabled()) {
+            return com.herald.agent.MemoryApprovalPolicy.disabled();
+        }
+        com.herald.agent.MemoryApprovalPolicy defaults = com.herald.agent.MemoryApprovalPolicy.defaults();
+        Map<String, com.herald.agent.MemoryApprovalPolicy.Mode> byType = new java.util.HashMap<>(defaults.byType());
+        if (ma.byType() != null) {
+            for (Map.Entry<String, String> e : ma.byType().entrySet()) {
+                com.herald.agent.MemoryApprovalPolicy.Mode m = com.herald.agent.MemoryApprovalPolicy.Mode.parse(e.getValue());
+                if (m != null) byType.put(e.getKey().toLowerCase(), m);
+            }
+        }
+        com.herald.agent.MemoryApprovalPolicy.Mode delMode = parseModeOr(ma.deleteAny(), defaults.deleteAny());
+        com.herald.agent.MemoryApprovalPolicy.Mode renMode = parseModeOr(ma.renameAny(), defaults.renameAny());
+        com.herald.agent.MemoryApprovalPolicy.Mode defMode = parseModeOr(ma.defaultMode(), defaults.defaultMode());
+        int timeout = (ma.timeoutSeconds() != null && ma.timeoutSeconds() > 0)
+                ? ma.timeoutSeconds() : defaults.timeoutSeconds();
+        return new com.herald.agent.MemoryApprovalPolicy(byType, delMode, renMode, defMode, timeout);
+    }
+
+    private static com.herald.agent.MemoryApprovalPolicy.Mode parseModeOr(
+            String raw, com.herald.agent.MemoryApprovalPolicy.Mode fallback) {
+        com.herald.agent.MemoryApprovalPolicy.Mode m = com.herald.agent.MemoryApprovalPolicy.Mode.parse(raw);
+        return m == null ? fallback : m;
     }
 
     /**

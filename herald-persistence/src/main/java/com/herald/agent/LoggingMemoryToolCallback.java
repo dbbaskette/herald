@@ -15,6 +15,13 @@ import java.util.Map;
  * Decorates a memory {@link ToolCallback} (one of {@code memoryCreate / memoryStrReplace /
  * memoryInsert / memoryDelete / memoryRename}) and appends an event to {@code log.md}
  * after the delegate call succeeds. Read-only operations are not wrapped.
+ *
+ * <p>When configured with a {@link MemoryApprovalGate} (issue #317), the
+ * decorator can ask the user to confirm the change via Telegram before the
+ * write. The gate respects a per-type {@link MemoryApprovalPolicy} so users
+ * can trust the agent on low-stakes types ({@code user}, {@code feedback})
+ * while still reviewing curated knowledge ({@code concept}, {@code entity},
+ * {@code source}) and destructive ops (delete, rename) before they land.</p>
  */
 final class LoggingMemoryToolCallback implements ToolCallback {
 
@@ -23,11 +30,17 @@ final class LoggingMemoryToolCallback implements ToolCallback {
     private final ToolCallback delegate;
     private final Path logFile;
     private final String eventName;
+    private final MemoryApprovalGate approvalGate;
 
     LoggingMemoryToolCallback(ToolCallback delegate, Path logFile) {
+        this(delegate, logFile, null);
+    }
+
+    LoggingMemoryToolCallback(ToolCallback delegate, Path logFile, MemoryApprovalGate approvalGate) {
         this.delegate = delegate;
         this.logFile = logFile;
         this.eventName = eventNameFor(delegate.getToolDefinition().name());
+        this.approvalGate = approvalGate;
     }
 
     @Override
@@ -42,6 +55,10 @@ final class LoggingMemoryToolCallback implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
+        MemoryApprovalGate.Decision decision = gateIfNeeded(toolInput);
+        if (decision != MemoryApprovalGate.Decision.APPLY) {
+            return rejectionMessage(decision);
+        }
         String result = delegate.call(toolInput);
         logSuccess(toolInput);
         return result;
@@ -49,9 +66,33 @@ final class LoggingMemoryToolCallback implements ToolCallback {
 
     @Override
     public String call(String toolInput, ToolContext toolContext) {
+        MemoryApprovalGate.Decision decision = gateIfNeeded(toolInput);
+        if (decision != MemoryApprovalGate.Decision.APPLY) {
+            return rejectionMessage(decision);
+        }
         String result = delegate.call(toolInput, toolContext);
         logSuccess(toolInput);
         return result;
+    }
+
+    private MemoryApprovalGate.Decision gateIfNeeded(String toolInput) {
+        if (approvalGate == null) return MemoryApprovalGate.Decision.APPLY;
+        return approvalGate.evaluate(delegate.getToolDefinition().name(), toolInput);
+    }
+
+    /**
+     * @return a string the agent receives instead of the tool's normal result
+     *         when the user declines or the prompt times out. Phrased so the
+     *         agent understands and adapts without re-trying the same edit.
+     */
+    private String rejectionMessage(MemoryApprovalGate.Decision decision) {
+        return switch (decision) {
+            case DISCARD -> "Memory edit was declined by the user. "
+                    + "Do not retry the same edit — ask the user what they want changed instead.";
+            case TIMEOUT -> "Memory edit was not confirmed in time. "
+                    + "Treat this as declined and continue without the edit.";
+            default -> "Memory edit was rejected.";
+        };
     }
 
     private void logSuccess(String toolInput) {
@@ -84,7 +125,12 @@ final class LoggingMemoryToolCallback implements ToolCallback {
         return extractJsonString(toolInput, "old_path");
     }
 
-    private static String extractJsonString(String json, String key) {
+    /**
+     * Lightweight JSON string extractor — package-private so {@link MemoryDiffRenderer}
+     * can pull preview values (old_str, new_str, content) from raw tool input
+     * without taking on a Jackson dependency.
+     */
+    static String extractJsonString(String json, String key) {
         String needle = "\"" + key + "\"";
         int k = json.indexOf(needle);
         if (k < 0) {
@@ -102,7 +148,19 @@ final class LoggingMemoryToolCallback implements ToolCallback {
         for (int i = quote + 1; i < json.length(); i++) {
             char c = json.charAt(i);
             if (c == '\\' && i + 1 < json.length()) {
-                sb.append(json.charAt(++i));
+                char next = json.charAt(++i);
+                // Translate the JSON escapes that show up in real tool inputs —
+                // crucial for MemoryCreate/StrReplace whose `content` / `old_str`
+                // / `new_str` fields commonly include newlines.
+                switch (next) {
+                    case 'n' -> sb.append('\n');
+                    case 't' -> sb.append('\t');
+                    case 'r' -> sb.append('\r');
+                    case '"' -> sb.append('"');
+                    case '\\' -> sb.append('\\');
+                    case '/' -> sb.append('/');
+                    default -> sb.append(next);
+                }
                 continue;
             }
             if (c == '"') {
