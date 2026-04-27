@@ -27,6 +27,14 @@ public class HeraldApplication {
                 com.herald.doctor.Doctor.main(stripArg(args, "--doctor"));
                 return;
             }
+            if ("--onboard".equals(arg)) {
+                // Same short-circuit pattern: the interactive setup wizard runs
+                // standalone without spinning up Spring (and crucially, before
+                // preflight — which would otherwise reject the missing keys we
+                // are about to ask the user for).
+                com.herald.onboard.Onboard.main(stripArg(args, "--onboard"));
+                return;
+            }
         }
 
         // Preflight (#283): friendly one-line errors for common misconfig before

@@ -342,6 +342,18 @@ Builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `her
 
 ### Step 3 — Configure
 
+**Recommended: interactive wizard.**
+
+```bash
+./run.sh onboard
+```
+
+Walks you through the Anthropic API key, Telegram bot token, and chat ID
+auto-detection (just send your bot a message — the wizard polls Telegram for
+you). Idempotent — re-run anytime to update values without clobbering hand-edits.
+
+**Or, manual:**
+
 ```bash
 cp .env.example .env
 ```
@@ -365,6 +377,7 @@ HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ./run.sh stop     # stops all services
 ./run.sh build    # builds all modules
 ./run.sh doctor   # diagnose common misconfig (--json, --quiet)
+./run.sh onboard  # interactive setup wizard (writes .env)
 ```
 
 **If something breaks, run `./run.sh doctor` first.** It checks Java, API keys,
