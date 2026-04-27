@@ -43,6 +43,7 @@ public class CommandHandler implements SlashCommandDispatcher {
     private final int activeToolsCount;
     private final int maxContextTokens;
     private final ApprovalGate approvalGate;
+    private final java.util.Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGate;
     private final java.util.Optional<ContextCompactionAdvisor> compactionAdvisor;
     private final PromptDumpAdvisor promptDumpAdvisor;
     private final java.util.Optional<RetrospectiveService> retrospectiveService;
@@ -58,7 +59,8 @@ public class CommandHandler implements SlashCommandDispatcher {
                           java.util.Optional<ContextCompactionAdvisor> compactionAdvisor,
                           PromptDumpAdvisor promptDumpAdvisor,
                           java.util.Optional<RetrospectiveService> retrospectiveService,
-                          java.util.Optional<BudgetPolicy> budgetPolicy) {
+                          java.util.Optional<BudgetPolicy> budgetPolicy,
+                          java.util.Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGate) {
         this.cronService = cronService;
         this.chatMemory = chatMemory;
         this.sender = sender;
@@ -73,6 +75,7 @@ public class CommandHandler implements SlashCommandDispatcher {
         this.promptDumpAdvisor = promptDumpAdvisor;
         this.retrospectiveService = retrospectiveService;
         this.budgetPolicy = budgetPolicy;
+        this.memoryApprovalGate = memoryApprovalGate;
     }
 
     @Override
@@ -123,7 +126,7 @@ public class CommandHandler implements SlashCommandDispatcher {
                 /model <provider> <model> — Switch to a different model
                 /skills list — List all loaded skills
                 /skills reload — Reload skills from disk
-                /confirm <id> yes|no — Approve or deny a pending action
+                /confirm <id> yes|no — Approve or deny a pending action (shell or memory edit)
                 /save [name] — File this conversation into long-term memory (wiki-ingest)
                 /think low|medium|high|off — Set extended-thinking budget (Anthropic only)
                 /compact [now|status] — Force-compact conversation history
@@ -330,7 +333,13 @@ public class CommandHandler implements SlashCommandDispatcher {
         }
         String approvalId = parts[1];
         boolean approved = "yes".equalsIgnoreCase(parts[2]);
+        // Try shell ApprovalGate first; fall through to MemoryApprovalGate (#317)
+        // if no pending shell approval matches that id. Both gates use disjoint
+        // UUID-based ids so there's no risk of cross-resolving the wrong one.
         boolean resolved = approvalGate.resolve(approvalId, approved);
+        if (!resolved && memoryApprovalGate.isPresent()) {
+            resolved = memoryApprovalGate.get().resolve(approvalId, approved);
+        }
         if (!resolved) {
             sender.sendMessage("No pending approval found for ID: " + approvalId);
         }

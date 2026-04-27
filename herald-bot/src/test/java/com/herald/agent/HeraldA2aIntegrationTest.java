@@ -112,7 +112,8 @@ class HeraldA2aIntegrationTest {
                 "system_and_tools",
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"));
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"),
+                Optional.empty());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();

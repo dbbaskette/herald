@@ -42,6 +42,24 @@ spring:
 herald:
   memory:
     db-path: ~/.herald/herald.db
+    # Per-type approval for memory mutations (#317). When the resolved mode
+    # is `confirm-diff`, the agent's MemoryStrReplace / MemoryCreate / Delete
+    # tool calls send a diff to Telegram and block on /confirm <id> yes|no.
+    # Defaults gate concept/entity/source + every delete/rename; trust the
+    # rest. Set `enabled: false` to disable globally.
+    # approval:
+    #   enabled: true
+    #   by-type:
+    #     concept: confirm-diff
+    #     entity: confirm-diff
+    #     source: confirm-diff
+    #     user: auto
+    #     feedback: auto
+    #     project: auto
+    #     reference: auto
+    #   delete-any: confirm-diff
+    #   rename-any: confirm-diff
+    #   timeout-seconds: 120
   long-term-memory:
     memories-dir: ${HERALD_MEMORIES_DIR:~/.herald/memories}
   providers:

@@ -128,6 +128,7 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 - 📓 Append-only `log.md` records every memory mutation with timestamps
 - 🔥 `hot.md` session-continuity note, auto-refreshed from compaction summaries
 - 🔍 `wiki-ingest` / `wiki-query` / `wiki-lint` skills for write, read-with-citations, and health checks
+- ✋ **Per-type approval gates** — concept/entity/source edits + every delete/rename send a diff preview to Telegram before the write lands; low-stakes types apply silently
 - 📒 Opt-in Obsidian vault mode for `[[wikilinks]]` + Graph view; default stays portable
 
 **Capabilities**

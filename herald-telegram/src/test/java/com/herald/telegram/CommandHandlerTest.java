@@ -73,7 +73,8 @@ class CommandHandlerTest {
                 reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
                 java.util.Optional.of(retrospectiveService),
-                java.util.Optional.of(budgetPolicy));
+                java.util.Optional.of(budgetPolicy),
+                java.util.Optional.empty());
     }
 
     // --- handle() routing ---
@@ -610,7 +611,8 @@ class CommandHandlerTest {
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.empty(), promptDumpAdvisor,
                 java.util.Optional.of(retrospectiveService),
-                java.util.Optional.of(budgetPolicy));
+                java.util.Optional.of(budgetPolicy),
+                java.util.Optional.empty());
 
         noCompact.handle("/compact");
 
@@ -685,7 +687,8 @@ class CommandHandlerTest {
                 cronService, chatMemory, sender, usageTracker, modelSwitcher,
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
-                java.util.Optional.empty(), java.util.Optional.of(budgetPolicy));
+                java.util.Optional.empty(), java.util.Optional.of(budgetPolicy),
+                java.util.Optional.empty());
 
         noRetro.handle("/why");
 
@@ -778,6 +781,7 @@ class CommandHandlerTest {
                 List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
                 java.util.Optional.of(compactionAdvisor), promptDumpAdvisor,
                 java.util.Optional.of(retrospectiveService),
+                java.util.Optional.empty(),
                 java.util.Optional.empty());
 
         noBudget.handle("/budget");
