@@ -8,12 +8,19 @@ UI_PORT=8080
 LOG_DIR="$SCRIPT_DIR/logs"
 
 # ── Load .env ────────────────────────────────────────────────────────
+# Onboard creates the .env, so it must run *before* this guard. Doctor reads
+# only env vars passed in by the caller, so it can also tolerate a missing
+# .env. Everything else needs config and bails out with a hint to onboard.
+COMMAND_RAW="${1:-all}"
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
     set +a
-else
-    echo "No .env file found. Copy the example and fill in your values:"
+elif [ "$COMMAND_RAW" != "onboard" ] && [ "$COMMAND_RAW" != "doctor" ] && [ "$COMMAND_RAW" != "build" ]; then
+    echo "No .env file found. Run the setup wizard to create one:"
+    echo "  ./run.sh onboard"
+    echo ""
+    echo "Or copy the example manually:"
     echo "  cp .env.example .env"
     exit 1
 fi
@@ -277,16 +284,35 @@ case "$cmd" in
     doctor)
         # Fast diagnostic — checks runtime, API keys, DB, memory dir, skills,
         # external CLIs, ports. Exit code: 0 clean / 1 warnings / 2 failures.
+        # Routes through HeraldApplication's --doctor short-circuit so the
+        # Spring-Boot fat-jar layout works correctly (classes are inside
+        # BOOT-INF/classes which `java -cp` cannot reach).
         cd "$SCRIPT_DIR"
         shift || true
-        JAR="$SCRIPT_DIR/herald-bot/target/herald-bot-1.0.0-SNAPSHOT.jar"
+        # Discover the built JAR by glob so version bumps don't break the wrapper.
+        JAR=$(ls -t "$SCRIPT_DIR/herald-bot/target"/herald-bot-*-SNAPSHOT.jar 2>/dev/null | head -1)
         if [ ! -f "$JAR" ]; then
-            # Run via mvnw exec so a fresh clone doesn't need to build first.
             ./mvnw -pl herald-bot -q exec:java \
                 -Dexec.mainClass=com.herald.doctor.Doctor \
                 -Dexec.args="$*"
         else
-            java -cp "$JAR" com.herald.doctor.Doctor "$@"
+            java -jar "$JAR" --doctor "$@"
+        fi
+        ;;
+    onboard)
+        # Interactive setup wizard — prompts for Anthropic key, Telegram
+        # bot token + chat ID (auto-detected via getUpdates), and memory dir,
+        # then writes them to .env. Idempotent — safe to re-run.
+        cd "$SCRIPT_DIR"
+        shift || true
+        # Discover the built JAR by glob so version bumps don't break the wrapper.
+        JAR=$(ls -t "$SCRIPT_DIR/herald-bot/target"/herald-bot-*-SNAPSHOT.jar 2>/dev/null | head -1)
+        if [ ! -f "$JAR" ]; then
+            ./mvnw -pl herald-bot -q exec:java \
+                -Dexec.mainClass=com.herald.onboard.Onboard \
+                -Dexec.args="$*"
+        else
+            java -jar "$JAR" --onboard "$@"
         fi
         ;;
     restart)
@@ -325,6 +351,7 @@ case "$cmd" in
         echo "  logs [mod]     Tail logs for bot, ui, or all"
         echo "  build          Build all modules"
         echo "  doctor [flags] Run diagnostic checks (--json | --quiet)"
+        echo "  onboard        Interactive setup wizard (writes .env)"
         exit 1
         ;;
 esac
