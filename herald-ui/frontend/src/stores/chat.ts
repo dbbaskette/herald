@@ -23,6 +23,36 @@ export const useChatStore = defineStore('chat', () => {
   let nextId = 1
   let currentStream: EventSource | null = null
   let currentAbort: AbortController | null = null
+  let notificationsStream: EventSource | null = null
+
+  // Open a long-lived SSE channel for async results (background document processing
+  // — e.g. markitdown + wiki-ingest after a PDF upload). The bot pushes the final
+  // assistant reply here when the in-flight turn completes.
+  function ensureNotificationsConnected() {
+    if (notificationsStream) return
+    const url = new URL('/api/chat/notifications', window.location.origin)
+    url.searchParams.set('conversationId', conversationId.value)
+    const es = new EventSource(url.toString())
+    notificationsStream = es
+
+    es.addEventListener('message', (e: MessageEvent) => {
+      addMessage('assistant', e.data)
+    })
+    es.addEventListener('error', (e: MessageEvent) => {
+      // Server emitted a named error event; otherwise EventSource will reconnect.
+      if (e.data) {
+        addMessage('error', e.data)
+      }
+    })
+  }
+
+  function reconnectNotifications() {
+    if (notificationsStream) {
+      notificationsStream.close()
+      notificationsStream = null
+    }
+    ensureNotificationsConnected()
+  }
 
   function addMessage(
     role: ChatMessage['role'],
@@ -246,7 +276,17 @@ export const useChatStore = defineStore('chat', () => {
   function newConversation() {
     conversationId.value = `web-${Date.now()}`
     clearMessages()
+    reconnectNotifications()
   }
 
-  return { messages, sending, conversationId, send, cancel, clearMessages, newConversation }
+  return {
+    messages,
+    sending,
+    conversationId,
+    send,
+    cancel,
+    clearMessages,
+    newConversation,
+    ensureNotificationsConnected,
+  }
 })

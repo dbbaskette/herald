@@ -107,6 +107,9 @@ watch(
 
 onMounted(() => {
   inputEl.value?.focus()
+  // Subscribe to async chat notifications (results of background
+  // document-processing turns get pushed here once they complete).
+  store.ensureNotificationsConnected()
 })
 </script>
 

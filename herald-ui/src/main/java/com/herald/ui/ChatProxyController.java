@@ -69,6 +69,44 @@ class ChatProxyController {
     }
 
     /**
+     * Proxies the bot's notifications SSE channel — used by the web chat to
+     * receive results of background document-processing turns. Long-lived
+     * (30 min) so a single subscription covers a typical session.
+     */
+    @GetMapping(value = "/notifications", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    ResponseEntity<StreamingResponseBody> notifications(
+            @RequestParam(name = "conversationId", required = false) String conversationId) {
+        StringBuilder url = new StringBuilder(botUrl).append("/api/chat/notifications");
+        if (conversationId != null && !conversationId.isBlank()) {
+            url.append("?conversationId=").append(URLEncoder.encode(conversationId, StandardCharsets.UTF_8));
+        }
+        StreamingResponseBody body = output -> {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url.toString()))
+                    .header("Accept", MediaType.TEXT_EVENT_STREAM_VALUE)
+                    .timeout(Duration.ofMinutes(30))
+                    .GET()
+                    .build();
+            try {
+                HttpResponse<InputStream> response = httpClient.send(
+                        request, HttpResponse.BodyHandlers.ofInputStream());
+                pumpStream(response.body(), output);
+            } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                log.debug("Notifications proxy disconnected: {}", e.getMessage());
+                writeProxyError(output, e);
+            }
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .header("Cache-Control", "no-cache")
+                .header("X-Accel-Buffering", "no")
+                .body(body);
+    }
+
+    /**
      * Proxies the bot's SSE chat stream. Opens a streaming HTTP connection upstream and
      * copies bytes to the servlet response so tokens flow through without buffering.
      */
