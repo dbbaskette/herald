@@ -115,6 +115,20 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = false
   }
 
+  function parseSseEvent(raw: string): { event: string; data: string } | null {
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim()
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).replace(/^ /, ''))
+      }
+    }
+    if (dataLines.length === 0) return null
+    return { event, data: dataLines.join('\n') }
+  }
+
   function clearMessages() {
     cancel()
     messages.value = []

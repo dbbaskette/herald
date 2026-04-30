@@ -44,6 +44,10 @@ public class TelegramSender implements MessageSender {
     static final long TYPING_REFRESH_MS = 4_000;
     /** Safety cap so a hung turn can't schedule forever. */
     static final int TYPING_MAX_REFRESHES = 30;
+    /** Throttle for StreamingSession edit-in-place updates. */
+    private static final long STREAM_EDIT_THROTTLE_MS = 1000;
+    /** Max length before StreamingSession falls back to chunked send. */
+    private static final int STREAM_MAX_EDIT_LENGTH = 3900;
 
     private static final ScheduledExecutorService TYPING_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -208,6 +212,98 @@ public class TelegramSender implements MessageSender {
             }
         } catch (Exception e) {
             log.error("Error sending keyboard message: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Create a new streaming session. Call {@link StreamingSession#append(String)} as
+     * chunks arrive, then {@link StreamingSession#complete(String)} with the final text
+     * to flush any trailing content and persist the definitive message.
+     */
+    public StreamingSession beginStream() {
+        return new StreamingSession();
+    }
+
+    /**
+     * Incremental Telegram message writer. Sends an initial placeholder, then edits
+     * the message in place as chunks accumulate (throttled to ~1 edit/sec). On
+     * completion, falls back to the normal chunked send path to respect the 4096
+     * character limit and MarkdownV2 formatting.
+     */
+    public class StreamingSession {
+        private final StringBuilder buffer = new StringBuilder();
+        private Integer messageId;
+        private long lastEditAt = 0;
+        private boolean overflowed = false;
+
+        public synchronized void append(String chunk) {
+            if (chunk == null || chunk.isEmpty()) {
+                return;
+            }
+            buffer.append(chunk);
+            if (overflowed) {
+                return;
+            }
+            if (buffer.length() > STREAM_MAX_EDIT_LENGTH) {
+                overflowed = true;
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if (messageId == null) {
+                sendPlaceholder();
+                lastEditAt = now;
+            } else if (now - lastEditAt >= STREAM_EDIT_THROTTLE_MS) {
+                editTo(buffer.toString());
+                lastEditAt = now;
+            }
+        }
+
+        /**
+         * Finalize the stream. If the content fits in a single message and an
+         * in-place edit is possible, edit the placeholder to the final text.
+         * Otherwise delete/skip the placeholder and send the full reply via the
+         * normal chunked path.
+         */
+        public synchronized void complete(String finalText) {
+            String text = finalText != null ? finalText : buffer.toString();
+            if (text.isEmpty()) {
+                return;
+            }
+            if (messageId != null && !overflowed && text.length() <= STREAM_MAX_EDIT_LENGTH) {
+                editTo(text);
+                return;
+            }
+            sendMessage(text);
+        }
+
+        private void sendPlaceholder() {
+            try {
+                SendResponse response = bot.execute(new SendMessage(chatId, buffer.toString()));
+                if (response.isOk() && response.message() != null) {
+                    messageId = response.message().messageId();
+                } else {
+                    log.warn("Failed to send streaming placeholder: {}", response.description());
+                }
+            } catch (Exception e) {
+                log.warn("Error sending streaming placeholder: {}", e.getMessage());
+            }
+        }
+
+        private void editTo(String text) {
+            if (messageId == null) {
+                return;
+            }
+            try {
+                BaseResponse response = bot.execute(new EditMessageText(chatId, messageId, text));
+                if (!response.isOk()) {
+                    // Throttling or transient failure — log and keep going; final
+                    // complete() will still deliver the full text.
+                    log.debug("Streaming edit failed (code={}): {}",
+                            response.errorCode(), response.description());
+                }
+            } catch (Exception e) {
+                log.debug("Error editing streaming message: {}", e.getMessage());
+            }
         }
     }
 
