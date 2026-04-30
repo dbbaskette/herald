@@ -1,18 +1,87 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue'
+import { ref, nextTick, onMounted, watch, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 
 const store = useChatStore()
 const input = ref('')
 const chatBody = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const fileInputEl = ref<HTMLInputElement | null>(null)
+const attachments = ref<File[]>([])
+const dragActive = ref(false)
+const attachmentError = ref('')
+
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024 // 20 MB total cap
+
+const totalBytes = computed(() =>
+  attachments.value.reduce((sum, f) => sum + f.size, 0)
+)
+
+const overLimit = computed(() => totalBytes.value > MAX_TOTAL_BYTES)
+
+const canSend = computed(
+  () => (input.value.trim().length > 0 || attachments.value.length > 0) && !store.sending && !overLimit.value
+)
 
 async function handleSend() {
-  const text = input.value.trim()
-  if (!text || store.sending) return
+  if (!canSend.value) return
+  const text = input.value
+  const files = attachments.value
   input.value = ''
-  await store.send(text)
+  attachments.value = []
+  attachmentError.value = ''
+  await store.send(text, files)
   inputEl.value?.focus()
+}
+
+function openFilePicker() {
+  fileInputEl.value?.click()
+}
+
+function onFileInputChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    addFiles(Array.from(target.files))
+  }
+  // Reset so selecting the same file again triggers change.
+  target.value = ''
+}
+
+function addFiles(files: File[]) {
+  attachmentError.value = ''
+  const next = [...attachments.value, ...files]
+  const total = next.reduce((s, f) => s + f.size, 0)
+  if (total > MAX_TOTAL_BYTES) {
+    attachmentError.value = `Total upload size exceeds ${formatBytes(MAX_TOTAL_BYTES)}.`
+  }
+  attachments.value = next
+}
+
+function removeAttachment(index: number) {
+  attachments.value = attachments.value.filter((_, i) => i !== index)
+  if (!overLimit.value) attachmentError.value = ''
+}
+
+function onDragOver(e: DragEvent) {
+  if (!e.dataTransfer) return
+  // Only show drop affordance when dragging files.
+  if (Array.from(e.dataTransfer.items).some((i) => i.kind === 'file')) {
+    e.preventDefault()
+    dragActive.value = true
+  }
+}
+
+function onDragLeave(e: DragEvent) {
+  // Only deactivate when leaving the drop zone, not just hovering child elements.
+  if ((e.currentTarget as HTMLElement)?.contains(e.relatedTarget as Node)) return
+  dragActive.value = false
+}
+
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  dragActive.value = false
+  const dropped = Array.from(e.dataTransfer?.files ?? [])
+  if (dropped.length > 0) addFiles(dropped)
 }
 
 async function scrollToBottom() {
@@ -20,6 +89,12 @@ async function scrollToBottom() {
   if (chatBody.value) {
     chatBody.value.scrollTop = chatBody.value.scrollHeight
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // Auto-scroll whenever messages change, content updates, or sending state changes
@@ -36,7 +111,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="chat-page">
+  <div
+    class="chat-page"
+    :class="{ 'drag-active': dragActive }"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
     <header class="chat-header">
       <div class="header-left">
         <h1 class="page-title">Chat</h1>
@@ -67,7 +148,7 @@ onMounted(() => {
           </svg>
         </div>
         <p class="empty-text">Send a message to start chatting with Herald</p>
-        <p class="empty-hint">Same agent as Telegram — tools, memory, and skills are all available</p>
+        <p class="empty-hint">Same agent as Telegram — tools, memory, and skills are all available. Drop a file to attach it.</p>
       </div>
 
       <!-- Messages -->
@@ -84,6 +165,20 @@ onMounted(() => {
             <span v-else>!</span>
           </div>
           <div class="message-content">
+            <!-- Attachment pills above the user bubble -->
+            <div v-if="msg.attachments && msg.attachments.length" class="message-attachments">
+              <span
+                v-for="(att, idx) in msg.attachments"
+                :key="idx"
+                class="message-attachment-pill"
+                :title="att.mimeType"
+              >
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M11 7l-4 4a2 2 0 0 1-3-3l5-5a3 3 0 0 1 4 4l-5 5"/>
+                </svg>
+                {{ att.name }} <span class="size">({{ formatBytes(att.size) }})</span>
+              </span>
+            </div>
             <!-- Streaming bubble with no content yet: show dots inline -->
             <div v-if="msg.streaming && !msg.content" class="typing-indicator">
               <span class="typing-dot"></span>
@@ -100,11 +195,58 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- Drag-drop overlay -->
+      <div v-if="dragActive" class="drop-overlay">
+        <div class="drop-message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 3v4a1 1 0 0 0 1 1h4M5 12V5a2 2 0 0 1 2-2h7l5 5v6M9 14l3 3 3-3M12 17v-6"/>
+          </svg>
+          <span>Drop files to attach</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending attachment pills + error banner -->
+    <div v-if="attachments.length > 0 || attachmentError" class="pending-row">
+      <div v-if="attachmentError" class="pending-error">{{ attachmentError }}</div>
+      <div v-if="attachments.length > 0" class="pending-pills">
+        <span
+          v-for="(file, idx) in attachments"
+          :key="idx"
+          class="pending-pill"
+        >
+          <span class="pending-name">{{ file.name }}</span>
+          <span class="pending-size">{{ formatBytes(file.size) }}</span>
+          <button class="pending-remove" @click="removeAttachment(idx)" title="Remove">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M3 3l6 6M9 3l-6 6"/>
+            </svg>
+          </button>
+        </span>
+      </div>
     </div>
 
     <!-- Input bar -->
     <div class="chat-input-bar">
       <div class="input-wrap">
+        <input
+          ref="fileInputEl"
+          type="file"
+          multiple
+          class="file-input-hidden"
+          @change="onFileInputChange"
+        />
+        <button
+          class="attach-btn"
+          :disabled="store.sending"
+          @click="openFilePicker"
+          title="Attach files"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M11 7.5l-4.25 4.25a2.5 2.5 0 0 1-3.54-3.54L8.5 3a3.5 3.5 0 0 1 4.95 4.95l-5.66 5.66"/>
+          </svg>
+        </button>
         <input
           ref="inputEl"
           v-model="input"
@@ -116,7 +258,7 @@ onMounted(() => {
         />
         <button
           class="send-btn"
-          :disabled="!input.trim() || store.sending"
+          :disabled="!canSend"
           @click="handleSend()"
         >
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -158,6 +300,7 @@ function formatTime(ts: string): string {
   flex-direction: column;
   height: 100%;
   font-family: 'DM Sans', system-ui, sans-serif;
+  position: relative;
 }
 
 /* Header */
@@ -242,6 +385,7 @@ function formatTime(ts: string): string {
   border: 1px solid #e8e5df;
   border-radius: 10px;
   background: #fafaf8;
+  position: relative;
 }
 
 .chat-empty {
@@ -329,6 +473,39 @@ function formatTime(ts: string): string {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.message-user .message-attachments {
+  justify-content: flex-end;
+}
+
+.message-attachment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  font-size: 0.7rem;
+  color: #1e3a8a;
+  font-weight: 500;
+}
+
+.message-attachment-pill svg {
+  width: 11px;
+  height: 11px;
+}
+
+.message-attachment-pill .size {
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .message-text {
@@ -441,6 +618,105 @@ function formatTime(ts: string): string {
   50% { opacity: 1; transform: translateY(-4px); }
 }
 
+/* Drag-drop overlay */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(29, 78, 216, 0.08);
+  border: 2px dashed #1d4ed8;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.drop-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.drop-message svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* Pending attachment row */
+.pending-row {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pending-error {
+  font-size: 0.75rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.pending-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pending-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  color: #1a1a1a;
+}
+
+.pending-name {
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-size {
+  color: #6b7280;
+}
+
+.pending-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.pending-remove:hover {
+  background: #e5e7eb;
+  color: #1a1a1a;
+}
+
+.pending-remove svg {
+  width: 10px;
+  height: 10px;
+}
+
 /* Input bar */
 .chat-input-bar {
   padding-top: 12px;
@@ -461,6 +737,41 @@ function formatTime(ts: string): string {
 .input-wrap:focus-within {
   border-color: #1d4ed8;
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+}
+
+.file-input-hidden {
+  display: none;
+}
+
+.attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 2px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #1a1a1a;
+}
+
+.attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.attach-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .chat-input {

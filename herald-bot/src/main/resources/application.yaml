@@ -5,6 +5,11 @@ spring:
     virtual:
       enabled: true
 
+  servlet:
+    multipart:
+      max-file-size: 20MB    # Per-file cap for /api/chat/stream-multipart uploads
+      max-request-size: 25MB # Total request cap (text + files + boundary overhead)
+
   sql:
     init:
       mode: never  # Schema managed explicitly by DataSourceInitializer bean

@@ -4,6 +4,10 @@ spring:
   threads:
     virtual:
       enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB    # Per-file cap for /api/chat/stream-multipart proxy
+      max-request-size: 25MB # Total request cap (text + files + boundary overhead)
   sql:
     init:
       mode: never
