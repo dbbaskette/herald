@@ -117,7 +117,7 @@ class HeraldAgentConfigTest {
     @Test
     void loadPromptTemplateThrowsForMissingResource() {
         assertThatThrownBy(() ->
-                agentConfig.modelSwitcher(null, configWith(null, null),
+                agentConfig.modelSwitcher(null, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), configWith(null, null),
                         Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                         Optional.empty(),
                         mock(com.herald.tools.HeraldShellDecorator.class),
