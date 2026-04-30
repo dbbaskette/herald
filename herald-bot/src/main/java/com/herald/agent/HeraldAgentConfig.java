@@ -195,8 +195,14 @@ public class HeraldAgentConfig {
     }
 
     @Bean
+    public org.springaicommunity.agent.tools.task.repository.TaskRepository taskRepository() {
+        return new DefaultTaskRepository();
+    }
+
+    @Bean
     public ModelSwitcher modelSwitcher(
             @Qualifier("anthropicChatModel") ChatModel chatModel,
+            org.springaicommunity.agent.tools.task.repository.TaskRepository taskRepository,
             HeraldConfig config,
             Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
             PromptDumpAdvisor promptDumpAdvisor,
@@ -299,8 +305,6 @@ public class HeraldAgentConfig {
                 config.obsidianVaultPath().isEmpty() ? "<unset>" : config.obsidianVaultPath());
 
         // Configure multi-model routing for subagent delegation
-        var taskRepository = new DefaultTaskRepository();
-
         var subagentTypeBuilder = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", ChatClient.builder(chatModel))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))

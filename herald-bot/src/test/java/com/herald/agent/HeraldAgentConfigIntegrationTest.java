@@ -66,7 +66,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
+                mockModel, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -117,7 +117,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
+                mockModel, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -159,7 +159,7 @@ class HeraldAgentConfigIntegrationTest {
                 .thenReturn(List.of());
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockAnthropicModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
+                mockAnthropicModel, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
                 Optional.of(mock(TelegramSendTool.class)),
@@ -229,7 +229,7 @@ class HeraldAgentConfigIntegrationTest {
                 new HeraldConfig.Agent("TestBot", null, null, null, null, null, null), null, null, null, null, null, null, null);
 
         ModelSwitcher switcher = agentConfig.modelSwitcher(
-                mockModel, config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
+                mockModel, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                 Optional.empty(),  // chatMemory
                 mock(HeraldShellDecorator.class),
                 new FileSystemTools(),
