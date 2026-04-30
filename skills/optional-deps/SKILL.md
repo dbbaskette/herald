@@ -13,7 +13,7 @@ description: >
 
 Herald has a handful of optional CLIs that unlock extra capabilities. The core works without any of them; they're strictly additive. This skill is the **inventory and bulk-install path** — for "what do I have, what am I missing, install all the missing ones."
 
-For single-tool installs scoped to a specific task ("the user just sent a PDF; install the PDF extractor"), the relevant feature skill (e.g. `pdf-extract`) handles its own install inline. Don't bounce the user through this skill for a single-tool install — too many hops.
+For single-tool installs scoped to a specific task ("the user just sent a PDF; install the document converter"), the relevant feature skill (e.g. `markitdown`) handles its own install inline. Don't bounce the user through this skill for a single-tool install — too many hops.
 
 **This is NOT a tool you call directly.** Use `shell` + `askUserQuestion` to drive detection, confirmation, and installation.
 
@@ -23,7 +23,7 @@ For single-tool installs scoped to a specific task ("the user just sent a PDF; i
 |---|---|---|---|
 | `whisper` | `brew install whisper-cpp` | `whisper --help` | Voice-memo transcription in Telegram ([#320](https://github.com/dbbaskette/herald/pull/324)). Without it: voice messages are saved to `~/.herald/uploads/` and the agent can only reach them via shell tools. |
 | `pdftotext` | `brew install poppler` | `pdftotext -v` | Inline text extraction from PDFs sent to Telegram (the simple, fast path — soup-style output, fine for 1–2 page PDFs). Without it: PDFs are saved to `~/.herald/uploads/` and the agent can only reach them via shell tools. |
-| `opendataloader-pdf` | `pip install -U opendataloader-pdf` | `opendataloader-pdf --version` | Structure-preserving PDF extraction (heading hierarchy, tables, reading order, OCR for scans). The `pdf-extract` skill drives it. Strongly preferred over `pdftotext` for any multi-page or table-heavy document. Requires Java 11+ (Herald's runtime already satisfies this) and Python 3.10+. |
+| `markitdown` | `pipx install 'markitdown[all]'` | `markitdown --help` | Structure-preserving conversion of PDFs, Office docs (DOCX/PPTX/XLSX), HTML, EPUB, images (OCR), audio (transcription), YouTube URLs, and ZIP archives → Markdown. The `markitdown` skill drives it. Strongly preferred over `pdftotext` for any multi-page or table-heavy document. Requires Python 3.10+. |
 | `gws` | `brew install googleworkspace-cli` (then `gws auth login -s gmail,calendar,drive`) | `gws auth status` | Gmail + Google Calendar + Google Drive skills. Without it: those skills return "gws not configured" and fail gracefully. |
 | `reminders` | `brew install keith/formulae/reminders-cli` (then grant Reminders access in System Settings → Privacy) | `reminders show-lists` | Apple Reminders read/write ([#300](https://github.com/dbbaskette/herald/issues/300)). Without it: `reminders_*` tools report "not available". |
 | `obsidian` | Install the Obsidian desktop app 1.12+ and enable CLI in Settings → General | `obsidian vault` | Obsidian vault search via the `obsidian` skill. Without it: vault queries fail. |

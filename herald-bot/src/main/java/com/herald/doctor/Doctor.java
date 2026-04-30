@@ -193,7 +193,7 @@ public final class Doctor {
                 "pipx install openai-whisper  — or run /skill voice-handling"));
         list.add(new ExternalCliCheck("PDF text extractor", "pdftotext",
                 new String[]{"-v"},
-                "brew install poppler  — or run /skill pdf-extract", false));
+                "brew install poppler  — or run /skill markitdown for richer Markdown extraction", false));
 
         // Ports.
         int botPort = parseInt(env.getOrDefault("HERALD_SERVER_PORT", "8081"), 8081);

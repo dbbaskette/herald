@@ -130,6 +130,6 @@ Step 0 + Step 1 → then ask the user: "Save as a memory page, a plain note, or 
 ## Related
 
 - `optional-deps` — bulk inventory if the user wants to check several CLIs at once.
-- `pdf-extract` — same self-install pattern for a different tool (`opendataloader-pdf`).
+- `markitdown` — same self-install pattern for a different tool (`markitdown` CLI); also handles short audio clips via its `[audio]` extra.
 - `reminders` — natural downstream when the voice memo is a task.
 - `wiki-ingest` — natural downstream when the voice memo is a durable note.

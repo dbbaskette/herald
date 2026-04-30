@@ -270,9 +270,9 @@ public class TelegramPoller {
         } else {
             if (text.length() > 0) text.append("\n\n");
             String hint = "application/pdf".equals(mime)
-                    ? " — run the `pdf-extract` skill to get structure-preserving Markdown "
+                    ? " — run the `markitdown` skill to get structure-preserving Markdown "
                             + "(headings, tables, reading order); it'll install "
-                            + "opendataloader-pdf if needed"
+                            + "the markitdown CLI if needed"
                     : "";
             text.append(String.format("[File received: %s (%s, %d bytes)%s — saved to %s]",
                     document.fileName(), mime, document.fileSize(), hint, localPath));

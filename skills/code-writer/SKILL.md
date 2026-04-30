@@ -192,5 +192,5 @@ Fast, doesn't mutate the tree, gives the main agent an index it can hand back to
 ## Related
 
 - `optional-deps` — bulk inventory (will now list `claude` alongside whisper, pdftotext, etc.).
-- `pdf-extract`, `voice-handling` — same self-install pattern.
+- `markitdown`, `voice-handling` — same self-install pattern.
 - Herald's task/subagent dispatch — different mechanism (in-process ChatClient); use this skill instead when the task is clearly "write code to disk," not "research a topic and return text."
