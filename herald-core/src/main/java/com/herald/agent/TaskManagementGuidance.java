@@ -40,14 +40,7 @@ public final class TaskManagementGuidance {
     }
 
     private static String readResource() {
-        try (InputStream in = TaskManagementGuidance.class.getResourceAsStream(RESOURCE_PATH)) {
-            if (in == null) {
-                throw new IllegalStateException(
-                        "Classpath resource " + RESOURCE_PATH + " not found");
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to load " + RESOURCE_PATH, e);
-        }
+        // Honors ~/.herald/prompts/TASK_MANAGEMENT_GUIDANCE.md as a user override.
+        return PromptLoader.load(RESOURCE_PATH).strip();
     }
 }

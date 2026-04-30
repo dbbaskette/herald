@@ -216,12 +216,14 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
         }
 
         private static String readPrompt(Resource resource) {
-            try (var in = resource.getInputStream()) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            } catch (IOException e) {
+            // Honors ~/.herald/prompts/<filename> as a user override; falls
+            // back to the bundled classpath resource.
+            try {
+                return PromptLoader.load(resource);
+            } catch (RuntimeException e) {
                 log.warn("Failed to read memory system prompt {}: {}",
                         resource.getDescription(), e.getMessage());
-                throw new UncheckedIOException(e);
+                throw e;
             }
         }
     }

@@ -45,6 +45,34 @@
 
     <build>
         <plugins>
+            <!-- Copy herald-core's bundled prompts into herald-ui's classpath so
+                 the PromptsController can read defaults via ClassPathResource.
+                 herald-core can't be a normal dependency — that pulls in Spring AI
+                 autoconfigurations that try to start chat models the UI doesn't need. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-bundled-prompts</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/prompts</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../herald-core/src/main/resources/prompts</directory>
+                                    <includes>
+                                        <include>*.md</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
