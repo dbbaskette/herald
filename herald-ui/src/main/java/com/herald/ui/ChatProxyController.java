@@ -1,5 +1,7 @@
 package com.herald.ui;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -19,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -86,27 +89,13 @@ class ChatProxyController {
             try {
                 HttpResponse<InputStream> response = httpClient.send(
                         request, HttpResponse.BodyHandlers.ofInputStream());
-                try (InputStream in = response.body()) {
-                    byte[] buf = new byte[1024];
-                    int n;
-                    while ((n = in.read(buf)) != -1) {
-                        output.write(buf, 0, n);
-                        output.flush();
-                    }
-                }
+                pumpStream(response.body(), output);
             } catch (IOException | InterruptedException e) {
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
                 log.warn("Chat stream proxy interrupted: {}", e.getMessage());
-                String err = "event: error\ndata: Bot unreachable: "
-                        + (e.getMessage() != null ? e.getMessage().replace("\n", " ") : "") + "\n\n";
-                try {
-                    output.write(err.getBytes(StandardCharsets.UTF_8));
-                    output.flush();
-                } catch (IOException ignored) {
-                    // Client already gone
-                }
+                writeProxyError(output, e);
             }
         };
 
@@ -115,5 +104,82 @@ class ChatProxyController {
                 .header("Cache-Control", "no-cache")
                 .header("X-Accel-Buffering", "no")
                 .body(body);
+    }
+
+    /**
+     * Forwards a multipart upload (text + files) to the bot's SSE multipart endpoint
+     * and streams the response back. We treat the request body as opaque bytes —
+     * preserving the original {@code multipart/form-data} boundary and parts so the
+     * bot can re-parse them with its own {@code MultipartFile} resolver.
+     */
+    @PostMapping(value = "/stream-multipart",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    ResponseEntity<StreamingResponseBody> streamMultipart(
+            @RequestHeader("Content-Type") String contentType,
+            HttpServletRequest request) {
+
+        // Read the raw multipart body once into memory. Bytes will be re-sent
+        // upstream with the same Content-Type (boundary) so the bot can re-parse.
+        // Cap is enforced by Spring's multipart-max-file-size + max-request-size.
+        final byte[] payload;
+        try (InputStream in = request.getInputStream()) {
+            payload = in.readAllBytes();
+        } catch (IOException e) {
+            log.warn("Failed to buffer multipart upload: {}", e.getMessage());
+            StreamingResponseBody errBody = output -> writeProxyError(output, e);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .contentType(MediaType.TEXT_EVENT_STREAM)
+                    .body(errBody);
+        }
+
+        StreamingResponseBody body = output -> {
+            HttpRequest upstream = HttpRequest.newBuilder()
+                    .uri(URI.create(botUrl + "/api/chat/stream-multipart"))
+                    .header("Content-Type", contentType)
+                    .header("Accept", MediaType.TEXT_EVENT_STREAM_VALUE)
+                    .timeout(Duration.ofMinutes(5))
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(payload))
+                    .build();
+            try {
+                HttpResponse<InputStream> response = httpClient.send(
+                        upstream, HttpResponse.BodyHandlers.ofInputStream());
+                pumpStream(response.body(), output);
+            } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                log.warn("Chat stream proxy interrupted: {}", e.getMessage());
+                writeProxyError(output, e);
+            }
+        };
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .header("Cache-Control", "no-cache")
+                .header("X-Accel-Buffering", "no")
+                .body(body);
+    }
+
+    private static void pumpStream(InputStream upstream, java.io.OutputStream client) throws IOException {
+        try (InputStream in = upstream) {
+            byte[] buf = new byte[1024];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                client.write(buf, 0, n);
+                client.flush();
+            }
+        }
+    }
+
+    private static void writeProxyError(java.io.OutputStream output, Exception e) {
+        String err = "event: error\ndata: Bot unreachable: "
+                + (e.getMessage() != null ? e.getMessage().replace("\n", " ") : "") + "\n\n";
+        try {
+            output.write(err.getBytes(StandardCharsets.UTF_8));
+            output.flush();
+        } catch (IOException ignored) {
+            // Client already gone
+        }
     }
 }
