@@ -30,9 +30,17 @@ import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.AnthropicCacheStrategy;
 import org.springframework.ai.chat.client.ChatClient;
 // MessageChatMemoryAdvisor replaced by OneShotMemoryAdvisor to prevent
-// re-loading/re-saving memory on each ToolSearchToolCallAdvisor iteration
-import org.springaicommunity.tool.search.ToolSearchToolCallAdvisor;
-import org.springaicommunity.tool.searcher.LuceneToolSearcher;
+// re-loading/re-saving memory on each tool-iteration round.
+//
+// NOTE: ToolSearchToolCallAdvisor (community library tool-search-tool 2.0.1)
+// was previously added here to filter the visible tool set per-turn via
+// Lucene scoring. It's been removed — the library calls
+// JsonParser.fromJson(String, com.fasterxml.jackson.core.type.TypeReference)
+// which no longer exists in Spring AI 2.0+ (the project moved to Jackson 3
+// under the tools.jackson.* package). Until tool-search-tool publishes a
+// Jackson-3-compatible release, all tools are exposed to the model directly
+// via Spring AI's built-in ToolCallAdvisor (auto-installed by the chat client
+// when tools are present).
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -517,13 +525,9 @@ public class HeraldAgentConfig {
         // Conditional on property (not persistence)
         advisors.add(promptDumpAdvisor);
 
-        // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — indexes all registered
-        // tools via LuceneToolSearcher and exposes a toolSearchTool for on-demand
-        // discovery. Explicit order just before ChatModelCallAdvisor (LOWEST_PRECEDENCE).
-        advisors.add(ToolSearchToolCallAdvisor.builder()
-                .toolSearcher(new LuceneToolSearcher())
-                .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
-                .build());
+        // Spring AI's built-in ToolCallAdvisor is added automatically by the chat
+        // client when tools are configured via .defaultTools / .defaultToolCallbacks
+        // (see DefaultChatClient). No explicit registration needed here.
 
         return advisors;
     }

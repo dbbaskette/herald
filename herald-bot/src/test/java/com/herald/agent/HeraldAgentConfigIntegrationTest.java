@@ -273,14 +273,21 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), false, Optional.empty());
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
-        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, ToolSearchToolCallAdvisor
-        assertThat(advisors).hasSize(6);
+        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor.
+        // (ToolSearchToolCallAdvisor was removed — incompatible with Spring AI 2.0
+        // Jackson 3 API. Spring AI auto-installs ToolCallAdvisor when tools are
+        // attached via .defaultTools / .defaultToolCallbacks, so we don't add it
+        // explicitly to this chain.)
+        assertThat(advisors).hasSize(5);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
 
     @Test
-    void advisorChainUsesToolSearchToolCallAdvisor(@TempDir Path tempDir) {
+    void advisorChainOmitsToolCallAdvisor(@TempDir Path tempDir) {
+        // Spring AI auto-installs ToolCallAdvisor when tools are configured on the
+        // chat client; herald no longer adds one explicitly. This test pins that
+        // contract so a future regression doesn't silently double-up.
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
@@ -295,12 +302,7 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), false, Optional.empty());
 
         assertThat(advisors)
-                .filteredOn(a -> a instanceof org.springaicommunity.tool.search.ToolSearchToolCallAdvisor)
-                .hasSize(1);
-        // ToolSearchToolCallAdvisor replaces ToolCallAdvisor — none of the base type should remain
-        assertThat(advisors)
-                .filteredOn(a -> a.getClass().equals(org.springframework.ai.chat.client.advisor.ToolCallAdvisor.class))
-                .isEmpty();
+                .noneMatch(a -> a instanceof org.springframework.ai.chat.client.advisor.ToolCallAdvisor);
     }
 
     @Test
