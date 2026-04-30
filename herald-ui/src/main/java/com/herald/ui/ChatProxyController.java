@@ -1,7 +1,6 @@
 package com.herald.ui;
 
-import jakarta.servlet.http.HttpServletRequest;
-
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -11,6 +10,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,10 +22,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RestController
@@ -108,30 +110,30 @@ class ChatProxyController {
 
     /**
      * Forwards a multipart upload (text + files) to the bot's SSE multipart endpoint
-     * and streams the response back. We treat the request body as opaque bytes —
-     * preserving the original {@code multipart/form-data} boundary and parts so the
-     * bot can re-parse them with its own {@code MultipartFile} resolver.
+     * and streams the response back. Spring's multipart filter has already parsed
+     * the incoming request body, so we rebuild a fresh {@code multipart/form-data}
+     * payload from the parsed parts (with our own boundary) for the upstream call.
      */
     @PostMapping(value = "/stream-multipart",
                  consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
                  produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     ResponseEntity<StreamingResponseBody> streamMultipart(
-            @RequestHeader("Content-Type") String contentType,
-            HttpServletRequest request) {
+            @RequestPart(name = "message", required = false) String message,
+            @RequestPart(name = "conversationId", required = false) String conversationId,
+            @RequestPart(name = "files", required = false) List<MultipartFile> files) {
 
-        // Read the raw multipart body once into memory. Bytes will be re-sent
-        // upstream with the same Content-Type (boundary) so the bot can re-parse.
-        // Cap is enforced by Spring's multipart-max-file-size + max-request-size.
+        final String boundary = "----herald" + UUID.randomUUID().toString().replace("-", "");
         final byte[] payload;
-        try (InputStream in = request.getInputStream()) {
-            payload = in.readAllBytes();
+        try {
+            payload = buildMultipartBody(message, conversationId, files, boundary);
         } catch (IOException e) {
-            log.warn("Failed to buffer multipart upload: {}", e.getMessage());
+            log.warn("Failed to assemble multipart payload: {}", e.getMessage());
             StreamingResponseBody errBody = output -> writeProxyError(output, e);
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .contentType(MediaType.TEXT_EVENT_STREAM)
                     .body(errBody);
         }
+        final String contentType = "multipart/form-data; boundary=" + boundary;
 
         StreamingResponseBody body = output -> {
             HttpRequest upstream = HttpRequest.newBuilder()
@@ -159,6 +161,60 @@ class ChatProxyController {
                 .header("Cache-Control", "no-cache")
                 .header("X-Accel-Buffering", "no")
                 .body(body);
+    }
+
+    /**
+     * Build a multipart/form-data body matching the bot's expected part names
+     * ({@code message}, {@code conversationId}, repeating {@code files}).
+     * Each text field is sent with no Content-Type; each file part includes the
+     * original filename and detected Content-Type.
+     */
+    private static byte[] buildMultipartBody(
+            String message,
+            String conversationId,
+            List<MultipartFile> files,
+            String boundary) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        if (message != null) {
+            writeTextPart(out, boundary, "message", message);
+        }
+        if (conversationId != null && !conversationId.isBlank()) {
+            writeTextPart(out, boundary, "conversationId", conversationId);
+        }
+        if (files != null) {
+            for (MultipartFile file : files) {
+                if (file == null || file.isEmpty()) continue;
+                writeFilePart(out, boundary, "files", file);
+            }
+        }
+        out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return out.toByteArray();
+    }
+
+    private static void writeTextPart(ByteArrayOutputStream out, String boundary,
+                                       String name, String value) throws IOException {
+        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+        // Set Content-Type explicitly so the bot's @RequestPart String binding
+        // resolves cleanly (Spring's StringHttpMessageConverter wants text/plain).
+        out.write("Content-Type: text/plain; charset=UTF-8\r\n\r\n"
+                .getBytes(StandardCharsets.UTF_8));
+        out.write(value.getBytes(StandardCharsets.UTF_8));
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void writeFilePart(ByteArrayOutputStream out, String boundary,
+                                       String name, MultipartFile file) throws IOException {
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "attachment";
+        String mime = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Disposition: form-data; name=\"" + name
+                + "\"; filename=\"" + filename.replace("\"", "\\\"") + "\"\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+        out.write(("Content-Type: " + mime + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        out.write(file.getBytes());
+        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
     private static void pumpStream(InputStream upstream, java.io.OutputStream client) throws IOException {
