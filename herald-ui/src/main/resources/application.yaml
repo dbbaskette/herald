@@ -8,6 +8,12 @@ spring:
     multipart:
       max-file-size: 20MB    # Per-file cap for /api/chat/stream-multipart proxy
       max-request-size: 25MB # Total request cap (text + files + boundary overhead)
+  mvc:
+    async:
+      # The proxy streams the bot's SSE response back to the browser. A 30-page PDF
+      # → markitdown → wiki-ingest run can easily take a couple of minutes; the
+      # default 30s tomcat async timeout was killing those mid-turn.
+      request-timeout: 300000
   sql:
     init:
       mode: never

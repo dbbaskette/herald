@@ -9,6 +9,12 @@ spring:
     multipart:
       max-file-size: 20MB    # Per-file cap for /api/chat/stream-multipart uploads
       max-request-size: 25MB # Total request cap (text + files + boundary overhead)
+  mvc:
+    async:
+      # Long-running SSE chat turns (multi-step tool use, markitdown over a 30-page
+      # PDF, etc.) easily run >30s. Match the SseEmitter STREAM_TIMEOUT_MS in
+      # ChatController so Tomcat doesn't tear down the async response prematurely.
+      request-timeout: 300000
 
   sql:
     init:
