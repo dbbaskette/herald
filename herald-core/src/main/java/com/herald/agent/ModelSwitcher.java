@@ -15,6 +15,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -237,7 +238,10 @@ public class ModelSwitcher {
                                                              List<String> anthropicSkills,
                                                              AnthropicCacheStrategy cacheStrategy) {
         if (chatModel instanceof OpenAiChatModel) {
-            return ChatOptions.builder().model(modelId);
+            // 8192 leaves headroom for "thinking" models (Qwen, DeepSeek, etc.)
+            // that burn output tokens on internal reasoning before producing content.
+            // Spring AI's default is too low and causes empty responses on those models.
+            return OpenAiChatOptions.builder().model(modelId).maxTokens(8192);
         }
         // Default to Anthropic
         var builder = AnthropicChatOptions.builder().model(modelId);

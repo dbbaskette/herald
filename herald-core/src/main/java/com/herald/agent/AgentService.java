@@ -125,6 +125,19 @@ public class AgentService {
     }
 
     /**
+     * Fallback streaming implementation: runs the blocking {@link #chat} on a
+     * worker thread and emits the full reply as a single chunk. Used when the
+     * underlying Spring AI streaming + tool-calling path produces an empty
+     * Flux (Spring AI 2.0-SNAPSHOT incompatibility).
+     */
+    private Flux<String> streamChatFallback(String userMessage, String conversationId) {
+        return Flux.defer(() -> {
+            String reply = chat(userMessage, conversationId);
+            return reply == null || reply.isEmpty() ? Flux.empty() : Flux.just(reply);
+        }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
+    }
+
+    /**
      * Overload that attaches media (images, audio, etc.) to the user message
      * so multimodal models can see/hear the content natively rather than
      * receiving a text description of a file path. See issue #320.
@@ -138,6 +151,14 @@ public class AgentService {
         log.info("Agent streaming message (conversation={}, attachments={}): {}",
                 conversationId, attachments == null ? 0 : attachments.size(),
                 userMessage.substring(0, Math.min(userMessage.length(), 50)));
+
+        // Spring AI 2.0-SNAPSHOT: native .stream() + tool-calling produces an
+        // empty Flux. Falling back to blocking chat() for now — tracked
+        // separately. Loses token-level streaming UX but keeps chat functional.
+        if (attachments == null || attachments.isEmpty()) {
+            return streamChatFallback(userMessage, conversationId);
+        }
+
 
         long startTime = System.nanoTime();
         AtomicReference<String> modelRef = new AtomicReference<>("unknown");
