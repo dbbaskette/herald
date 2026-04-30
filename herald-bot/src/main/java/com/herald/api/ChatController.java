@@ -4,8 +4,10 @@ import com.herald.agent.AgentService;
 import com.herald.agent.MediaAttachment;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -38,6 +40,8 @@ public class ChatController {
     private static final long STREAM_TIMEOUT_MS = 5 * 60 * 1000L;
     /** Per-file size cap. Mirrors Telegram's photo/document limit. */
     private static final long MAX_ATTACHMENT_BYTES = 20L * 1024 * 1024;
+    /** Where uploaded documents land — same directory Telegram uses, so skills work uniformly. */
+    private static final Path UPLOADS_DIR = Path.of(System.getProperty("user.home"), ".herald", "uploads");
 
     private final AgentService agentService;
 
@@ -86,10 +90,21 @@ public class ChatController {
 
     /**
      * Multipart streaming endpoint accepting text + file attachments.
-     * Mirrors the GET /stream contract for response events (chunk/done/error)
-     * but allows the user to attach images, PDFs, etc. as MultipartFile parts.
-     * Each file becomes a {@link MediaAttachment} on the agent turn — the same
-     * pipeline used by Telegram for incoming photos/documents.
+     * Mirrors the GET /stream contract for response events (chunk/done/error).
+     *
+     * <p>Routing rules per upload (matches the Telegram pattern):</p>
+     * <ul>
+     *   <li>{@code image/*} and {@code audio/*} → kept as inline
+     *       {@link MediaAttachment} so vision / audio-capable models see the
+     *       bytes natively in one round-trip.</li>
+     *   <li>Everything else (PDF, DOCX, XLSX, HTML, …) → saved to
+     *       {@code ~/.herald/uploads/} and referenced in the user message text
+     *       as {@code [File received: NAME (mime, N bytes) — saved to PATH]}.
+     *       The agent then runs the {@code markitdown} skill against the path
+     *       to extract structured Markdown — far better than blasting raw
+     *       PDF/Office bytes into the model context (which also blew past
+     *       Anthropic's 100-page PDF limit on large documents).</li>
+     * </ul>
      */
     @PostMapping(value = "/stream-multipart",
                  consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
@@ -100,58 +115,96 @@ public class ChatController {
             @RequestPart(name = "files", required = false) List<MultipartFile> files) {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
 
-        String text = message != null ? message : "";
-        List<MediaAttachment> attachments = buildAttachments(files);
+        String userText = message != null ? message : "";
+        List<MediaAttachment> inlineAttachments = new ArrayList<>();
+        List<String> savedFileLabels = new ArrayList<>();
+        StringBuilder savedFileTags = new StringBuilder();
 
-        if (text.isBlank() && attachments.isEmpty()) {
+        try {
+            partitionUploads(files, inlineAttachments, savedFileLabels, savedFileTags);
+        } catch (IllegalArgumentException | IOException e) {
+            log.warn("Failed to handle multipart upload: {}", e.getMessage());
+            sendErrorAndComplete(emitter, e.getMessage());
+            return emitter;
+        }
+
+        boolean hasInline = !inlineAttachments.isEmpty();
+        boolean hasSaved = !savedFileLabels.isEmpty();
+        if (userText.isBlank() && !hasInline && !hasSaved) {
             sendErrorAndComplete(emitter, "empty message and no attachments");
             return emitter;
         }
 
-        // Bot conversation memory expects a non-empty user message — fall back to
-        // a label describing the attachments so the model has something to refer to.
-        if (text.isBlank()) {
-            text = describeAttachments(attachments);
+        // Compose the final user message: their text plus any saved-file references
+        // appended as a separate paragraph so the agent reasons about them explicitly.
+        StringBuilder composed = new StringBuilder(userText);
+        if (hasSaved) {
+            if (!composed.isEmpty()) composed.append("\n\n");
+            composed.append(savedFileTags);
         }
+        if (composed.toString().isBlank() && hasInline) {
+            // Inline-only turn: give the model a label so the conversation memory
+            // has something readable.
+            composed.append(describeAttachments(inlineAttachments));
+        }
+        String text = composed.toString();
 
-        log.info("Web chat multipart turn ({} attachments): {}",
-                attachments.size(),
-                text.substring(0, Math.min(text.length(), 80)));
+        log.info("Web chat multipart turn (inline={}, saved={}): {}",
+                inlineAttachments.size(), savedFileLabels.size(),
+                text.substring(0, Math.min(text.length(), 120)));
 
         String resolvedConversationId = resolveConversationId(conversationId);
-        Flux<String> stream = agentService.streamChat(text, attachments, resolvedConversationId);
+        Flux<String> stream = agentService.streamChat(text, inlineAttachments, resolvedConversationId);
         wireStreamToEmitter(stream, emitter);
         return emitter;
     }
 
-    private List<MediaAttachment> buildAttachments(List<MultipartFile> files) {
-        if (files == null || files.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<MediaAttachment> attachments = new ArrayList<>(files.size());
+    /**
+     * Split uploads into two buckets based on MIME type:
+     * <ul>
+     *   <li>Images and audio go into {@code inline} as {@link MediaAttachment}
+     *       (vision / audio model consumes the bytes directly).</li>
+     *   <li>Everything else is written to {@link #UPLOADS_DIR} and a
+     *       {@code [File received: …]} tag is appended to {@code savedTags}
+     *       (and the filename added to {@code savedLabels}).</li>
+     * </ul>
+     */
+    private static void partitionUploads(
+            List<MultipartFile> files,
+            List<MediaAttachment> inline,
+            List<String> savedLabels,
+            StringBuilder savedTags) throws IOException {
+        if (files == null || files.isEmpty()) return;
+        Files.createDirectories(UPLOADS_DIR);
+
         for (MultipartFile file : files) {
-            if (file == null || file.isEmpty()) {
-                continue;
-            }
+            if (file == null || file.isEmpty()) continue;
             if (file.getSize() > MAX_ATTACHMENT_BYTES) {
                 throw new IllegalArgumentException("Attachment '" + file.getOriginalFilename()
                         + "' exceeds " + MAX_ATTACHMENT_BYTES + " bytes");
             }
-            try {
-                String mimeType = file.getContentType();
-                if (mimeType == null || mimeType.isBlank()) {
-                    mimeType = "application/octet-stream";
-                }
-                String label = file.getOriginalFilename() != null
-                        ? file.getOriginalFilename()
-                        : "attachment";
-                attachments.add(new MediaAttachment(mimeType, file.getBytes(), label));
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to read upload '"
-                        + file.getOriginalFilename() + "': " + e.getMessage(), e);
+            String mime = file.getContentType();
+            if (mime == null || mime.isBlank()) mime = "application/octet-stream";
+            String label = file.getOriginalFilename() != null
+                    ? file.getOriginalFilename() : "attachment";
+
+            if (mime.startsWith("image/") || mime.startsWith("audio/")) {
+                inline.add(new MediaAttachment(mime, file.getBytes(), label));
+                continue;
             }
+
+            // Save to ~/.herald/uploads/<timestamp>_<safeName>
+            String safeName = label.replaceAll("[^A-Za-z0-9._-]+", "_");
+            Path target = UPLOADS_DIR.resolve(System.currentTimeMillis() + "_" + safeName);
+            try (var in = file.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            savedLabels.add(label);
+            if (savedTags.length() > 0) savedTags.append('\n');
+            savedTags.append(String.format("[File received: %s (%s, %d bytes) — saved to %s]",
+                    label, mime, file.getSize(), target));
+            log.info("Saved web upload: {} → {}", label, target);
         }
-        return attachments;
     }
 
     private static String describeAttachments(List<MediaAttachment> attachments) {
