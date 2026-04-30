@@ -4,11 +4,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
                            Weather weather, Obsidian obsidian, Vault vault, Archival archival,
                            LongTermMemory longTermMemory, A2a a2a) {
+
+    @ConstructorBinding
+    public HeraldConfig {}
 
     /**
      * Backwards-compatible constructor for callers that predate the A2A addition.
@@ -22,6 +26,9 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record A2a(List<A2aAgent> agents, Server server) {
+        @ConstructorBinding
+        public A2a {}
+
         /**
          * Backwards-compatible constructor for callers that predate the A2A
          * server-side config. Leaves {@code server} null (server defaults to
@@ -51,6 +58,9 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     }
 
     public record Memory(String dbPath, MemoryApproval approval) {
+        @ConstructorBinding
+        public Memory {}
+
         /** Backwards-compatible 1-arg ctor predating the approval block. */
         public Memory(String dbPath) {
             this(dbPath, null);

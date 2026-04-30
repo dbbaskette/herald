@@ -10,7 +10,7 @@ spring:
       mode: never  # Schema managed explicitly by DataSourceInitializer bean
   ai:
     tools:
-      throw-exception-on-error: org.springaicommunity.agent.tools.AskUserQuestionTool$InvalidUserAnswerException
+      throw-exception-on-error: true  # Spring AI 2.0: boolean; rethrows tool exceptions (needed for AskUserQuestionTool)
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
       chat:

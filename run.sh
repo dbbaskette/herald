@@ -97,15 +97,17 @@ stop_module() {
     local module=$1
     local port=$2
     echo "Stopping $module..."
+    # Kill Maven wrapper shell + JVM first so they can't respawn the Spring process
+    pkill -f "mvnw.*${module}" 2>/dev/null || true
+    pkill -f "maven-wrapper.*${module}" 2>/dev/null || true
+    pkill -f "classworlds.*${module}" 2>/dev/null || true
+    sleep 1
+    # Kill the Spring Boot Java process by port and by module name
     kill_on_port "$port"
     kill_java_procs "$module"
-    # Kill Maven wrapper processes
-    local mvn_pids
-    mvn_pids=$(pgrep -f "classworlds.*-pl ${module}" 2>/dev/null | grep -v $$ || true)
-    if [ -n "$mvn_pids" ]; then
-        echo "  Killing Maven for $module: $(echo $mvn_pids | tr '\n' ' ')"
-        echo "$mvn_pids" | xargs kill 2>/dev/null || true
-    fi
+    # Force-kill any surviving Maven processes
+    pkill -9 -f "mvnw.*${module}" 2>/dev/null || true
+    pkill -9 -f "classworlds.*${module}" 2>/dev/null || true
 }
 
 wait_for_port() {
