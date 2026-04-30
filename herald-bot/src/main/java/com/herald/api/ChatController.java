@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +46,14 @@ public class ChatController {
     private static final Path UPLOADS_DIR = Path.of(System.getProperty("user.home"), ".herald", "uploads");
 
     private final AgentService agentService;
+    private final ChatNotificationsHub notificationsHub;
+    /** Virtual-thread executor for background document-processing turns. */
+    private final ExecutorService backgroundExecutor =
+            Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("chat-async-", 0).factory());
 
-    public ChatController(AgentService agentService) {
+    public ChatController(AgentService agentService, ChatNotificationsHub notificationsHub) {
         this.agentService = agentService;
+        this.notificationsHub = notificationsHub;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -148,15 +155,81 @@ public class ChatController {
             composed.append(describeAttachments(inlineAttachments));
         }
         String text = composed.toString();
+        String resolvedConversationId = resolveConversationId(conversationId);
 
         log.info("Web chat multipart turn (inline={}, saved={}): {}",
                 inlineAttachments.size(), savedFileLabels.size(),
                 text.substring(0, Math.min(text.length(), 120)));
 
-        String resolvedConversationId = resolveConversationId(conversationId);
+        // Saved-file uploads (PDF/DOCX/etc) trigger long-running tool chains
+        // (markitdown → wiki-ingest → summarize). Don't block the SSE stream
+        // for minutes — ack now, run async, push the result via the
+        // notifications channel when ready.
+        if (hasSaved) {
+            String ack = buildBackgroundAck(savedFileLabels);
+            try {
+                emitter.send(SseEmitter.event().name("chunk").data(ack));
+                emitter.send(SseEmitter.event().name("done").data(""));
+                emitter.complete();
+            } catch (IOException ignored) {
+                // Client disconnected before ack — work still kicks off.
+            }
+            final String finalText = text;
+            backgroundExecutor.submit(() -> runBackgroundTurn(finalText, resolvedConversationId));
+            return emitter;
+        }
+
+        // Pure-text and inline-attachment turns stay synchronous.
         Flux<String> stream = agentService.streamChat(text, inlineAttachments, resolvedConversationId);
         wireStreamToEmitter(stream, emitter);
         return emitter;
+    }
+
+    /**
+     * Subscribe to async chat notifications for a conversation. The hub
+     * forwards new assistant messages — typically the result of a background
+     * document-processing turn — as SSE {@code message} events.
+     */
+    @GetMapping(value = "/notifications", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter notifications(
+            @RequestParam(name = "conversationId", required = false) String conversationId) {
+        String id = resolveConversationId(conversationId);
+        // Long-lived; tomcat will recycle when client disconnects. 30 min keeps
+        // typical chat sessions alive without leaking idle channels forever.
+        return notificationsHub.register(id, 30L * 60 * 1000);
+    }
+
+    private static String buildBackgroundAck(List<String> filenames) {
+        if (filenames.size() == 1) {
+            return "📄 Got **" + filenames.get(0) + "**. Processing in the background — I'll send the summary as soon as it's done.";
+        }
+        StringBuilder sb = new StringBuilder("📄 Got ");
+        for (int i = 0; i < filenames.size(); i++) {
+            if (i > 0) sb.append(i == filenames.size() - 1 ? " and " : ", ");
+            sb.append("**").append(filenames.get(i)).append("**");
+        }
+        sb.append(". Processing in the background — I'll send the summary as soon as it's done.");
+        return sb.toString();
+    }
+
+    private void runBackgroundTurn(String message, String conversationId) {
+        try {
+            log.info("Background turn started (conversation={})", conversationId);
+            String reply = agentService.chat(message, conversationId);
+            log.info("Background turn completed (conversation={}, length={})",
+                    conversationId, reply == null ? 0 : reply.length());
+            if (reply != null && !reply.isBlank()) {
+                notificationsHub.publish(conversationId, "message", reply);
+            } else {
+                notificationsHub.publish(conversationId, "message",
+                        "_(background turn finished with no reply)_");
+            }
+        } catch (Exception e) {
+            log.warn("Background turn failed (conversation={}): {}",
+                    conversationId, e.getMessage(), e);
+            notificationsHub.publish(conversationId, "error",
+                    "Background processing failed: " + e.getMessage());
+        }
     }
 
     /**
