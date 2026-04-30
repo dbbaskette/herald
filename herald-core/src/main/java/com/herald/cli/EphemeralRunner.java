@@ -40,6 +40,7 @@ public class EphemeralRunner implements ApplicationRunner {
     private final PrintStream out;
     private final PrintStream err;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public EphemeralRunner(ChatModel chatModel) {
         this(Map.of("default", chatModel), System.out, System.err);
     }
