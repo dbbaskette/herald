@@ -193,7 +193,7 @@ skills/
 ├── wiki-ingest/       # Ingest URL/file/text → sources + concepts + entities
 ├── wiki-query/        # Search memory, answer with page citations
 ├── wiki-lint/         # Orphan/dead-link/stale-claim audit
-├── pdf-extract/       # Structure-preserving PDF → Markdown via opendataloader-pdf
+├── markitdown/        # PDF / Office / HTML / image / audio → Markdown via markitdown CLI
 ├── voice-handling/    # Local audio → text via whisper (self-installing)
 ├── code-writer/       # Delegate coding tasks to Claude Code via `claude -p`
 ├── skill-browser/     # Browse + install skills from anthropics/skills on demand
