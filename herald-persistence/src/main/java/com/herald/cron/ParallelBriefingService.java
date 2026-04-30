@@ -30,6 +30,7 @@ public class ParallelBriefingService {
     private final boolean webSearchAvailable;
 
     // Spring wiring constructor — reads web search API key and derives the boolean
+    @org.springframework.beans.factory.annotation.Autowired
     public ParallelBriefingService(TaskRepository taskRepository,
                                    GwsAvailabilityChecker gwsChecker,
                                    HeraldConfig config,
