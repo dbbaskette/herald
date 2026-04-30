@@ -54,11 +54,6 @@
             <groupId>org.springaicommunity</groupId>
             <artifactId>spring-ai-agent-utils-a2a</artifactId>
         </dependency>
-        <!-- Tool search / dynamic tool discovery (Blog 7) -->
-        <dependency>
-            <groupId>org.springaicommunity</groupId>
-            <artifactId>tool-searcher-lucene</artifactId>
-        </dependency>
         <!-- MCP Client — connects to external MCP servers (Calendar, Gmail, etc.) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
