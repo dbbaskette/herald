@@ -28,12 +28,15 @@ class TelegramPollerTest {
     private TelegramQuestionHandler questionHandler;
     private SlashCommandDispatcher commandHandler;
     private AgentService agentService;
+    private TelegramSender.StreamingSession session;
     private TelegramPoller poller;
 
     @BeforeEach
     void setUp() {
         bot = mock(TelegramBot.class);
         sender = mock(TelegramSender.class);
+        session = mock(TelegramSender.StreamingSession.class);
+        when(sender.beginStream()).thenReturn(session);
         questionHandler = mock(TelegramQuestionHandler.class);
         // Depend on the narrow SlashCommandDispatcher interface rather than
         // the full CommandHandler — Mockito can instrument one-method
