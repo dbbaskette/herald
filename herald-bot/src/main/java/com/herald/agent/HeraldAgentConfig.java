@@ -673,14 +673,22 @@ public class HeraldAgentConfig {
     }
 
     private String loadPromptTemplate(Resource resource) {
-        try {
-            return resource.getContentAsString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to load system prompt template", e);
-        }
+        return com.herald.agent.PromptLoader.load(resource);
     }
 
     String loadContextTemplate() {
+        // CONTEXT_TEMPLATE.md is the seed for ~/.herald/CONTEXT.md on first run.
+        // Honor the same override pattern so admins can ship a different
+        // organization-wide template via ~/.herald/prompts/CONTEXT_TEMPLATE.md.
+        Path override = com.herald.agent.PromptLoader.overrideDir()
+                .resolve("CONTEXT_TEMPLATE.md");
+        if (Files.isRegularFile(override) && Files.isReadable(override)) {
+            try {
+                return Files.readString(override, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (IOException ignored) {
+                // fall through to classpath
+            }
+        }
         try (InputStream in = getClass().getResourceAsStream("/prompts/CONTEXT_TEMPLATE.md")) {
             if (in == null) {
                 throw new IllegalStateException("CONTEXT_TEMPLATE.md not found on classpath");

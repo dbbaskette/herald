@@ -129,9 +129,10 @@ public class RetrospectiveService {
     }
 
     private static String loadPromptTemplate() {
-        try (var in = new ClassPathResource(PROMPT_RESOURCE).getInputStream()) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
+        try {
+            // Honors ~/.herald/prompts/RETROSPECTIVE_PROMPT.md as a user override.
+            return PromptLoader.load(PROMPT_RESOURCE);
+        } catch (RuntimeException e) {
             log.warn("Failed to load retrospective prompt template: {}", e.getMessage());
             return "Explain why you made the choices in your previous turn. "
                     + "User said: {{user_message}}\nYou responded: {{assistant_response}}";
