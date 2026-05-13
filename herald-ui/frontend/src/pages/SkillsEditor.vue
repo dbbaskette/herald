@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useSkillsStore } from '@/stores/skills'
+import DiffEditor from '@/components/DiffEditor.vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
@@ -22,6 +23,27 @@ const saveFlash = ref(false)
 const sseStatus = ref<'connected' | 'disconnected' | 'error'>('disconnected')
 const lastLoaded = ref<string | null>(null)
 let eventSource: EventSource | null = null
+
+// Diff view state (#363). Available when the selected skill has a bundled origin.
+const diffMode = ref(false)
+const diffSummary = computed(() => computeDiffSummary(store.bundledContent, store.editorContent))
+
+function computeDiffSummary(a: string, b: string) {
+  if (!a || !b) return { added: 0, removed: 0, changed: 0 }
+  const av = a.split('\n')
+  const bv = b.split('\n')
+  // Tiny line-level LCS — enough for a "23 changed · 5 added · 2 removed" chip.
+  const m = av.length, n = bv.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    dp[i][j] = av[i - 1] === bv[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+  }
+  const lcs = dp[m][n]
+  const removed = m - lcs
+  const added = n - lcs
+  const changed = Math.min(added, removed)
+  return { added: added - changed, removed: removed - changed, changed }
+}
 
 // Warm syntax theme for dark editor
 const darkroomHighlight = HighlightStyle.define([
@@ -128,12 +150,26 @@ watch(() => store.selectedName, (name) => {
   if (name) {
     if (editorView) {
       syncEditorContent(store.editorContent)
-    } else {
+    } else if (!diffMode.value) {
       createEditor()
     }
   } else {
     editorView?.destroy()
     editorView = null
+  }
+}, { flush: 'post' })
+
+// When diff mode toggles, swap between the regular CodeMirror editor and the
+// DiffEditor component. The regular editor must be destroyed before its DOM
+// node disappears, and recreated when it comes back.
+watch(diffMode, async (on) => {
+  if (on) {
+    editorView?.destroy()
+    editorView = null
+  } else if (store.selectedName) {
+    await nextTick()
+    createEditor()
+    syncEditorContent(store.editorContent)
   }
 }, { flush: 'post' })
 
@@ -318,6 +354,28 @@ function formatTime(ts: string | null): string {
               Discard
             </button>
             <div class="toolbar-separator"></div>
+            <!-- Diff toggle: only when a bundled baseline exists (#363). -->
+            <button
+              v-if="store.hasBundled"
+              class="action-btn action-diff"
+              :class="{ active: diffMode }"
+              :title="diffMode ? 'Hide diff' : 'Show diff vs bundled'"
+              @click="diffMode = !diffMode"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M5 3v10M11 3v10M3 5h4M9 11h4"/>
+              </svg>
+              Diff
+            </button>
+            <span
+              v-if="diffMode && store.hasBundled"
+              class="diff-summary"
+              :title="`vs. bundled: ${diffSummary.changed} changed, ${diffSummary.added} added, ${diffSummary.removed} removed`"
+            >
+              <span class="diff-stat diff-changed">~{{ diffSummary.changed }}</span>
+              <span class="diff-stat diff-added">+{{ diffSummary.added }}</span>
+              <span class="diff-stat diff-removed">−{{ diffSummary.removed }}</span>
+            </span>
             <button
               class="action-btn action-delete"
               @click="confirmingDelete = true"
@@ -327,8 +385,21 @@ function formatTime(ts: string | null): string {
           </div>
         </div>
 
-        <!-- CodeMirror editor -->
-        <div v-if="store.selectedName" ref="editorContainer" class="editor-container"></div>
+        <!-- Diff view (bundled vs override) -->
+        <DiffEditor
+          v-if="store.selectedName && diffMode && store.hasBundled"
+          class="editor-container"
+          :original="store.bundledContent"
+          :modified="store.editorContent"
+          :read-only="store.selectedReadOnly"
+          @update:modified="(v) => store.editorContent = v"
+        />
+        <!-- Standard CodeMirror editor -->
+        <div
+          v-else-if="store.selectedName"
+          ref="editorContainer"
+          class="editor-container"
+        ></div>
 
         <!-- Empty state -->
         <div v-else class="editor-empty">
@@ -865,6 +936,41 @@ function formatTime(ts: string | null): string {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
 }
+
+.action-diff {
+  background: transparent;
+  border: 1px solid #353944;
+  color: #d1d5db;
+}
+
+.action-diff:hover {
+  background: #2a2d37;
+}
+
+.action-diff.active {
+  background: rgba(226, 181, 99, 0.12);
+  border-color: rgba(226, 181, 99, 0.45);
+  color: #e2b563;
+}
+
+.action-diff svg {
+  width: 13px;
+  height: 13px;
+}
+
+.diff-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.diff-stat { font-weight: 600; }
+.diff-changed { color: #d6bcfa; }
+.diff-added   { color: #68d391; }
+.diff-removed { color: #fc8181; }
 
 .action-danger {
   background: #dc2626;

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 
 export interface ChatMessage {
   id: number
@@ -8,6 +8,7 @@ export interface ChatMessage {
   timestamp: string
   streaming?: boolean
   attachments?: AttachmentInfo[]
+  toolCalls?: ToolCall[]
 }
 
 export interface AttachmentInfo {
@@ -16,10 +17,35 @@ export interface AttachmentInfo {
   mimeType: string
 }
 
+/**
+ * Live tool-call observation for the chat UI (#362). One entry is pushed onto
+ * the most recent streaming assistant message when a `tool_start` event arrives;
+ * it transitions to `ok` or `error` when the matching `tool_end` arrives.
+ */
+export interface ToolCall {
+  id: string
+  name: string
+  args: string
+  status: 'running' | 'ok' | 'error'
+  startedAt: number
+  elapsedMs?: number
+  summary?: string
+}
+
+export interface ProcessingState {
+  active: boolean
+  label: string
+}
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const sending = ref(false)
   const conversationId = ref('web-console')
+  // Tracks an in-flight background document-processing turn (PDF ingest, etc.).
+  // Set when an upload-with-saved-file triggers the ack-and-run-async path,
+  // cleared when a `message`/`error` notification arrives or a `progress`
+  // event signals completion.
+  const processing = reactive<ProcessingState>({ active: false, label: '' })
   let nextId = 1
   let currentStream: EventSource | null = null
   let currentAbort: AbortController | null = null
@@ -36,14 +62,56 @@ export const useChatStore = defineStore('chat', () => {
     notificationsStream = es
 
     es.addEventListener('message', (e: MessageEvent) => {
-      addMessage('assistant', e.data)
+      // If a placeholder was created for tool cards during the background turn,
+      // finalize that placeholder with the assistant's final text rather than
+      // appending a new bubble.
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.role === 'assistant' && (last.streaming || (last.toolCalls && last.toolCalls.length > 0)) && !last.content) {
+        last.content = e.data
+        last.streaming = false
+      } else {
+        addMessage('assistant', e.data)
+      }
+      processing.active = false
+      processing.label = ''
     })
     es.addEventListener('error', (e: MessageEvent) => {
       // Server emitted a named error event; otherwise EventSource will reconnect.
       if (e.data) {
         addMessage('error', e.data)
+        processing.active = false
+        processing.label = ''
       }
     })
+    // Optional progress event: backend may push stage updates ("Converting…",
+    // "Ingesting…"). The data payload is treated as the new label; an empty
+    // payload clears the indicator.
+    es.addEventListener('progress', (e: MessageEvent) => {
+      if (!e.data) {
+        processing.active = false
+        processing.label = ''
+      } else {
+        processing.active = true
+        processing.label = e.data
+      }
+    })
+    // Tool-call events forwarded from the agent during background turns (#362).
+    // Latch onto whatever assistant placeholder is most recent; if there isn't
+    // one yet (the ack message has been emitted but no assistant turn started),
+    // create an in-progress placeholder so the cards have somewhere to attach.
+    es.addEventListener('tool_start', (e: MessageEvent) => {
+      ensureBackgroundPlaceholder()
+      onToolStart(e.data)
+    })
+    es.addEventListener('tool_end', (e: MessageEvent) => onToolEnd(e.data))
+  }
+
+  function ensureBackgroundPlaceholder() {
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant' && (last.streaming || (last.toolCalls && last.toolCalls.length > 0))) {
+      return
+    }
+    addMessage('assistant', '', true)
   }
 
   function reconnectNotifications() {
@@ -77,6 +145,48 @@ export const useChatStore = defineStore('chat', () => {
     if (msg) {
       msg.content += chunk
     }
+  }
+
+  /**
+   * Handle a `tool_start` SSE event (#362). Attaches a running ToolCall to the
+   * most recent streaming assistant message; if none is streaming, finds the
+   * latest assistant message instead.
+   */
+  function onToolStart(data: string) {
+    try {
+      const evt = JSON.parse(data)
+      const target = findLiveAssistantMessage()
+      if (!target) return
+      if (!target.toolCalls) target.toolCalls = []
+      target.toolCalls.push({
+        id: evt.id,
+        name: evt.name,
+        args: evt.args ?? '',
+        status: 'running',
+        startedAt: Date.now(),
+      })
+    } catch { /* malformed event */ }
+  }
+
+  function onToolEnd(data: string) {
+    try {
+      const evt = JSON.parse(data)
+      const target = findLiveAssistantMessage()
+      if (!target?.toolCalls) return
+      const tc = target.toolCalls.find((c) => c.id === evt.id)
+      if (!tc) return
+      tc.status = evt.ok ? 'ok' : 'error'
+      tc.elapsedMs = evt.elapsedMs
+      tc.summary = evt.summary
+    } catch { /* malformed event */ }
+  }
+
+  function findLiveAssistantMessage(): ChatMessage | undefined {
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      const m = messages.value[i]
+      if (m.role === 'assistant') return m
+    }
+    return undefined
   }
 
   function finalizeMessage(id: number) {
@@ -132,6 +242,9 @@ export const useChatStore = defineStore('chat', () => {
         appendToMessage(assistantId, e.data)
       })
 
+      es.addEventListener('tool_start', (e: MessageEvent) => onToolStart(e.data))
+      es.addEventListener('tool_end',   (e: MessageEvent) => onToolEnd(e.data))
+
       es.addEventListener('done', () => {
         finish()
       })
@@ -167,6 +280,20 @@ export const useChatStore = defineStore('chat', () => {
       form.append('files', file, file.name)
     }
 
+    // Predict whether this upload will trigger background processing.
+    // The bot acks immediately for non-image / non-audio files (PDFs, DOCX, etc.)
+    // and runs the ingest pipeline async. We start the indicator now and the
+    // notification channel will clear it on completion.
+    const willTriggerBackground = files.some(
+      (f) => !(f.type || '').startsWith('image/') && !(f.type || '').startsWith('audio/')
+    )
+    if (willTriggerBackground) {
+      processing.active = true
+      processing.label = files.length === 1
+        ? `Processing ${files[0].name}…`
+        : `Processing ${files.length} files…`
+    }
+
     const abort = new AbortController()
     currentAbort = abort
     let gotContent = false
@@ -175,6 +302,8 @@ export const useChatStore = defineStore('chat', () => {
       const idx = messages.value.findIndex((m) => m.id === assistantId)
       if (idx !== -1) messages.value.splice(idx, 1)
       addMessage('error', msg)
+      processing.active = false
+      processing.label = ''
     }
 
     const finish = () => {
@@ -216,6 +345,10 @@ export const useChatStore = defineStore('chat', () => {
           if (evt.event === 'chunk') {
             gotContent = true
             appendToMessage(assistantId, evt.data)
+          } else if (evt.event === 'tool_start') {
+            onToolStart(evt.data)
+          } else if (evt.event === 'tool_end') {
+            onToolEnd(evt.data)
           } else if (evt.event === 'done') {
             finish()
             return
@@ -250,6 +383,49 @@ export const useChatStore = defineStore('chat', () => {
     return { event, data: dataLines.join('\n') }
   }
 
+  /**
+   * Edit a previously-sent user message in place, then re-send the conversation
+   * from that point. Truncates everything after the edited message and replays
+   * with the new text. Matches the standard "Edit" behavior in ChatGPT / Claude.ai.
+   */
+  async function editUserMessage(id: number, newText: string): Promise<void> {
+    if (sending.value) return
+    const idx = messages.value.findIndex((m) => m.id === id && m.role === 'user')
+    if (idx < 0) return
+    const target = messages.value[idx]
+    const attachmentInfo = target.attachments
+    // Truncate everything from the edited message onward; we'll re-add the user
+    // turn and rerun the agent. Attachments are dropped on edit (typing a new
+    // question shouldn't silently re-upload bytes the user can't see).
+    messages.value = messages.value.slice(0, idx)
+    sending.value = true
+    addMessage('user', newText, false, attachmentInfo)
+    const assistantMsg = addMessage('assistant', '', true)
+    return sendEventSource(newText, assistantMsg.id)
+  }
+
+  /**
+   * Drop the last assistant message and re-run the agent from the prior user
+   * turn. If the last message isn't an assistant message, this is a no-op.
+   */
+  async function retryLastAssistant(): Promise<void> {
+    if (sending.value) return
+    const lastIdx = messages.value.length - 1
+    if (lastIdx < 0) return
+    const last = messages.value[lastIdx]
+    if (last.role !== 'assistant' && last.role !== 'error') return
+    // Find the user turn that preceded this assistant message.
+    let userIdx = lastIdx - 1
+    while (userIdx >= 0 && messages.value[userIdx].role !== 'user') userIdx--
+    if (userIdx < 0) return
+    const prior = messages.value[userIdx]
+    // Drop the previous assistant reply; keep the user turn.
+    messages.value = messages.value.slice(0, lastIdx)
+    sending.value = true
+    const assistantMsg = addMessage('assistant', '', true)
+    return sendEventSource(prior.content, assistantMsg.id)
+  }
+
   function cancel() {
     if (currentStream) {
       currentStream.close()
@@ -270,6 +446,8 @@ export const useChatStore = defineStore('chat', () => {
   function clearMessages() {
     cancel()
     messages.value = []
+    processing.active = false
+    processing.label = ''
     nextId = 1
   }
 
@@ -279,14 +457,62 @@ export const useChatStore = defineStore('chat', () => {
     reconnectNotifications()
   }
 
+  /**
+   * Switch the active conversation and load its persisted history from
+   * SPRING_AI_CHAT_MEMORY via /api/conversations/{id}/messages. Used by the
+   * conversation sidebar (#361).
+   */
+  async function switchConversation(id: string): Promise<void> {
+    if (id === conversationId.value) return
+    cancel()
+    conversationId.value = id
+    messages.value = []
+    processing.active = false
+    processing.label = ''
+    nextId = 1
+    try {
+      const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/messages`)
+      if (res.ok) {
+        const rows: Array<{ role: string; content: string; timestamp: string }> = await res.json()
+        for (const r of rows) {
+          const role = r.role === 'USER' ? 'user'
+                     : r.role === 'ASSISTANT' ? 'assistant'
+                     : r.role === 'SYSTEM' ? 'assistant' // surface system as assistant for now
+                     : 'assistant'
+          // The persisted content is a JSON blob (Spring AI's serialized form);
+          // best-effort extract the visible text.
+          let text = r.content
+          const m = text.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+          if (m) {
+            text = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+          }
+          const msg: ChatMessage = {
+            id: nextId++,
+            role: role as ChatMessage['role'],
+            content: text,
+            timestamp: r.timestamp,
+          }
+          messages.value.push(msg)
+        }
+      }
+    } catch {
+      // History load is best-effort; an empty timeline is fine.
+    }
+    reconnectNotifications()
+  }
+
   return {
     messages,
     sending,
     conversationId,
+    processing,
     send,
+    editUserMessage,
+    retryLastAssistant,
     cancel,
     clearMessages,
     newConversation,
+    switchConversation,
     ensureNotificationsConnected,
   }
 })

@@ -10,10 +10,12 @@ spring:
       max-request-size: 25MB # Total request cap (text + files + boundary overhead)
   mvc:
     async:
-      # The proxy streams the bot's SSE response back to the browser. A 30-page PDF
-      # → markitdown → wiki-ingest run can easily take a couple of minutes; the
-      # default 30s tomcat async timeout was killing those mid-turn.
-      request-timeout: 300000
+      # The UI proxies three SSE streams from the bot: /stream, /stream-multipart,
+      # and /notifications. The notifications channel is long-lived (30 min on the
+      # bot side), and chat streams with heavy tool use (markitdown + wiki-ingest)
+      # can run several minutes. This timeout must be >= the longest upstream
+      # SseEmitter timeout (30 min for notifications).
+      request-timeout: 1800000
   sql:
     init:
       mode: never

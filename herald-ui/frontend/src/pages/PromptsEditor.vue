@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import DiffEditor from '@/components/DiffEditor.vue'
 
 interface PromptSummary {
   name: string
@@ -33,6 +34,29 @@ const errorMessage = ref('')
 const restartRequired = computed(
   () => selected.value !== null && selected.value.name !== 'CONTEXT.md'
 )
+
+// Diff view (#363) — available when the selected prompt has a bundled baseline.
+const diffMode = ref(false)
+const diffSummary = computed(() => {
+  if (!selected.value?.defaultContent) return { added: 0, removed: 0, changed: 0 }
+  return computeDiffSummary(selected.value.defaultContent, editorContent.value)
+})
+
+function computeDiffSummary(a: string, b: string) {
+  if (!a || !b) return { added: 0, removed: 0, changed: 0 }
+  const av = a.split('\n')
+  const bv = b.split('\n')
+  const m = av.length, n = bv.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    dp[i][j] = av[i - 1] === bv[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+  }
+  const lcs = dp[m][n]
+  const removed = m - lcs
+  const added = n - lcs
+  const changed = Math.min(added, removed)
+  return { added: added - changed, removed: removed - changed, changed }
+}
 
 async function loadList() {
   try {
@@ -217,6 +241,20 @@ onMounted(() => {
             <button
               v-if="selected.defaultContent"
               class="btn btn-subtle"
+              :class="{ 'btn-active': diffMode }"
+              :title="diffMode ? 'Hide diff' : 'Show diff vs bundled default'"
+              @click="diffMode = !diffMode"
+            >
+              Diff
+              <span v-if="diffMode" class="diff-summary-inline">
+                <span class="diff-changed">~{{ diffSummary.changed }}</span>
+                <span class="diff-added">+{{ diffSummary.added }}</span>
+                <span class="diff-removed">−{{ diffSummary.removed }}</span>
+              </span>
+            </button>
+            <button
+              v-if="selected.defaultContent"
+              class="btn btn-subtle"
               @click="loadDefault"
               title="Replace editor content with the bundled default"
             >Load default</button>
@@ -237,7 +275,15 @@ onMounted(() => {
         <div v-if="saveMessage" class="banner banner-success">{{ saveMessage }}</div>
         <div v-if="errorMessage" class="banner banner-error">{{ errorMessage }}</div>
 
+        <DiffEditor
+          v-if="diffMode && selected.defaultContent"
+          class="editor-diff"
+          :original="selected.defaultContent"
+          :modified="editorContent"
+          @update:modified="(v) => { editorContent = v; onContentChange() }"
+        />
         <textarea
+          v-else
           class="editor-textarea"
           :value="editorContent"
           @input="(e) => { editorContent = (e.target as HTMLTextAreaElement).value; onContentChange() }"
@@ -486,6 +532,32 @@ onMounted(() => {
   border-color: #1d4ed8;
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
 }
+
+.editor-diff {
+  flex: 1;
+  min-height: 300px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.btn-active {
+  background: rgba(200, 165, 90, 0.12) !important;
+  border-color: rgba(200, 165, 90, 0.4) !important;
+  color: #a68a3e !important;
+}
+
+.diff-summary-inline {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.diff-summary-inline .diff-changed { color: #7c3aed; }
+.diff-summary-inline .diff-added   { color: #16a34a; }
+.diff-summary-inline .diff-removed { color: #dc2626; }
 
 .editor-hint {
   font-size: 0.7rem;

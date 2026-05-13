@@ -36,29 +36,20 @@ class ContextMdAdvisor implements CallAdvisor, StreamAdvisor {
         this.contextFilePath = contextFilePath;
     }
 
-    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+    private static final String GUARD_KEY = "context-md";
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextCall(request);
-        }
-        INJECTED.set(true);
-        try {
-            return chain.nextCall(injectContext(request));
-        } finally {
-            INJECTED.remove();
-        }
+        return AdvisorGuard.runCallOnce(GUARD_KEY,
+                () -> chain.nextCall(injectContext(request)),
+                () -> chain.nextCall(request));
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextStream(request);
-        }
-        INJECTED.set(true);
-        return chain.nextStream(injectContext(request))
-                .doFinally(signal -> INJECTED.remove());
+        return AdvisorGuard.runStreamOnce(GUARD_KEY,
+                () -> chain.nextStream(injectContext(request)),
+                () -> chain.nextStream(request));
     }
 
     private ChatClientRequest injectContext(ChatClientRequest request) {

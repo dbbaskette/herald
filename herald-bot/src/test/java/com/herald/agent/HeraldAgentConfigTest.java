@@ -138,7 +138,8 @@ class HeraldAgentConfigTest {
                         "daily",
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                         List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"),
-                        Optional.empty()))
+                        Optional.empty(),
+                        new com.herald.agent.ToolEventBus()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("Failed to load prompt resource");
     }

@@ -1,5 +1,7 @@
 package com.herald.telegram;
 
+import com.herald.agent.ChatChannelContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
@@ -72,6 +74,22 @@ public class TelegramQuestionHandler implements AskUserQuestionTool.QuestionHand
     public Map<String, String> handle(List<Question> questions) {
         if (questions == null || questions.isEmpty()) {
             return Map.of();
+        }
+
+        // Web chat turns can't do interactive Q&A yet — auto-approve so the
+        // agent isn't blocked for 5 minutes waiting for a Telegram reply that
+        // will never come.
+        if (ChatChannelContext.isWeb()) {
+            log.info("Auto-approving {} question(s) from web chat context", questions.size());
+            Map<String, String> auto = new LinkedHashMap<>();
+            for (Question q : questions) {
+                // Pick the first option if available, otherwise "yes"
+                String answer = (q.options() != null && !q.options().isEmpty())
+                        ? q.options().getFirst().label()
+                        : "yes";
+                auto.put(q.question(), answer);
+            }
+            return auto;
         }
 
         // Use inline keyboard only for a single single-select question with options

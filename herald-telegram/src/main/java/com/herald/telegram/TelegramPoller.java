@@ -93,7 +93,7 @@ public class TelegramPoller {
         }
     }
 
-    private static final Path UPLOADS_DIR = Path.of(System.getProperty("user.home"), ".herald", "uploads");
+    private static final Path UPLOADS_DIR = com.herald.config.HeraldLimits.UPLOADS_DIR;
 
     private void processUpdate(Update update) {
         // Handle inline keyboard button presses
@@ -167,8 +167,9 @@ public class TelegramPoller {
     /** Payload record returned to the main dispatcher. */
     record UserMessagePayload(String text, List<com.herald.agent.MediaAttachment> attachments) {}
 
-    /** Max file size accepted from Telegram. Tunable via {@code herald.telegram.media.max-file-size-mb}. */
-    private static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    /** Max file size accepted from Telegram. Unified with web chat in
+     *  {@link com.herald.config.HeraldLimits#MAX_UPLOAD_BYTES}. */
+    private static final long MAX_FILE_BYTES = com.herald.config.HeraldLimits.MAX_UPLOAD_BYTES;
 
     /**
      * Builds the agent payload from a Telegram message. Photos become native
@@ -274,8 +275,8 @@ public class TelegramPoller {
                             + "(headings, tables, reading order); it'll install "
                             + "the markitdown CLI if needed"
                     : "";
-            text.append(String.format("[File received: %s (%s, %d bytes)%s — saved to %s]",
-                    document.fileName(), mime, document.fileSize(), hint, localPath));
+            text.append(com.herald.agent.SavedUpload.fileReceivedTag(
+                    document.fileName(), mime, document.fileSize(), localPath, hint));
         }
         return new UserMessagePayload(text.toString(), List.of());
     }
@@ -407,8 +408,10 @@ public class TelegramPoller {
     private record FetchedFile(byte[] bytes, String fileName) {}
 
     /**
-     * Downloads a file from Telegram servers to ~/.herald/uploads/.
-     * Returns the local path, or null on failure.
+     * Downloads a file from Telegram servers to {@link com.herald.config.HeraldLimits#UPLOADS_DIR}.
+     * Returns the local path, or null on failure. Filename sanitization and the
+     * timestamped-prefix scheme are shared with the web chat path via
+     * {@link com.herald.agent.SavedUpload}.
      */
     private Path downloadTelegramFile(String fileId, String fileName) {
         try {
@@ -419,17 +422,11 @@ public class TelegramPoller {
             }
 
             String downloadUrl = bot.getFullFilePath(fileResponse.file());
+            String labeled = fileName != null ? fileName : fileId;
 
-            Files.createDirectories(UPLOADS_DIR);
-
-            // Sanitize filename
-            String safeName = fileName != null ? fileName.replaceAll("[^a-zA-Z0-9._-]", "_") : fileId;
-            // Prepend timestamp to avoid collisions
-            String timestamped = System.currentTimeMillis() + "_" + safeName;
-            Path target = UPLOADS_DIR.resolve(timestamped);
-
+            Path target;
             try (InputStream in = URI.create(downloadUrl).toURL().openStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                target = com.herald.agent.SavedUpload.save(in, labeled);
             }
 
             log.info("Downloaded Telegram file: {} → {}", fileName, target);

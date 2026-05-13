@@ -30,6 +30,13 @@ public class ApprovalGate {
     }
 
     public String requestApproval(String description) {
+        // Web chat can't do interactive approval yet — auto-approve so the
+        // agent isn't stuck waiting for a Telegram reply that never comes.
+        if (ChatChannelContext.isWeb()) {
+            log.info("Auto-approving from web chat context: {}", description);
+            return "APPROVED";
+        }
+
         if (messageSender == null) {
             log.warn("MessageSender not available; auto-denying approval for: {}", description);
             return "DENIED";

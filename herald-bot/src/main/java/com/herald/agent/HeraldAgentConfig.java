@@ -245,7 +245,8 @@ public class HeraldAgentConfig {
             @Qualifier("geminiChatModel") Optional<ChatModel> geminiChatModel,
             @Qualifier("lmstudioChatModel") Optional<ChatModel> lmstudioChatModel,
             @Qualifier("activeToolNames") List<String> activeToolNames,
-            Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGateOpt) {
+            Optional<com.herald.agent.MemoryApprovalGate> memoryApprovalGateOpt,
+            com.herald.agent.ToolEventBus toolEventBus) {
 
         // Set up long-term memory (HeraldAutoMemoryAdvisor owns the tools)
         Path memoriesDir = resolveTildePath(config.memoriesDir());
@@ -413,7 +414,7 @@ public class HeraldAgentConfig {
                         .defaultSystem(systemPrompt)
                         .defaultTools(toolList.toArray())
                         .defaultToolCallbacks(buildToolCallbacks(taskTool, taskOutputTool,
-                                reloadableSkillsTool, activeToolNames))
+                                reloadableSkillsTool, activeToolNames, toolEventBus))
                         .defaultAdvisors(advisorChain);
 
         // Register available provider ChatModels and their default model names
@@ -717,12 +718,22 @@ public class HeraldAgentConfig {
             ToolCallback taskTool,
             ToolCallback taskOutputTool,
             ReloadableSkillsTool skillsTool,
-            List<String> registeredToolNames) {
+            List<String> registeredToolNames,
+            com.herald.agent.ToolEventBus toolEventBus) {
         List<ToolCallback> callbacks = new ArrayList<>();
         callbacks.add(taskTool);
         callbacks.add(taskOutputTool);
         callbacks.add(skillsTool);
         callbacks.addAll(buildToolAliases(skillsTool, registeredToolNames));
+        // Decorate every callback with the observer so the UI can show
+        // live tool-call cards (#362). The observer no-ops when no
+        // conversation context is set (tests, scheduled jobs).
+        if (toolEventBus != null) {
+            for (int i = 0; i < callbacks.size(); i++) {
+                callbacks.set(i, new com.herald.agent.ObservingToolCallback(
+                        callbacks.get(i), toolEventBus));
+            }
+        }
         return callbacks.toArray(new ToolCallback[0]);
     }
 

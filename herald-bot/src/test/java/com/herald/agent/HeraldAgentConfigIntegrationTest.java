@@ -83,7 +83,8 @@ class HeraldAgentConfigIntegrationTest {
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
-                Optional.empty());
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -134,7 +135,8 @@ class HeraldAgentConfigIntegrationTest {
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
-                Optional.empty());
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -176,7 +178,8 @@ class HeraldAgentConfigIntegrationTest {
                 "daily",
                 Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
-                Optional.empty());
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
@@ -251,7 +254,8 @@ class HeraldAgentConfigIntegrationTest {
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
-                Optional.empty());
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();

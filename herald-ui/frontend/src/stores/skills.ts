@@ -6,6 +6,7 @@ export interface SkillSummary {
   description: string
   source: string
   readOnly: boolean
+  hasBundled: boolean
 }
 
 export const useSkillsStore = defineStore('skills', () => {
@@ -18,10 +19,16 @@ export const useSkillsStore = defineStore('skills', () => {
   })
   const editorContent = ref('')
   const savedContent = ref('')
+  /** Bundled (read-only) version of the currently selected skill, or empty if none. */
+  const bundledContent = ref('')
   const loading = ref(false)
   const saving = ref(false)
   const isDirty = computed(() => editorContent.value !== savedContent.value)
   const error = ref<string | null>(null)
+  const hasBundled = computed(() => {
+    const s = skills.value.find(s => s.name === selectedName.value)
+    return s?.hasBundled ?? false
+  })
 
   async function fetchSkills() {
     loading.value = true
@@ -48,6 +55,15 @@ export const useSkillsStore = defineStore('skills', () => {
       selectedName.value = name
       editorContent.value = content
       savedContent.value = content
+      // Best-effort fetch of the bundled baseline for diff view. 404 is fine.
+      bundledContent.value = ''
+      const summary = skills.value.find(s => s.name === name)
+      if (summary?.hasBundled) {
+        try {
+          const bundledRes = await fetch(`/api/skills/${encodeURIComponent(name)}/bundled`)
+          if (bundledRes.ok) bundledContent.value = await bundledRes.text()
+        } catch { /* leave empty */ }
+      }
     } catch (e: any) {
       error.value = e.message
     } finally {
@@ -121,7 +137,7 @@ export const useSkillsStore = defineStore('skills', () => {
 
   return {
     skills, skillNames, selectedName, selectedReadOnly, editorContent, savedContent,
-    loading, saving, isDirty, error,
+    bundledContent, hasBundled, loading, saving, isDirty, error,
     fetchSkills, selectSkill, saveSkill, createSkill, deleteSkill, discardChanges,
   }
 })

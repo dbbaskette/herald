@@ -113,7 +113,8 @@ class HeraldA2aIntegrationTest {
                 "daily",
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web"),
-                Optional.empty());
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
 
         assertThat(switcher).isNotNull();
         assertThat(switcher.getActiveClient()).isNotNull();
