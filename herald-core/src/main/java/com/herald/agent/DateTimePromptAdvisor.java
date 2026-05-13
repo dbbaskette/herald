@@ -33,29 +33,20 @@ class DateTimePromptAdvisor implements CallAdvisor, StreamAdvisor {
         this.formatter = formatter;
     }
 
-    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+    private static final String GUARD_KEY = "datetime";
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextCall(request);
-        }
-        INJECTED.set(true);
-        try {
-            return chain.nextCall(injectDateTime(request));
-        } finally {
-            INJECTED.remove();
-        }
+        return AdvisorGuard.runCallOnce(GUARD_KEY,
+                () -> chain.nextCall(injectDateTime(request)),
+                () -> chain.nextCall(request));
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextStream(request);
-        }
-        INJECTED.set(true);
-        return chain.nextStream(injectDateTime(request))
-                .doFinally(signal -> INJECTED.remove());
+        return AdvisorGuard.runStreamOnce(GUARD_KEY,
+                () -> chain.nextStream(injectDateTime(request)),
+                () -> chain.nextStream(request));
     }
 
     private ChatClientRequest injectDateTime(ChatClientRequest request) {

@@ -49,15 +49,23 @@ class SkillsController {
     @GetMapping
     List<SkillSummary> list() throws IOException {
         List<SkillSummary> skills = new ArrayList<>();
-        // Collect local skills first so we can deduplicate bundled ones
+        // Collect bundled names first so we can flag local overrides with hasBundled=true.
+        java.util.Set<String> bundledNames = new java.util.HashSet<>();
+        if (bundledSkillsDir != null && Files.isDirectory(bundledSkillsDir)) {
+            try (Stream<Path> entries = Files.list(bundledSkillsDir)) {
+                entries.filter(Files::isDirectory)
+                        .filter(p -> Files.exists(p.resolve("SKILL.md")))
+                        .forEach(p -> bundledNames.add(p.getFileName().toString()));
+            }
+        }
         java.util.Set<String> localNames = new java.util.HashSet<>();
         if (Files.isDirectory(skillsDir)) {
-            collectSkills(skillsDir, "local", false, skills);
+            collectSkills(skillsDir, "local", false, bundledNames, skills);
             skills.forEach(s -> localNames.add(s.name()));
         }
         if (bundledSkillsDir != null && Files.isDirectory(bundledSkillsDir)) {
             List<SkillSummary> bundled = new ArrayList<>();
-            collectSkills(bundledSkillsDir, "bundled", true, bundled);
+            collectSkills(bundledSkillsDir, "bundled", true, bundledNames, bundled);
             // Only include bundled skills that don't have a local copy
             bundled.stream().filter(s -> !localNames.contains(s.name())).forEach(skills::add);
         }
@@ -75,6 +83,27 @@ class SkillsController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(Files.readString(skillFile));
+    }
+
+    /**
+     * Returns the bundled (read-only) version of a skill, if one exists. Used by
+     * the editor's diff view to show what the user's override changed relative
+     * to the shipped baseline. 404 if the skill has no bundled origin (i.e. it
+     * is purely user-created).
+     */
+    @GetMapping(value = "/{name}/bundled", produces = MediaType.TEXT_PLAIN_VALUE)
+    ResponseEntity<String> getBundled(@PathVariable String name) throws IOException {
+        if (!isValidName(name)) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (bundledSkillsDir == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Path bundled = bundledSkillsDir.resolve(name).resolve("SKILL.md");
+        if (!Files.exists(bundled)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Files.readString(bundled));
     }
 
     @PutMapping("/{name}")
@@ -139,6 +168,7 @@ class SkillsController {
     }
 
     private void collectSkills(Path dir, String source, boolean readOnly,
+            java.util.Set<String> bundledNames,
             List<SkillSummary> skills) throws IOException {
         try (Stream<Path> entries = Files.list(dir)) {
             entries.filter(Files::isDirectory).forEach(skillDir -> {
@@ -147,10 +177,13 @@ class SkillsController {
                     try {
                         String content = Files.readString(skillFile);
                         Map<String, String> frontmatter = parseFrontmatter(content);
-                        String name = frontmatter.getOrDefault("name",
-                                skillDir.getFileName().toString());
+                        String dirName = skillDir.getFileName().toString();
+                        String name = frontmatter.getOrDefault("name", dirName);
                         String description = frontmatter.getOrDefault("description", "");
-                        skills.add(new SkillSummary(name, description, source, readOnly));
+                        // Has a bundled origin if a directory with the same name
+                        // (dir name, not display name) exists in bundledSkillsDir.
+                        boolean hasBundled = bundledNames.contains(dirName);
+                        skills.add(new SkillSummary(name, description, source, readOnly, hasBundled));
                     }
                     catch (IOException e) {
                         // skip unreadable skills
@@ -242,7 +275,8 @@ class SkillsController {
         return name.substring(0, 1).toUpperCase() + name.substring(1);
     }
 
-    record SkillSummary(String name, String description, String source, boolean readOnly) {
+    record SkillSummary(String name, String description, String source,
+                        boolean readOnly, boolean hasBundled) {
     }
 
     record SkillCreatePayload(String name) {

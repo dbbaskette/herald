@@ -37,29 +37,20 @@ public class HotMdAdvisor implements CallAdvisor, StreamAdvisor {
         this.hotFilePath = hotFilePath;
     }
 
-    private static final ThreadLocal<Boolean> INJECTED = ThreadLocal.withInitial(() -> false);
+    private static final String GUARD_KEY = "hot-md";
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextCall(request);
-        }
-        INJECTED.set(true);
-        try {
-            return chain.nextCall(injectHot(request));
-        } finally {
-            INJECTED.remove();
-        }
+        return AdvisorGuard.runCallOnce(GUARD_KEY,
+                () -> chain.nextCall(injectHot(request)),
+                () -> chain.nextCall(request));
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        if (INJECTED.get()) {
-            return chain.nextStream(request);
-        }
-        INJECTED.set(true);
-        return chain.nextStream(injectHot(request))
-                .doFinally(signal -> INJECTED.remove());
+        return AdvisorGuard.runStreamOnce(GUARD_KEY,
+                () -> chain.nextStream(injectHot(request)),
+                () -> chain.nextStream(request));
     }
 
     private ChatClientRequest injectHot(ChatClientRequest request) {

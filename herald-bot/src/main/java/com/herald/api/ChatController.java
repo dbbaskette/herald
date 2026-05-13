@@ -2,11 +2,12 @@ package com.herald.api;
 
 import com.herald.agent.AgentService;
 import com.herald.agent.MediaAttachment;
+import com.herald.agent.SavedUpload;
+import com.herald.agent.ToolEventBus;
+import com.herald.config.HeraldLimits;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -38,22 +39,20 @@ import reactor.core.publisher.Flux;
 public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
-    private static final String WEB_CONVERSATION_ID = "web-console";
-    private static final long STREAM_TIMEOUT_MS = 5 * 60 * 1000L;
-    /** Per-file size cap. Mirrors Telegram's photo/document limit. */
-    private static final long MAX_ATTACHMENT_BYTES = 20L * 1024 * 1024;
-    /** Where uploaded documents land — same directory Telegram uses, so skills work uniformly. */
-    private static final Path UPLOADS_DIR = Path.of(System.getProperty("user.home"), ".herald", "uploads");
 
     private final AgentService agentService;
     private final ChatNotificationsHub notificationsHub;
+    private final ToolEventBus toolEventBus;
     /** Virtual-thread executor for background document-processing turns. */
     private final ExecutorService backgroundExecutor =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("chat-async-", 0).factory());
 
-    public ChatController(AgentService agentService, ChatNotificationsHub notificationsHub) {
+    public ChatController(AgentService agentService,
+                          ChatNotificationsHub notificationsHub,
+                          ToolEventBus toolEventBus) {
         this.agentService = agentService;
         this.notificationsHub = notificationsHub;
+        this.toolEventBus = toolEventBus;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -82,7 +81,7 @@ public class ChatController {
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestParam String message,
                              @RequestParam(name = "conversationId", required = false) String conversationId) {
-        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(HeraldLimits.streamTimeoutMs());
 
         if (message == null || message.isBlank()) {
             sendErrorAndComplete(emitter, "empty message");
@@ -91,7 +90,7 @@ public class ChatController {
 
         String resolvedConversationId = resolveConversationId(conversationId);
         Flux<String> stream = agentService.streamChat(message, resolvedConversationId);
-        wireStreamToEmitter(stream, emitter);
+        wireStreamToEmitter(stream, emitter, resolvedConversationId);
         return emitter;
     }
 
@@ -120,7 +119,7 @@ public class ChatController {
             @RequestPart(name = "message", required = false) String message,
             @RequestPart(name = "conversationId", required = false) String conversationId,
             @RequestPart(name = "files", required = false) List<MultipartFile> files) {
-        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(HeraldLimits.streamTimeoutMs());
 
         String userText = message != null ? message : "";
         List<MediaAttachment> inlineAttachments = new ArrayList<>();
@@ -167,21 +166,31 @@ public class ChatController {
         // notifications channel when ready.
         if (hasSaved) {
             String ack = buildBackgroundAck(savedFileLabels);
-            try {
-                emitter.send(SseEmitter.event().name("chunk").data(ack));
-                emitter.send(SseEmitter.event().name("done").data(""));
-                emitter.complete();
-            } catch (IOException ignored) {
-                // Client disconnected before ack — work still kicks off.
+            SseSender.send(emitter, "chunk", ack);
+            SseSender.sendAndComplete(emitter, "done", "");
+            // If the user didn't provide explicit instructions alongside the
+            // upload, auto-append the ingest pipeline so the agent converts
+            // with markitdown and feeds the result into wiki-ingest without
+            // being asked. The user can still override by providing their own
+            // text (e.g. "just summarize this, don't save to memory").
+            String finalText = text;
+            if (userText.isBlank()) {
+                finalText = text + "\n\nAuto-ingest instructions: "
+                        + "1) Convert each file with the markitdown skill (markitdown <path> -o <out.md>). "
+                        + "2) Do NOT read the full converted file into context — it may be very large. "
+                        + "Instead, read only the first ~100 lines (head -100) to extract title and key metadata. "
+                        + "3) Ingest the file into memory using wiki-ingest — pass the output .md path as the source. "
+                        + "The wiki-ingest skill will handle reading and chunking the content. "
+                        + "4) Reply with a brief summary of what was ingested (title, page count, key topics).";
             }
-            final String finalText = text;
-            backgroundExecutor.submit(() -> runBackgroundTurn(finalText, resolvedConversationId));
+            final String bgText = finalText;
+            backgroundExecutor.submit(() -> runBackgroundTurn(bgText, resolvedConversationId));
             return emitter;
         }
 
         // Pure-text and inline-attachment turns stay synchronous.
         Flux<String> stream = agentService.streamChat(text, inlineAttachments, resolvedConversationId);
-        wireStreamToEmitter(stream, emitter);
+        wireStreamToEmitter(stream, emitter, resolvedConversationId);
         return emitter;
     }
 
@@ -196,7 +205,7 @@ public class ChatController {
         String id = resolveConversationId(conversationId);
         // Long-lived; tomcat will recycle when client disconnects. 30 min keeps
         // typical chat sessions alive without leaking idle channels forever.
-        return notificationsHub.register(id, 30L * 60 * 1000);
+        return notificationsHub.register(id, HeraldLimits.notificationsTimeoutMs());
     }
 
     private static String buildBackgroundAck(List<String> filenames) {
@@ -213,11 +222,26 @@ public class ChatController {
     }
 
     private void runBackgroundTurn(String message, String conversationId) {
+        // Bridge tool events to the notifications channel so the chat UI can
+        // render live cards while the background turn runs (#362).
+        Runnable unsubscribe = toolEventBus.subscribe(conversationId, event -> {
+            if (event instanceof ToolEventBus.ToolStart start) {
+                notificationsHub.publish(conversationId, "tool_start", encodeToolStart(start));
+            } else if (event instanceof ToolEventBus.ToolEnd end) {
+                notificationsHub.publish(conversationId, "tool_end", encodeToolEnd(end));
+            }
+        });
         try {
             log.info("Background turn started (conversation={})", conversationId);
+            // Push an initial progress event so the web UI can show a live
+            // indicator while the agent works through the ingest pipeline.
+            notificationsHub.publish(conversationId, "progress",
+                    "Processing — agent is working…");
             String reply = agentService.chat(message, conversationId);
             log.info("Background turn completed (conversation={}, length={})",
                     conversationId, reply == null ? 0 : reply.length());
+            // Clear the progress indicator before delivering the final message.
+            notificationsHub.publish(conversationId, "progress", "");
             if (reply != null && !reply.isBlank()) {
                 notificationsHub.publish(conversationId, "message", reply);
             } else {
@@ -227,8 +251,11 @@ public class ChatController {
         } catch (Exception e) {
             log.warn("Background turn failed (conversation={}): {}",
                     conversationId, e.getMessage(), e);
+            notificationsHub.publish(conversationId, "progress", "");
             notificationsHub.publish(conversationId, "error",
                     "Background processing failed: " + e.getMessage());
+        } finally {
+            try { unsubscribe.run(); } catch (Exception ignored) {}
         }
     }
 
@@ -237,7 +264,7 @@ public class ChatController {
      * <ul>
      *   <li>Images and audio go into {@code inline} as {@link MediaAttachment}
      *       (vision / audio model consumes the bytes directly).</li>
-     *   <li>Everything else is written to {@link #UPLOADS_DIR} and a
+     *   <li>Everything else is written to {@link HeraldLimits#UPLOADS_DIR} and a
      *       {@code [File received: …]} tag is appended to {@code savedTags}
      *       (and the filename added to {@code savedLabels}).</li>
      * </ul>
@@ -248,13 +275,12 @@ public class ChatController {
             List<String> savedLabels,
             StringBuilder savedTags) throws IOException {
         if (files == null || files.isEmpty()) return;
-        Files.createDirectories(UPLOADS_DIR);
 
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) continue;
-            if (file.getSize() > MAX_ATTACHMENT_BYTES) {
+            if (file.getSize() > HeraldLimits.MAX_UPLOAD_BYTES) {
                 throw new IllegalArgumentException("Attachment '" + file.getOriginalFilename()
-                        + "' exceeds " + MAX_ATTACHMENT_BYTES + " bytes");
+                        + "' exceeds " + HeraldLimits.MAX_UPLOAD_BYTES + " bytes");
             }
             String mime = file.getContentType();
             if (mime == null || mime.isBlank()) mime = "application/octet-stream";
@@ -266,16 +292,13 @@ public class ChatController {
                 continue;
             }
 
-            // Save to ~/.herald/uploads/<timestamp>_<safeName>
-            String safeName = label.replaceAll("[^A-Za-z0-9._-]+", "_");
-            Path target = UPLOADS_DIR.resolve(System.currentTimeMillis() + "_" + safeName);
+            Path target;
             try (var in = file.getInputStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                target = SavedUpload.save(in, label);
             }
             savedLabels.add(label);
             if (savedTags.length() > 0) savedTags.append('\n');
-            savedTags.append(String.format("[File received: %s (%s, %d bytes) — saved to %s]",
-                    label, mime, file.getSize(), target));
+            savedTags.append(SavedUpload.fileReceivedTag(label, mime, file.getSize(), target));
             log.info("Saved web upload: {} → {}", label, target);
         }
     }
@@ -293,47 +316,71 @@ public class ChatController {
         return sb.toString();
     }
 
-    private void wireStreamToEmitter(Flux<String> stream, SseEmitter emitter) {
+    private void wireStreamToEmitter(Flux<String> stream, SseEmitter emitter, String conversationId) {
+        // Subscribe to tool-call events so the UI can render live tool cards (#362).
+        // The subscription is auto-unregistered when the emitter completes.
+        Runnable unsubscribe = toolEventBus.subscribe(conversationId, event -> {
+            if (event instanceof ToolEventBus.ToolStart start) {
+                SseSender.send(emitter, "tool_start", encodeToolStart(start));
+            } else if (event instanceof ToolEventBus.ToolEnd end) {
+                SseSender.send(emitter, "tool_end", encodeToolEnd(end));
+            }
+        });
+        Runnable cleanup = () -> { try { unsubscribe.run(); } catch (Exception ignored) {} };
+
         stream.subscribe(
-                chunk -> {
-                    try {
-                        emitter.send(SseEmitter.event().name("chunk").data(chunk));
-                    } catch (IOException e) {
-                        log.debug("SSE client disconnected: {}", e.getMessage());
-                        emitter.completeWithError(e);
-                    }
-                },
+                chunk -> SseSender.send(emitter, "chunk", chunk),
                 err -> {
-                    try {
-                        emitter.send(SseEmitter.event()
-                                .name("error")
-                                .data(err.getMessage() != null ? err.getMessage() : "stream error"));
-                    } catch (IOException ignored) {
-                        // Client disconnected
-                    }
-                    emitter.completeWithError(err);
+                    SseSender.send(emitter, "error",
+                            err.getMessage() != null ? err.getMessage() : "stream error");
+                    cleanup.run();
+                    SseSender.completeWithError(emitter, err);
                 },
                 () -> {
-                    try {
-                        emitter.send(SseEmitter.event().name("done").data(""));
-                    } catch (IOException ignored) {
-                        // Client disconnected
-                    }
-                    emitter.complete();
+                    cleanup.run();
+                    SseSender.sendAndComplete(emitter, "done", "");
                 });
     }
 
-    private static void sendErrorAndComplete(SseEmitter emitter, String message) {
-        try {
-            emitter.send(SseEmitter.event().name("error").data(message));
-            emitter.complete();
-        } catch (IOException ignored) {
-            // Client disconnected
+    private static String encodeToolStart(ToolEventBus.ToolStart e) {
+        return String.format(
+                "{\"id\":\"%s\",\"name\":\"%s\",\"args\":\"%s\"}",
+                jsonEscape(e.callId()), jsonEscape(e.toolName()),
+                jsonEscape(e.argsPreview()));
+    }
+
+    private static String encodeToolEnd(ToolEventBus.ToolEnd e) {
+        return String.format(
+                "{\"id\":\"%s\",\"name\":\"%s\",\"ok\":%s,\"elapsedMs\":%d,\"summary\":\"%s\"}",
+                jsonEscape(e.callId()), jsonEscape(e.toolName()),
+                e.ok(), e.elapsedMs(), jsonEscape(e.summary()));
+    }
+
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"': out.append("\\\""); break;
+                case '\\': out.append("\\\\"); break;
+                case '\n': out.append("\\n"); break;
+                case '\r': out.append("\\r"); break;
+                case '\t': out.append("\\t"); break;
+                default:
+                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
+                    else out.append(c);
+            }
         }
+        return out.toString();
+    }
+
+    private static void sendErrorAndComplete(SseEmitter emitter, String message) {
+        SseSender.sendAndComplete(emitter, "error", message);
     }
 
     private String resolveConversationId(String requested) {
-        return requested != null && !requested.isBlank() ? requested : WEB_CONVERSATION_ID;
+        return requested != null && !requested.isBlank() ? requested : HeraldLimits.WEB_CONVERSATION_ID;
     }
 
     public record ChatRequest(String message, String conversationId) {}

@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
+import com.herald.config.HeraldLimits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -28,7 +29,13 @@ import reactor.core.publisher.Flux;
 public class AgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
-    public static final String DEFAULT_CONVERSATION_ID = "default";
+
+    /**
+     * @deprecated Use {@link HeraldLimits#DEFAULT_CONVERSATION_ID} directly.
+     * Retained as a re-export so existing callers compile without churn.
+     */
+    @Deprecated
+    public static final String DEFAULT_CONVERSATION_ID = HeraldLimits.DEFAULT_CONVERSATION_ID;
 
     /** Strip reasoning tags emitted by some local models (Qwen, DeepSeek, etc.) */
     private static final Pattern THINK_TAGS = Pattern.compile("<think>.*?</think>\\s*", Pattern.DOTALL);
@@ -56,6 +63,17 @@ public class AgentService {
     public String chat(String userMessage, String conversationId) {
         log.info("Agent processing message (conversation={}): {}",
                 conversationId, userMessage.substring(0, Math.min(userMessage.length(), 50)));
+
+        // Propagate channel context so tools (e.g. AskUserQuestionTool) know
+        // whether this turn originated from the web chat or Telegram.
+        boolean setChannel = ChatChannelContext.get() == null && conversationId != null;
+        if (setChannel) {
+            ChatChannelContext.set(
+                    conversationId.startsWith("web")
+                            ? ChatChannelContext.Channel.WEB
+                            : ChatChannelContext.Channel.TELEGRAM,
+                    conversationId);
+        }
 
         long startTime = System.nanoTime();
 
@@ -96,6 +114,9 @@ public class AgentService {
                 String provider = AgentTurnListener.deriveProvider(model);
                 agentTurnListener.recordTurn(provider, model, tokensIn, tokensOut,
                         cacheReadTokens, cacheWriteTokens, latencyMs, toolCalls, null);
+            }
+            if (setChannel) {
+                ChatChannelContext.clear();
             }
         }
 
