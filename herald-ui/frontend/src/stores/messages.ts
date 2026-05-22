@@ -77,7 +77,9 @@ export const useMessagesStore = defineStore('messages', () => {
         content: (row.content ?? row.CONTENT ?? '') as string,
         timestamp: (row.created_at ?? row.CREATED_AT ?? null) as string,
         toolCalls: parseToolCalls(row.tool_calls ?? row.TOOL_CALLS),
-        subagentCalls: [],
+        subagentCalls: Array.isArray(row.subagentCalls)
+          ? (row.subagentCalls as SubagentCall[])
+          : [],
       }))
       currentPage.value = data.number ?? 0
       totalPages.value = data.totalPages ?? 0

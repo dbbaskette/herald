@@ -10,12 +10,14 @@
  * store). The sidebar shows them all so users can also re-read their
  * Telegram history in the web UI if they want.
  */
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useConversationsStore, type ConversationSummary } from '@/stores/conversations'
 import { useChatStore } from '@/stores/chat'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const conversations = useConversationsStore()
 const chat = useChatStore()
+const deleteTarget = ref<string | null>(null)
 
 const groups = computed(() => {
   const now = new Date()
@@ -56,7 +58,13 @@ async function pick(id: string) {
 
 async function remove(id: string, evt: Event) {
   evt.stopPropagation()
-  if (!confirm('Delete this conversation history? This cannot be undone.')) return
+  deleteTarget.value = id
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  const id = deleteTarget.value
+  deleteTarget.value = null
   const ok = await conversations.deleteConversation(id)
   if (ok && chat.conversationId === id) {
     chat.newConversation()
@@ -74,6 +82,15 @@ defineExpose({ refresh })
 
 <template>
   <aside class="conversation-list">
+    <ConfirmModal
+      :open="deleteTarget !== null"
+      title="Delete Conversation"
+      message="Delete this conversation history? This cannot be undone."
+      confirm-label="Delete"
+      danger
+      @confirm="confirmDelete()"
+      @cancel="deleteTarget = null"
+    />
     <div class="cl-header">
       <span class="cl-title">CONVERSATIONS</span>
       <button class="cl-refresh" :title="conversations.loading ? 'Refreshing…' : 'Refresh'" :disabled="conversations.loading" @click="refresh">

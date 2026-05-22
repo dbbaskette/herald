@@ -40,12 +40,18 @@ function mountPage() {
   })
 }
 
+function mockFetch(statusPromise: Promise<unknown> = Promise.resolve(fullStatus)) {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    if (String(url).includes('/api/approvals')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }
+    return statusPromise.then((body) => ({ ok: true, json: () => Promise.resolve(body) }))
+  }))
+}
+
 describe('SystemStatus.vue', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(fullStatus),
-    }))
+    mockFetch()
   })
 
   it('renders the page title', () => {
@@ -53,10 +59,17 @@ describe('SystemStatus.vue', () => {
     expect(wrapper.text()).toContain('System Status')
   })
 
-  it('shows loading state initially', () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise(() => {}))) // never resolves
+  it('shows loading state initially', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/approvals')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      return new Promise(() => {})
+    }))
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Loading status')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('Loading status')
+    })
   })
 
   it('renders all status cards after data loads', async () => {

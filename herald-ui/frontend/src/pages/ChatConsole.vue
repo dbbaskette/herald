@@ -5,9 +5,12 @@ import { useChatStore } from '@/stores/chat'
 import { useConversationsStore } from '@/stores/conversations'
 import ConversationList from '@/components/ConversationList.vue'
 import ToolCallCard from '@/components/ToolCallCard.vue'
+import ApprovalInbox from '@/components/ApprovalInbox.vue'
+import { useApprovalsStore } from '@/stores/approvals'
 
 const store = useChatStore()
 const conversations = useConversationsStore()
+const approvals = useApprovalsStore()
 const showSidebar = ref(true)
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
 const input = ref('')
@@ -98,6 +101,15 @@ const overLimit = computed(() => totalBytes.value > MAX_TOTAL_BYTES)
 const canSend = computed(
   () => (input.value.trim().length > 0 || attachments.value.length > 0) && !store.sending && !overLimit.value
 )
+
+/** Id of the last assistant/error message — only that one gets a working Retry button. */
+const lastAssistantMessageId = computed(() => {
+  for (let i = store.messages.length - 1; i >= 0; i--) {
+    const m = store.messages[i]
+    if (m.role === 'assistant' || m.role === 'error') return m.id
+  }
+  return null
+})
 
 // Configure markdown-it: enable links, lists, tables, etc. with safe HTML escaping.
 const md = new MarkdownIt({
@@ -325,7 +337,17 @@ onMounted(() => {
   store.ensureNotificationsConnected()
   fetchModelStatus()
   conversations.fetchAll()
+  approvals.startPolling(4000)
   document.addEventListener('click', onDocumentClick)
+  const draft = sessionStorage.getItem('herald-chat-draft')
+  if (draft) {
+    input.value = draft
+    sessionStorage.removeItem('herald-chat-draft')
+    nextTick(() => {
+      resizeTextarea()
+      inputEl.value?.focus()
+    })
+  }
 })
 
 // Refresh the sidebar after each completed send so new conversations appear
@@ -339,6 +361,7 @@ watch(() => store.sending, (sending, wasSending) => {
 onUnmounted(() => {
   if (processingTimer) clearInterval(processingTimer)
   document.removeEventListener('click', onDocumentClick)
+  approvals.stopPolling()
 })
 </script>
 
@@ -414,6 +437,13 @@ onUnmounted(() => {
     <div class="chat-main">
       <ConversationList v-if="showSidebar" ref="conversationListRef" class="chat-side" />
       <div class="chat-stage">
+    <!-- Memory approval prompt (web channel) -->
+    <ApprovalInbox
+      v-if="approvals.count > 0"
+      compact
+      :conversation-id="store.conversationId"
+      class="chat-approval-bar"
+    />
     <div ref="chatBody" class="chat-body">
       <!-- Empty state -->
       <div v-if="store.messages.length === 0 && !store.sending" class="chat-empty">
@@ -516,7 +546,7 @@ onUnmounted(() => {
                 </svg>
               </button>
               <button
-                v-if="msg.role === 'assistant'"
+                v-if="msg.role === 'assistant' && msg.id === lastAssistantMessageId"
                 class="msg-action"
                 title="Retry"
                 @click="retryFrom(msg.id)"
@@ -644,6 +674,13 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.chat-approval-bar {
+  flex-shrink: 0;
+  padding: 10px 0 0;
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: 8px;
 }
 
 .chat-side {

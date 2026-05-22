@@ -1,26 +1,27 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/status'
+import { useApprovalsStore } from '@/stores/approvals'
+import ApprovalInbox from '@/components/ApprovalInbox.vue'
 
 const store = useStatusStore()
+const approvals = useApprovalsStore()
 
 onMounted(async () => {
   await store.fetchStatus()
   store.connectSSE()
+  approvals.startPolling(5000)
 })
 
 onUnmounted(() => {
   store.disconnectSSE()
+  approvals.stopPolling()
 })
 
-function statusDot(ok: boolean): string {
-  return ok ? 'bg-green-500' : 'bg-red-500'
-}
-
-function mcpStatusColor(status: string): string {
-  if (status === 'connected') return 'text-green-600'
-  if (status === 'error') return 'text-red-600'
-  return 'text-gray-400'
+function mcpStatusClass(status: string): string {
+  if (status === 'connected') return 'status-ok'
+  if (status === 'error') return 'status-err'
+  return 'status-idle'
 }
 
 function formatTime(ts: string | null): string {
@@ -35,134 +36,91 @@ function formatTime(ts: string | null): string {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">System Status</h1>
-      <div class="flex items-center gap-2 text-sm">
-        <span
-          class="inline-block w-2 h-2 rounded-full"
-          :class="store.connected ? 'bg-green-500' : 'bg-gray-400'"
-        />
-        <span class="text-gray-500">{{ store.connected ? 'Live' : 'Disconnected' }}</span>
+    <div class="page-header">
+      <h1 class="page-title">System Status</h1>
+      <div class="live-indicator">
+        <span class="status-dot" :class="store.connected ? 'status-dot--live' : 'status-dot--idle'" />
+        <span class="live-label">{{ store.connected ? 'Live' : 'Disconnected' }}</span>
       </div>
     </div>
 
-    <!-- Loading state -->
-    <div v-if="store.loading" class="text-gray-500">Loading status…</div>
+    <div v-if="store.loading" class="text-muted">Loading status…</div>
 
     <template v-else>
-      <!-- Status Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <section class="mb-8">
+        <ApprovalInbox />
+      </section>
 
-        <!-- Bot Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full" :class="statusDot(store.status.bot.running)" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Bot</h2>
+      <div class="status-grid">
+        <div class="card status-card">
+          <div class="card-head">
+            <span class="status-dot" :class="store.status.bot.running ? 'status-dot--live' : 'status-dot--error'" />
+            <h2 class="section-label">Bot</h2>
           </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Status</dt>
-              <dd class="font-medium" :class="store.status.bot.running ? 'text-green-700' : 'text-red-700'">
+          <dl class="kv-list">
+            <div class="kv-row">
+              <dt>Status</dt>
+              <dd :class="store.status.bot.running ? 'status-ok' : 'status-err'">
                 {{ store.status.bot.running ? 'Running' : 'Stopped' }}
               </dd>
             </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">PID</dt>
-              <dd class="text-gray-900">{{ store.status.bot.pid ?? '—' }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Uptime</dt>
-              <dd class="text-gray-900">{{ store.status.bot.uptime }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Restarts</dt>
-              <dd class="text-gray-900">{{ store.status.bot.restartCount }}</dd>
+            <div class="kv-row"><dt>PID</dt><dd>{{ store.status.bot.pid ?? '—' }}</dd></div>
+            <div class="kv-row"><dt>Uptime</dt><dd>{{ store.status.bot.uptime }}</dd></div>
+            <div class="kv-row"><dt>Restarts</dt><dd>{{ store.status.bot.restartCount }}</dd></div>
+          </dl>
+        </div>
+
+        <div class="card status-card">
+          <div class="card-head">
+            <span class="status-dot status-dot--warning" />
+            <h2 class="section-label">Model</h2>
+          </div>
+          <dl class="kv-list">
+            <div class="kv-row"><dt>Name</dt><dd>{{ store.status.model.name }}</dd></div>
+            <div class="kv-row"><dt>Requests today</dt><dd>{{ store.status.model.requestsToday }}</dd></div>
+            <div class="kv-row"><dt>Est. token spend</dt><dd>{{ store.status.model.estimatedTokenSpend }}</dd></div>
+          </dl>
+        </div>
+
+        <div class="card status-card">
+          <div class="card-head">
+            <span class="status-dot" style="background: #a855f7" />
+            <h2 class="section-label">Skills</h2>
+          </div>
+          <dl class="kv-list">
+            <div class="kv-row"><dt>Total loaded</dt><dd>{{ store.status.skills.totalLoaded }}</dd></div>
+            <div class="kv-row"><dt>Last reload</dt><dd>{{ formatTime(store.status.skills.lastReload) }}</dd></div>
+            <div v-if="store.status.skills.parseErrors.length" class="parse-errors">
+              <dt class="status-err">Parse errors</dt>
+              <dd v-for="(err, i) in store.status.skills.parseErrors" :key="i" class="status-err text-xs">{{ err }}</dd>
             </div>
           </dl>
         </div>
 
-        <!-- Model Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Model</h2>
+        <div class="card status-card">
+          <div class="card-head">
+            <span class="status-dot status-dot--warning" />
+            <h2 class="section-label">Memory</h2>
           </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Name</dt>
-              <dd class="text-gray-900">{{ store.status.model.name }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Requests today</dt>
-              <dd class="text-gray-900">{{ store.status.model.requestsToday }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Est. token spend</dt>
-              <dd class="text-gray-900">{{ store.status.model.estimatedTokenSpend }}</dd>
-            </div>
+          <dl class="kv-list">
+            <div class="kv-row"><dt>Entries</dt><dd>{{ store.status.memory.entryCount }}</dd></div>
+            <div class="kv-row"><dt>DB file size</dt><dd>{{ store.status.memory.databaseFileSize }}</dd></div>
           </dl>
         </div>
 
-        <!-- Skills Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-purple-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Skills</h2>
+        <div class="card status-card span-2">
+          <div class="card-head">
+            <span class="status-dot" style="background: #6366f1" />
+            <h2 class="section-label">MCP Connections</h2>
           </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Total loaded</dt>
-              <dd class="text-gray-900">{{ store.status.skills.totalLoaded }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Last reload</dt>
-              <dd class="text-gray-900">{{ formatTime(store.status.skills.lastReload) }}</dd>
-            </div>
-            <div v-if="store.status.skills.parseErrors.length" class="pt-1">
-              <dt class="text-red-600 text-xs font-medium">Parse errors</dt>
-              <dd v-for="(err, i) in store.status.skills.parseErrors" :key="i" class="text-red-500 text-xs">
-                {{ err }}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <!-- Memory Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Memory</h2>
-          </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Entries</dt>
-              <dd class="text-gray-900">{{ store.status.memory.entryCount }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">DB file size</dt>
-              <dd class="text-gray-900">{{ store.status.memory.databaseFileSize }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <!-- MCP Connections Card -->
-        <div class="bg-white rounded-lg shadow p-4 md:col-span-2">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">MCP Connections</h2>
-          </div>
-          <div v-if="store.status.mcp.length === 0" class="text-sm text-gray-400">No MCP servers configured</div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="server in store.status.mcp"
-              :key="server.name"
-              class="flex items-center justify-between text-sm border-b border-gray-100 pb-1 last:border-0"
-            >
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-900">{{ server.name }}</span>
-                <span class="text-xs" :class="mcpStatusColor(server.status)">{{ server.status }}</span>
+          <div v-if="store.status.mcp.length === 0" class="text-muted text-sm">No MCP servers configured</div>
+          <div v-else class="mcp-list">
+            <div v-for="server in store.status.mcp" :key="server.name" class="mcp-row">
+              <div class="mcp-name">
+                <span>{{ server.name }}</span>
+                <span class="text-xs" :class="mcpStatusClass(server.status)">{{ server.status }}</span>
               </div>
-              <div class="flex gap-4 text-gray-500 text-xs">
+              <div class="mcp-meta">
                 <span>{{ server.toolCount }} tools</span>
                 <span>Last ping: {{ formatTime(server.lastPing) }}</span>
               </div>
@@ -171,68 +129,239 @@ function formatTime(ts: string | null): string {
         </div>
       </div>
 
-      <!-- Cron Jobs -->
-      <div v-if="store.status.cron.length" class="bg-white rounded-lg shadow p-4 mb-8">
-        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Cron Jobs</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-gray-500 border-b border-gray-200">
-                <th class="pb-2 font-medium">Job</th>
-                <th class="pb-2 font-medium">Next Run</th>
-                <th class="pb-2 font-medium">Last Run</th>
-                <th class="pb-2 font-medium">Last Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="job in store.status.cron" :key="job.name" class="border-b border-gray-50">
-                <td class="py-1.5 text-gray-900 font-medium">{{ job.name }}</td>
-                <td class="py-1.5 text-gray-600">{{ formatTime(job.nextRun) }}</td>
-                <td class="py-1.5 text-gray-600">{{ formatTime(job.lastRun) }}</td>
-                <td class="py-1.5">
-                  <span
-                    v-if="job.lastResult"
-                    class="text-xs px-1.5 py-0.5 rounded"
-                    :class="job.lastResult === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                  >
-                    {{ job.lastResult }}
-                  </span>
-                  <span v-else class="text-gray-400">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div v-if="store.status.cron.length" class="card section-block">
+        <h2 class="section-label mb-3">Cron Jobs</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="table-header pb-2">Job</th>
+              <th class="table-header pb-2">Next Run</th>
+              <th class="table-header pb-2">Last Run</th>
+              <th class="table-header pb-2">Last Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="job in store.status.cron" :key="job.name" class="data-row">
+              <td class="font-medium">{{ job.name }}</td>
+              <td class="text-secondary">{{ formatTime(job.nextRun) }}</td>
+              <td class="text-secondary">{{ formatTime(job.lastRun) }}</td>
+              <td>
+                <span v-if="job.lastResult" class="result-badge" :class="job.lastResult === 'success' ? 'ok' : 'err'">
+                  {{ job.lastResult }}
+                </span>
+                <span v-else class="text-muted">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <!-- Recent Activity Feed -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Recent Activity</h2>
-        <div v-if="store.status.recentActivity.length === 0" class="text-sm text-gray-400">
-          No recent activity
-        </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="(entry, i) in store.status.recentActivity"
-            :key="i"
-            class="border-b border-gray-100 pb-2 last:border-0"
-          >
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs text-gray-400">{{ formatTime(entry.timestamp) }}</span>
-              <div v-if="entry.toolCalls.length" class="flex gap-1">
-                <span
-                  v-for="(tool, j) in entry.toolCalls"
-                  :key="j"
-                  class="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded"
-                >
-                  {{ tool }}
-                </span>
+      <div class="card section-block">
+        <h2 class="section-label mb-3">Recent Activity</h2>
+        <div v-if="store.status.recentActivity.length === 0" class="text-muted text-sm">No recent activity</div>
+        <div v-else class="activity-list">
+          <div v-for="(entry, i) in store.status.recentActivity" :key="i" class="activity-item">
+            <div class="activity-head">
+              <span class="text-xs text-muted">{{ formatTime(entry.timestamp) }}</span>
+              <div v-if="entry.toolCalls.length" class="tool-tags">
+                <span v-for="(tool, j) in entry.toolCalls" :key="j" class="tool-tag">{{ tool }}</span>
               </div>
             </div>
-            <p class="text-sm text-gray-700 truncate">{{ entry.messagePreview }}</p>
+            <p class="activity-preview">{{ entry.messagePreview }}</p>
           </div>
         </div>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.mb-8 { margin-bottom: 32px; }
+.mb-3 { margin-bottom: 12px; }
+.text-muted { color: var(--color-text-muted); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-xs { font-size: 0.75rem; }
+.text-sm { font-size: 0.875rem; }
+.font-medium { font-weight: 500; }
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 720px) {
+  .span-2 { grid-column: span 1; }
+}
+
+.status-card {
+  padding: 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kv-row dt {
+  color: var(--color-text-muted);
+}
+
+.kv-row dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.status-ok { color: #15803d; }
+.status-err { color: #dc2626; }
+.status-idle { color: var(--color-text-muted); }
+
+.parse-errors {
+  padding-top: 4px;
+}
+
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.mcp-row:last-child {
+  border-bottom: none;
+}
+
+.mcp-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.mcp-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.section-block {
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.data-table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.data-row td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.result-badge {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.result-badge.ok {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.result-badge.err {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tool-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tool-tag {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+
+.activity-preview {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

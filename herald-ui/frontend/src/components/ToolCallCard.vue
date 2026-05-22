@@ -1,14 +1,20 @@
 <script setup lang="ts">
-/**
- * Compact inline card for a tool call (#362). Rendered inside the assistant
- * message stream during streaming turns. Shows tool name + truncated args
- * with elapsed time; expands to reveal the full args + result summary.
- */
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { ToolCall } from '@/stores/chat'
+import { extractMemoryPath, memoryViewerRoute } from '@/utils/memoryTools'
 
 const props = defineProps<{ call: ToolCall }>()
+const router = useRouter()
 const expanded = ref(false)
+
+const memoryPath = computed(() => extractMemoryPath(props.call.name, props.call.args))
+
+function openMemory() {
+  const path = memoryPath.value
+  if (!path) return
+  router.push(memoryViewerRoute(path))
+}
 
 const elapsedLabel = computed(() => {
   const ms = props.call.elapsedMs ?? (Date.now() - props.call.startedAt)
@@ -55,6 +61,11 @@ const headlineLabel = computed(() => props.call.args || '(no arguments)')
       <div v-if="call.summary" class="tool-card-row">
         <span class="tool-card-label">Result</span>
         <code class="tool-card-code">{{ call.summary }}</code>
+      </div>
+      <div v-if="memoryPath" class="tool-card-memory-link">
+        <button type="button" class="link-memory" @click.stop="openMemory">
+          Open {{ memoryPath }} in Memory →
+        </button>
       </div>
     </div>
   </div>
@@ -190,5 +201,9 @@ const headlineLabel = computed(() => props.call.args || '(no arguments)')
   background: transparent;
   padding: 0;
   display: block;
+}
+
+.tool-card-memory-link {
+  margin-top: 6px;
 }
 </style>
