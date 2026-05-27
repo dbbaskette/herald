@@ -125,6 +125,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 .app-content {
   flex: 1;
   overflow: auto;
-  padding: 28px 32px;
+  padding: 28px 36px;
 }
 </style>

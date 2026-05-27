@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import ConversationHistory from './ConversationHistory.vue'
 
 const samplePage = {
@@ -31,10 +32,18 @@ const samplePage = {
   number: 0,
 }
 
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/history', component: ConversationHistory },
+    { path: '/chat', component: { template: '<div>Chat</div>' } },
+  ],
+})
+
 function mountPage() {
   return mount(ConversationHistory, {
     global: {
-      plugins: [createPinia()],
+      plugins: [createPinia(), router],
     },
   })
 }
@@ -93,7 +102,7 @@ describe('ConversationHistory.vue', () => {
     expect(wrapper.text()).toContain('read_file')
 
     // Click to expand
-    const toolBtn = wrapper.find('button.w-full')
+    const toolBtn = wrapper.find('.tool-toggle')
     await toolBtn.trigger('click')
 
     expect(wrapper.text()).toContain('Inputs')
@@ -111,7 +120,7 @@ describe('ConversationHistory.vue', () => {
     expect(wrapper.text()).toContain('research-agent')
 
     // Click to expand subagent
-    const subBtn = wrapper.findAll('button.w-full')[1]
+    const subBtn = wrapper.findAll('.tool-toggle')[1]
     await subBtn.trigger('click')
 
     expect(wrapper.text()).toContain('Result')
@@ -152,9 +161,9 @@ describe('ConversationHistory.vue', () => {
     const clearBtn = wrapper.findAll('button').find(b => b.text() === 'Clear History')!
     await clearBtn.trigger('click')
 
-    // Should show confirmation
-    expect(wrapper.text()).toContain('Clear all history?')
-    expect(wrapper.text()).toContain('Confirm')
+    // Should show confirmation modal
+    expect(wrapper.text()).toContain('Clear all conversation history?')
+    expect(wrapper.text()).toContain('Clear All')
   })
 
   it('shows search and clear filters buttons', () => {

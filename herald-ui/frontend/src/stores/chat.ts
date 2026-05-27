@@ -104,6 +104,13 @@ export const useChatStore = defineStore('chat', () => {
       onToolStart(e.data)
     })
     es.addEventListener('tool_end', (e: MessageEvent) => onToolEnd(e.data))
+    es.addEventListener('approval_required', (e: MessageEvent) => {
+      if (!e.data) return
+      // Lazy import avoids circular dependency at module load time.
+      import('./approvals').then(({ useApprovalsStore }) => {
+        useApprovalsStore().upsertFromSse(e.data)
+      })
+    })
   }
 
   function ensureBackgroundPlaceholder() {

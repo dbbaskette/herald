@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import DiffEditor from '@/components/DiffEditor.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 interface PromptSummary {
   name: string
@@ -30,6 +33,31 @@ const dirty = ref(false)
 const saving = ref(false)
 const saveMessage = ref('')
 const errorMessage = ref('')
+
+const confirmOpen = ref(false)
+const confirmTitle = ref('Confirm')
+const confirmMessage = ref('')
+const confirmDanger = ref(false)
+let confirmHandler: (() => void | Promise<void>) | null = null
+
+function askConfirm(
+  title: string,
+  message: string,
+  handler: () => void | Promise<void>,
+  danger = false
+) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmDanger.value = danger
+  confirmHandler = handler
+  confirmOpen.value = true
+}
+
+async function onConfirmModal() {
+  confirmOpen.value = false
+  if (confirmHandler) await confirmHandler()
+  confirmHandler = null
+}
 
 const restartRequired = computed(
   () => selected.value !== null && selected.value.name !== 'CONTEXT.md'
@@ -73,8 +101,13 @@ async function loadList() {
 
 async function selectPrompt(name: string) {
   if (dirty.value) {
-    if (!confirm('Discard unsaved changes?')) return
+    askConfirm('Unsaved Changes', 'Discard unsaved changes?', () => doSelectPrompt(name))
+    return
   }
+  await doSelectPrompt(name)
+}
+
+async function doSelectPrompt(name: string) {
   errorMessage.value = ''
   saveMessage.value = ''
   try {
@@ -124,35 +157,45 @@ async function save() {
 async function revertOverride() {
   if (!selected.value || !selected.value.overridden) return
   if (selected.value.name === 'CONTEXT.md') {
-    if (!confirm('Clear CONTEXT.md content?')) return
-    editorContent.value = ''
-    await save()
+    askConfirm('Clear Context', 'Clear CONTEXT.md content?', async () => {
+      editorContent.value = ''
+      await save()
+    }, true)
     return
   }
-  if (!confirm(`Delete the user override and revert to the bundled ${selected.value.displayName}? Restart required to take effect.`)) {
-    return
-  }
-  try {
-    const res = await fetch(`/api/prompts/${encodeURIComponent(selected.value.name)}`, {
-      method: 'DELETE',
-    })
-    const result = await res.json()
-    if (!res.ok) throw new Error(result.error ?? `HTTP ${res.status}`)
-    saveMessage.value = result.reverted
-      ? `Reverted — restart herald-bot to apply the bundled default.`
-      : 'No override file present.'
-    await selectPrompt(selected.value.name)
-    await loadList()
-  } catch (e: any) {
-    errorMessage.value = `Revert failed: ${e.message}`
-  }
+  askConfirm(
+    'Revert Override',
+    `Delete the user override and revert to the bundled ${selected.value.displayName}? Restart required to take effect.`,
+    async () => {
+      try {
+        const res = await fetch(`/api/prompts/${encodeURIComponent(selected.value!.name)}`, {
+          method: 'DELETE',
+        })
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error ?? `HTTP ${res.status}`)
+        saveMessage.value = result.reverted
+          ? `Reverted — restart herald-bot to apply the bundled default.`
+          : 'No override file present.'
+        await doSelectPrompt(selected.value!.name)
+        await loadList()
+      } catch (e: any) {
+        errorMessage.value = `Revert failed: ${e.message}`
+      }
+    },
+    true
+  )
 }
 
 function loadDefault() {
   if (!selected.value) return
-  if (!confirm('Replace editor content with the bundled default? (Not saved until you press Save.)')) return
-  editorContent.value = selected.value.defaultContent
-  onContentChange()
+  askConfirm(
+    'Load Default',
+    'Replace editor content with the bundled default? (Not saved until you press Save.)',
+    () => {
+      editorContent.value = selected.value!.defaultContent
+      onContentChange()
+    }
+  )
 }
 
 function insertDocSnippet() {
@@ -187,12 +230,17 @@ onMounted(() => {
 
 <template>
   <div class="prompts-page">
-    <header class="prompts-header">
-      <div>
-        <h1 class="page-title">Prompts</h1>
-        <p class="page-subtitle">View and edit Herald's system prompts and your personal context.</p>
-      </div>
-    </header>
+    <ConfirmModal
+      :open="confirmOpen"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :danger="confirmDanger"
+      @confirm="onConfirmModal()"
+      @cancel="confirmOpen = false"
+    />
+    <NowStripe />
+    <PageHeader title="Prompts" path="/prompts" />
+    <p class="page-hint">View and edit Herald's system prompts and your personal context.</p>
 
     <div class="prompts-layout">
       <!-- Left: list -->
@@ -311,23 +359,11 @@ onMounted(() => {
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-.prompts-header {
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8e5df;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-
-.page-subtitle {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 4px 0 0 0;
+.page-hint {
+  color: var(--graphite-2);
+  font-size: 0.6875rem;
+  margin: 0 0 18px;
+  letter-spacing: 0.02em;
 }
 
 .prompts-layout {

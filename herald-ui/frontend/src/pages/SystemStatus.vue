@@ -1,238 +1,327 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/status'
+import { useApprovalsStore } from '@/stores/approvals'
+import ApprovalInbox from '@/components/ApprovalInbox.vue'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SectionCard from '@/components/SectionCard.vue'
+import MetricRow from '@/components/MetricRow.vue'
+import StatusGlyph from '@/components/StatusGlyph.vue'
 
 const store = useStatusStore()
+const approvals = useApprovalsStore()
 
 onMounted(async () => {
   await store.fetchStatus()
   store.connectSSE()
+  approvals.startPolling(5000)
 })
 
 onUnmounted(() => {
   store.disconnectSSE()
+  approvals.stopPolling()
 })
-
-function statusDot(ok: boolean): string {
-  return ok ? 'bg-green-500' : 'bg-red-500'
-}
-
-function mcpStatusColor(status: string): string {
-  if (status === 'connected') return 'text-green-600'
-  if (status === 'error') return 'text-red-600'
-  return 'text-gray-400'
-}
 
 function formatTime(ts: string | null): string {
   if (!ts) return '—'
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
+  try { return new Date(ts).toLocaleString() } catch { return ts }
 }
+
+const botGlyph = computed<'live' | 'err'>(() =>
+  store.status.bot.running ? 'live' : 'err',
+)
+const botTone = computed<'ok' | 'err'>(() =>
+  store.status.bot.running ? 'ok' : 'err',
+)
+const liveGlyph = computed<'live-pulse' | 'idle'>(() =>
+  store.connected ? 'live-pulse' : 'idle',
+)
+const skillsTone = computed<'data' | 'warn'>(() =>
+  store.status.skills.parseErrors.length ? 'warn' : 'data',
+)
+const skillsGlyph = computed<'data' | 'warn'>(() =>
+  store.status.skills.parseErrors.length ? 'warn' : 'data',
+)
+const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
+  s === 'connected' ? 'live' : s === 'error' ? 'err' : 'idle'
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">System Status</h1>
-      <div class="flex items-center gap-2 text-sm">
-        <span
-          class="inline-block w-2 h-2 rounded-full"
-          :class="store.connected ? 'bg-green-500' : 'bg-gray-400'"
-        />
-        <span class="text-gray-500">{{ store.connected ? 'Live' : 'Disconnected' }}</span>
-      </div>
+  <div class="status-page">
+    <NowStripe />
+
+    <PageHeader title="Status" path="/status">
+      <template #right>
+        <span class="page-right">
+          <StatusGlyph :kind="liveGlyph" size="sm" />
+          <span>{{ store.connected ? 'live' : 'disconnected' }}</span>
+        </span>
+      </template>
+    </PageHeader>
+
+    <div v-if="store.loading" class="loading">
+      <StatusGlyph kind="idle" /> Loading status…
     </div>
 
-    <!-- Loading state -->
-    <div v-if="store.loading" class="text-gray-500">Loading status…</div>
-
     <template v-else>
-      <!-- Status Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <!-- Approval inbox up top when non-empty -->
+      <ApprovalInbox class="approval-block" />
 
-        <!-- Bot Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full" :class="statusDot(store.status.bot.running)" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Bot</h2>
+      <!-- Bot + Model -->
+      <div class="card-grid">
+        <SectionCard label="Bot" :tone="botTone" :glyph="botGlyph">
+          <div class="section-body">
+            <MetricRow label="Status" :tone="store.status.bot.running ? 'ok' : 'err'">
+              <template #leading><StatusGlyph :kind="botGlyph" /></template>
+              {{ store.status.bot.running ? 'Running' : 'Stopped' }}
+            </MetricRow>
+            <MetricRow label="PID"      :value="store.status.bot.pid" />
+            <MetricRow label="Uptime"   :value="store.status.bot.uptime" />
+            <MetricRow label="Restarts" :value="store.status.bot.restartCount" />
           </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Status</dt>
-              <dd class="font-medium" :class="store.status.bot.running ? 'text-green-700' : 'text-red-700'">
-                {{ store.status.bot.running ? 'Running' : 'Stopped' }}
-              </dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">PID</dt>
-              <dd class="text-gray-900">{{ store.status.bot.pid ?? '—' }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Uptime</dt>
-              <dd class="text-gray-900">{{ store.status.bot.uptime }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Restarts</dt>
-              <dd class="text-gray-900">{{ store.status.bot.restartCount }}</dd>
-            </div>
-          </dl>
-        </div>
+        </SectionCard>
 
-        <!-- Model Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Model</h2>
+        <SectionCard label="Model" tone="gold" glyph="gold">
+          <div class="section-body">
+            <MetricRow label="Name"           :value="store.status.model.name" tone="gold" />
+            <MetricRow label="Requests today" :value="store.status.model.requestsToday" tone="info" />
+            <MetricRow label="Spend"          :value="store.status.model.estimatedTokenSpend" tone="info" />
           </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Name</dt>
-              <dd class="text-gray-900">{{ store.status.model.name }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Requests today</dt>
-              <dd class="text-gray-900">{{ store.status.model.requestsToday }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Est. token spend</dt>
-              <dd class="text-gray-900">{{ store.status.model.estimatedTokenSpend }}</dd>
-            </div>
-          </dl>
-        </div>
+        </SectionCard>
+      </div>
 
-        <!-- Skills Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-purple-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Skills</h2>
-          </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Total loaded</dt>
-              <dd class="text-gray-900">{{ store.status.skills.totalLoaded }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Last reload</dt>
-              <dd class="text-gray-900">{{ formatTime(store.status.skills.lastReload) }}</dd>
-            </div>
-            <div v-if="store.status.skills.parseErrors.length" class="pt-1">
-              <dt class="text-red-600 text-xs font-medium">Parse errors</dt>
-              <dd v-for="(err, i) in store.status.skills.parseErrors" :key="i" class="text-red-500 text-xs">
+      <!-- Skills + Memory -->
+      <div class="card-grid">
+        <SectionCard label="Skills" :tone="skillsTone" :glyph="skillsGlyph">
+          <div class="section-body">
+            <MetricRow label="Total loaded" :value="store.status.skills.totalLoaded" tone="data" />
+            <MetricRow label="Last reload"  :value="formatTime(store.status.skills.lastReload)" />
+            <div v-if="store.status.skills.parseErrors.length" class="parse-errors">
+              <div class="parse-errors__head">
+                <StatusGlyph kind="warn" />
+                <span class="parse-errors__label">Parse errors</span>
+              </div>
+              <div v-for="(err, i) in store.status.skills.parseErrors" :key="i" class="parse-errors__row">
                 {{ err }}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <!-- Memory Card -->
-        <div class="bg-white rounded-lg shadow p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Memory</h2>
-          </div>
-          <dl class="space-y-1 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Entries</dt>
-              <dd class="text-gray-900">{{ store.status.memory.entryCount }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">DB file size</dt>
-              <dd class="text-gray-900">{{ store.status.memory.databaseFileSize }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <!-- MCP Connections Card -->
-        <div class="bg-white rounded-lg shadow p-4 md:col-span-2">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500" />
-            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">MCP Connections</h2>
-          </div>
-          <div v-if="store.status.mcp.length === 0" class="text-sm text-gray-400">No MCP servers configured</div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="server in store.status.mcp"
-              :key="server.name"
-              class="flex items-center justify-between text-sm border-b border-gray-100 pb-1 last:border-0"
-            >
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-900">{{ server.name }}</span>
-                <span class="text-xs" :class="mcpStatusColor(server.status)">{{ server.status }}</span>
-              </div>
-              <div class="flex gap-4 text-gray-500 text-xs">
-                <span>{{ server.toolCount }} tools</span>
-                <span>Last ping: {{ formatTime(server.lastPing) }}</span>
               </div>
             </div>
           </div>
-        </div>
+        </SectionCard>
+
+        <SectionCard label="Memory" tone="data" glyph="data">
+          <div class="section-body">
+            <MetricRow label="Entries" :value="store.status.memory.entryCount" tone="data" />
+            <MetricRow label="DB size" :value="store.status.memory.databaseFileSize" />
+          </div>
+        </SectionCard>
       </div>
 
-      <!-- Cron Jobs -->
-      <div v-if="store.status.cron.length" class="bg-white rounded-lg shadow p-4 mb-8">
-        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Cron Jobs</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-gray-500 border-b border-gray-200">
-                <th class="pb-2 font-medium">Job</th>
-                <th class="pb-2 font-medium">Next Run</th>
-                <th class="pb-2 font-medium">Last Run</th>
-                <th class="pb-2 font-medium">Last Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="job in store.status.cron" :key="job.name" class="border-b border-gray-50">
-                <td class="py-1.5 text-gray-900 font-medium">{{ job.name }}</td>
-                <td class="py-1.5 text-gray-600">{{ formatTime(job.nextRun) }}</td>
-                <td class="py-1.5 text-gray-600">{{ formatTime(job.lastRun) }}</td>
-                <td class="py-1.5">
-                  <span
-                    v-if="job.lastResult"
-                    class="text-xs px-1.5 py-0.5 rounded"
-                    :class="job.lastResult === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                  >
-                    {{ job.lastResult }}
-                  </span>
-                  <span v-else class="text-gray-400">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- MCP -->
+      <SectionCard
+        label="MCP Connections"
+        tone="magic"
+        glyph="magic"
+        :trailing="store.status.mcp.length === 0 ? '0 servers' : `${store.status.mcp.length} server${store.status.mcp.length === 1 ? '' : 's'}`"
+      >
+        <div v-if="store.status.mcp.length === 0" class="empty">
+          No MCP servers configured.
         </div>
-      </div>
-
-      <!-- Recent Activity Feed -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Recent Activity</h2>
-        <div v-if="store.status.recentActivity.length === 0" class="text-sm text-gray-400">
-          No recent activity
-        </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="(entry, i) in store.status.recentActivity"
-            :key="i"
-            class="border-b border-gray-100 pb-2 last:border-0"
-          >
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs text-gray-400">{{ formatTime(entry.timestamp) }}</span>
-              <div v-if="entry.toolCalls.length" class="flex gap-1">
-                <span
-                  v-for="(tool, j) in entry.toolCalls"
-                  :key="j"
-                  class="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded"
-                >
-                  {{ tool }}
-                </span>
-              </div>
+        <div v-else class="mcp-list">
+          <div v-for="server in store.status.mcp" :key="server.name" class="mcp-row">
+            <div class="mcp-row__name">
+              <StatusGlyph :kind="mcpGlyph(server.status)" />
+              <span class="mcp-row__text">{{ server.name }}</span>
+              <span class="caption">{{ server.status }}</span>
             </div>
-            <p class="text-sm text-gray-700 truncate">{{ entry.messagePreview }}</p>
+            <div class="mcp-row__meta">
+              <span>{{ server.toolCount }} tools</span>
+              <span class="dot-sep">·</span>
+              <span>last ping {{ formatTime(server.lastPing) }}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
+
+      <!-- Cron -->
+      <SectionCard
+        v-if="store.status.cron.length"
+        label="Cron"
+        tone="ok"
+        :trailing="`${store.status.cron.length} job${store.status.cron.length === 1 ? '' : 's'}`"
+      >
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Next run</th>
+              <th>Last run</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="job in store.status.cron" :key="job.name">
+              <td>{{ job.name }}</td>
+              <td class="text-muted">{{ formatTime(job.nextRun) }}</td>
+              <td class="text-muted">{{ formatTime(job.lastRun) }}</td>
+              <td>
+                <span v-if="job.lastResult === 'success'" class="result-badge ok">ok</span>
+                <span v-else-if="job.lastResult" class="result-badge err">{{ job.lastResult }}</span>
+                <span v-else class="text-muted">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <!-- Recent activity -->
+      <SectionCard label="Recent activity" tone="info">
+        <div v-if="store.status.recentActivity.length === 0" class="empty">
+          No recent activity.
+        </div>
+        <div v-else class="activity-list">
+          <div v-for="(entry, i) in store.status.recentActivity" :key="i" class="activity-item">
+            <div class="activity-item__head">
+              <span class="caption">{{ formatTime(entry.timestamp) }}</span>
+              <div v-if="entry.toolCalls.length" class="tool-tags">
+                <span v-for="(tool, j) in entry.toolCalls" :key="j" class="tool-tag">{{ tool }}</span>
+              </div>
+            </div>
+            <p class="activity-item__preview">{{ entry.messagePreview }}</p>
+          </div>
+        </div>
+      </SectionCard>
     </template>
   </div>
 </template>
+
+<style scoped>
+.status-page { max-width: 1080px; }
+
+.page-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--graphite);
+  font-size: 0.875rem;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--graphite-2);
+  padding: 32px 0;
+}
+
+.approval-block { margin-bottom: 20px; }
+
+/* Two-up grid of cards */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 760px) {
+  .card-grid { grid-template-columns: 1fr; }
+}
+
+/* MCP list inside its card */
+.mcp-list { display: flex; flex-direction: column; gap: 8px; }
+
+.mcp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--paper-3);
+}
+.mcp-row:last-child { border-bottom: none; }
+
+.mcp-row__name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.9375rem;
+}
+.mcp-row__text { color: var(--ink); font-weight: 500; }
+
+.mcp-row__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--graphite-2);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+}
+.dot-sep { color: var(--paper-3); }
+
+/* Activity feed */
+.activity-list { display: flex; flex-direction: column; }
+.activity-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--paper-3);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-item__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.tool-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tool-tag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  padding: 1px 8px;
+  background: var(--gold-softer);
+  color: var(--gold-dim);
+  border-radius: 999px;
+  font-weight: 500;
+}
+.activity-item__preview {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Empty states */
+.empty {
+  font-size: 0.9375rem;
+  color: var(--graphite-2);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* Parse errors block inside Skills card */
+.parse-errors {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--warn-softer);
+  border-left: 3px solid var(--warn);
+  border-radius: 4px;
+}
+.parse-errors__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warn);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.parse-errors__label { color: var(--warn); }
+.parse-errors__row {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+  color: var(--graphite);
+  padding: 2px 0;
+}
+</style>

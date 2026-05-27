@@ -12,12 +12,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MemoryApprovalGateTest {
+
+    @AfterEach
+    void clearChannel() {
+        ChatChannelContext.clear();
+    }
 
     private static class CapturingSink implements MemoryApprovalGate.MessageSenderLike {
         final List<String> messages = new ArrayList<>();
@@ -136,6 +142,40 @@ class MemoryApprovalGateTest {
                 m -> {}, MemoryApprovalPolicy.disabled(), null, null);
 
         assertThat(gate.resolve("not-a-real-id", true)).isFalse();
+    }
+
+    @Test
+    void webChannelBlocksUntilConsoleResolves(@TempDir Path tempDir) throws Exception {
+        PendingApprovalRegistry registry = new PendingApprovalRegistry();
+        MemoryApprovalPolicy policy = new MemoryApprovalPolicy(
+                Map.of("concept", MemoryApprovalPolicy.Mode.CONFIRM_DIFF),
+                MemoryApprovalPolicy.Mode.CONFIRM_DIFF, MemoryApprovalPolicy.Mode.CONFIRM_DIFF,
+                MemoryApprovalPolicy.Mode.AUTO, 5);
+        CapturingSink sink = new CapturingSink();
+        MemoryApprovalGate gate = new MemoryApprovalGate(
+                sink, policy, tempDir, tempDir.resolve("log.md"), registry, a -> {});
+
+        CompletableFuture<MemoryApprovalGate.Decision> result = CompletableFuture.supplyAsync(
+                () -> {
+                    ChatChannelContext.set(ChatChannelContext.Channel.WEB, "web-test");
+                    try {
+                        return gate.evaluate("memoryStrReplace",
+                                "{\"path\":\"concepts/w.md\",\"old_str\":\"a\",\"new_str\":\"b\"}");
+                    } finally {
+                        ChatChannelContext.clear();
+                    }
+                },
+                Executors.newSingleThreadExecutor());
+
+        for (int i = 0; i < 50 && registry.listAll().isEmpty(); i++) {
+            Thread.sleep(50);
+        }
+        assertThat(sink.messages).isEmpty();
+        assertThat(registry.listAll()).hasSize(1);
+
+        String id = registry.listAll().get(0).id();
+        gate.resolve(id, true);
+        assertThat(result.get(2, TimeUnit.SECONDS)).isEqualTo(MemoryApprovalGate.Decision.APPLY);
     }
 
     /** Extract the 8-char hex id from a "Reply: /confirm <id> yes …" prompt. */

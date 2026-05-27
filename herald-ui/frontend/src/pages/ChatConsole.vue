@@ -5,9 +5,14 @@ import { useChatStore } from '@/stores/chat'
 import { useConversationsStore } from '@/stores/conversations'
 import ConversationList from '@/components/ConversationList.vue'
 import ToolCallCard from '@/components/ToolCallCard.vue'
+import ApprovalInbox from '@/components/ApprovalInbox.vue'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import { useApprovalsStore } from '@/stores/approvals'
 
 const store = useChatStore()
 const conversations = useConversationsStore()
+const approvals = useApprovalsStore()
 const showSidebar = ref(true)
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
 const input = ref('')
@@ -98,6 +103,15 @@ const overLimit = computed(() => totalBytes.value > MAX_TOTAL_BYTES)
 const canSend = computed(
   () => (input.value.trim().length > 0 || attachments.value.length > 0) && !store.sending && !overLimit.value
 )
+
+/** Id of the last assistant/error message — only that one gets a working Retry button. */
+const lastAssistantMessageId = computed(() => {
+  for (let i = store.messages.length - 1; i >= 0; i--) {
+    const m = store.messages[i]
+    if (m.role === 'assistant' || m.role === 'error') return m.id
+  }
+  return null
+})
 
 // Configure markdown-it: enable links, lists, tables, etc. with safe HTML escaping.
 const md = new MarkdownIt({
@@ -325,7 +339,17 @@ onMounted(() => {
   store.ensureNotificationsConnected()
   fetchModelStatus()
   conversations.fetchAll()
+  approvals.startPolling(4000)
   document.addEventListener('click', onDocumentClick)
+  const draft = sessionStorage.getItem('herald-chat-draft')
+  if (draft) {
+    input.value = draft
+    sessionStorage.removeItem('herald-chat-draft')
+    nextTick(() => {
+      resizeTextarea()
+      inputEl.value?.focus()
+    })
+  }
 })
 
 // Refresh the sidebar after each completed send so new conversations appear
@@ -339,6 +363,7 @@ watch(() => store.sending, (sending, wasSending) => {
 onUnmounted(() => {
   if (processingTimer) clearInterval(processingTimer)
   document.removeEventListener('click', onDocumentClick)
+  approvals.stopPolling()
 })
 </script>
 
@@ -350,70 +375,76 @@ onUnmounted(() => {
     @dragleave="onDragLeave"
     @drop="onDrop"
   >
-    <header class="chat-header">
-      <div class="header-left">
-        <button
-          class="sidebar-toggle"
-          :class="{ active: showSidebar }"
-          :title="showSidebar ? 'Hide conversation list' : 'Show conversation list'"
-          @click="showSidebar = !showSidebar"
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="3" width="12" height="10" rx="1.5"/>
-            <line x1="6" y1="3" x2="6" y2="13"/>
-          </svg>
-        </button>
-        <h1 class="page-title">Chat</h1>
-        <span class="conv-id">{{ store.conversationId }}</span>
-        <!-- Model badge with quick-switch dropdown -->
-        <div v-if="modelStatus" class="model-badge-wrap">
+    <NowStripe />
+    <PageHeader title="Chat" :path="store.conversationId">
+      <template #right>
+        <div class="chat-header-controls">
           <button
-            class="model-badge"
-            :class="{ 'is-open': modelMenuOpen, 'is-switching': modelSwitching }"
-            :title="`${modelStatus.provider}/${modelStatus.model} — click to switch`"
-            @click.stop="toggleModelMenu"
+            class="sidebar-toggle"
+            :class="{ active: showSidebar }"
+            :title="showSidebar ? 'Hide conversation list' : 'Show conversation list'"
+            @click="showSidebar = !showSidebar"
           >
-            <span class="model-dot"></span>
-            <span class="model-text">{{ modelStatus.provider }}/{{ modelStatus.model }}</span>
-            <svg class="model-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M3 5l3 3 3-3"/>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+              <line x1="6" y1="3" x2="6" y2="13"/>
             </svg>
           </button>
-          <div v-if="modelMenuOpen" class="model-menu">
-            <div class="model-menu-header">Switch provider</div>
+          <!-- Model badge with quick-switch dropdown -->
+          <div v-if="modelStatus" class="model-badge-wrap">
             <button
-              v-for="p in availableProviders"
-              :key="p"
-              class="model-menu-item"
-              :class="{ 'is-active': p === modelStatus.provider }"
-              @click="switchModel(p)"
+              class="model-badge"
+              :class="{ 'is-open': modelMenuOpen, 'is-switching': modelSwitching }"
+              :title="`${modelStatus.provider}/${modelStatus.model} — click to switch`"
+              @click.stop="toggleModelMenu"
             >
-              <span class="model-menu-radio">
-                <span v-if="p === modelStatus.provider" class="model-menu-radio-fill"></span>
-              </span>
-              <span class="model-menu-name">{{ p }}</span>
-              <span class="model-menu-model">{{ modelStatus.available[p] }}</span>
+              <span class="model-dot"></span>
+              <span class="model-text">{{ modelStatus.provider }}/{{ modelStatus.model }}</span>
+              <svg class="model-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 5l3 3 3-3"/>
+              </svg>
             </button>
+            <div v-if="modelMenuOpen" class="model-menu">
+              <div class="model-menu-header">Switch provider</div>
+              <button
+                v-for="p in availableProviders"
+                :key="p"
+                class="model-menu-item"
+                :class="{ 'is-active': p === modelStatus.provider }"
+                @click="switchModel(p)"
+              >
+                <span class="model-menu-radio">
+                  <span v-if="p === modelStatus.provider" class="model-menu-radio-fill"></span>
+                </span>
+                <span class="model-menu-name">{{ p }}</span>
+                <span class="model-menu-model">{{ modelStatus.available[p] }}</span>
+              </button>
+            </div>
           </div>
+          <button class="header-btn" @click="store.newConversation()" title="New conversation">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+            New Chat
+          </button>
+          <button
+            class="header-btn header-btn-subtle"
+            @click="store.clearMessages()"
+            :disabled="store.messages.length === 0"
+            title="Clear messages"
+          >Clear</button>
         </div>
-      </div>
-      <div class="header-right">
-        <button class="header-btn" @click="store.newConversation()" title="New conversation">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
-          New Chat
-        </button>
-        <button
-          class="header-btn header-btn-subtle"
-          @click="store.clearMessages()"
-          :disabled="store.messages.length === 0"
-          title="Clear messages"
-        >Clear</button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <div class="chat-main">
       <ConversationList v-if="showSidebar" ref="conversationListRef" class="chat-side" />
       <div class="chat-stage">
+    <!-- Memory approval prompt (web channel) -->
+    <ApprovalInbox
+      v-if="approvals.count > 0"
+      compact
+      :conversation-id="store.conversationId"
+      class="chat-approval-bar"
+    />
     <div ref="chatBody" class="chat-body">
       <!-- Empty state -->
       <div v-if="store.messages.length === 0 && !store.sending" class="chat-empty">
@@ -516,7 +547,7 @@ onUnmounted(() => {
                 </svg>
               </button>
               <button
-                v-if="msg.role === 'assistant'"
+                v-if="msg.role === 'assistant' && msg.id === lastAssistantMessageId"
                 class="msg-action"
                 title="Retry"
                 @click="retryFrom(msg.id)"
@@ -646,6 +677,13 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.chat-approval-bar {
+  flex-shrink: 0;
+  padding: 10px 0 0;
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: 8px;
+}
+
 .chat-side {
   /* sized inside the component */
 }
@@ -682,33 +720,12 @@ onUnmounted(() => {
   height: 14px;
 }
 
-/* Header */
-.chat-header {
+/* Header controls — sit in PageHeader #right slot */
+.chat-header-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  gap: 12px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  letter-spacing: -0.02em;
-}
-
-.conv-id {
-  font-size: 0.7rem;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--color-text-muted);
 }
 
 /* Model badge */
@@ -845,11 +862,6 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
   color: var(--color-text-muted);
-}
-
-.header-right {
-  display: flex;
-  gap: 6px;
 }
 
 .header-btn {

@@ -1,42 +1,36 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMessagesStore } from '@/stores/messages'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import { extractMemoryPath, memoryViewerRoute } from '@/utils/memoryTools'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SectionRule from '@/components/SectionRule.vue'
+import StatusGlyph from '@/components/StatusGlyph.vue'
 
 const store = useMessagesStore()
+const router = useRouter()
 
 const expandedTools = ref<Set<string>>(new Set())
 const expandedSubagents = ref<Set<string>>(new Set())
 const confirmingClear = ref(false)
 
-onMounted(() => {
-  store.fetchMessages()
-})
+onMounted(() => { store.fetchMessages() })
 
 function toggleToolCall(messageId: string, index: number) {
   const key = `${messageId}-tool-${index}`
-  if (expandedTools.value.has(key)) {
-    expandedTools.value.delete(key)
-  } else {
-    expandedTools.value.add(key)
-  }
+  if (expandedTools.value.has(key)) expandedTools.value.delete(key)
+  else expandedTools.value.add(key)
 }
-
-function isToolExpanded(messageId: string, index: number): boolean {
-  return expandedTools.value.has(`${messageId}-tool-${index}`)
-}
+const isToolExpanded = (m: string, i: number) => expandedTools.value.has(`${m}-tool-${i}`)
 
 function toggleSubagent(messageId: string, index: number) {
   const key = `${messageId}-sub-${index}`
-  if (expandedSubagents.value.has(key)) {
-    expandedSubagents.value.delete(key)
-  } else {
-    expandedSubagents.value.add(key)
-  }
+  if (expandedSubagents.value.has(key)) expandedSubagents.value.delete(key)
+  else expandedSubagents.value.add(key)
 }
-
-function isSubagentExpanded(messageId: string, index: number): boolean {
-  return expandedSubagents.value.has(`${messageId}-sub-${index}`)
-}
+const isSubagentExpanded = (m: string, i: number) => expandedSubagents.value.has(`${m}-sub-${i}`)
 
 async function executeClear() {
   await store.clearHistory()
@@ -45,233 +39,312 @@ async function executeClear() {
 
 function formatTime(ts: string | null): string {
   if (!ts) return '—'
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
+  try { return new Date(ts).toLocaleString() } catch { return ts }
 }
 
 function roleBadgeClass(role: string): string {
   switch (role) {
-    case 'user': return 'bg-blue-100 text-blue-800'
-    case 'assistant': return 'bg-green-100 text-green-800'
-    case 'system': return 'bg-gray-100 text-gray-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'user':      return 'badge badge-user'
+    case 'assistant': return 'badge badge-assistant'
+    case 'system':    return 'badge badge-system'
+    default:          return 'badge badge-system'
   }
 }
 
-function formatJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
+function formatJson(v: unknown): string {
+  try { return JSON.stringify(v, null, 2) } catch { return String(v) }
+}
+
+function openMemoryPath(toolName: string, inputs: Record<string, unknown>) {
+  const path = extractMemoryPath(toolName, inputs)
+  if (path) router.push(memoryViewerRoute(path))
+}
+
+function continueInChat(content: string) {
+  sessionStorage.setItem('herald-chat-draft', content)
+  router.push('/chat')
 }
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Conversation History</h1>
-      <div class="flex gap-2">
-        <div v-if="confirmingClear" class="flex gap-1 items-center">
-          <span class="text-sm text-red-600">Clear all history?</span>
+  <div class="history-page">
+    <NowStripe />
+
+    <PageHeader title="History" path="/history">
+      <template #right>
+        <RouterLink to="/chat" class="btn-secondary">Open chat</RouterLink>
+        <button class="btn-danger" @click="confirmingClear = true">Clear history</button>
+      </template>
+    </PageHeader>
+
+    <p class="page-hint">
+      Audit log of all bot messages. To resume a thread with full context, use the
+      conversations sidebar on the Chat page.
+    </p>
+
+    <ConfirmModal
+      :open="confirmingClear"
+      title="Clear history"
+      message="Clear all conversation history? This cannot be undone."
+      confirm-label="Clear all"
+      danger
+      @confirm="executeClear()"
+      @cancel="confirmingClear = false"
+    />
+
+    <!-- Filter bar -->
+    <SectionRule label="FILTER" tone="info" />
+    <div class="filter-bar">
+      <div class="filter-field flex-1">
+        <label class="micro-label">Search</label>
+        <input v-model="store.search" type="text" placeholder="search messages…" class="input" @keydown.enter="store.applyFilters()" />
+      </div>
+      <div class="filter-field">
+        <label class="micro-label">From</label>
+        <input v-model="store.startDate" type="date" class="input" />
+      </div>
+      <div class="filter-field">
+        <label class="micro-label">To</label>
+        <input v-model="store.endDate" type="date" class="input" />
+      </div>
+      <button class="btn-primary" @click="store.applyFilters()">Search</button>
+      <button class="btn-secondary" @click="store.clearFilters()">Clear</button>
+    </div>
+
+    <SectionRule
+      label="MESSAGES"
+      tone="gold"
+      :trailing="`${store.totalElements} total`"
+    />
+
+    <div v-if="store.loading" class="empty">
+      <StatusGlyph kind="idle" /> Loading…
+    </div>
+
+    <div v-else class="message-list">
+      <article v-for="msg in store.messages" :key="msg.id" class="message">
+        <div class="message-head">
+          <span :class="roleBadgeClass(msg.role)">{{ msg.role }}</span>
+          <span class="caption">{{ formatTime(msg.timestamp) }}</span>
           <button
-            class="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md shadow-sm hover:bg-red-700"
-            @click="executeClear()"
+            v-if="msg.role === 'user'"
+            class="link-action continue-link"
+            @click="continueInChat(msg.content)"
           >
-            Confirm
-          </button>
-          <button
-            class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 text-gray-700"
-            @click="confirmingClear = false"
-          >
-            Cancel
+            continue in chat →
           </button>
         </div>
-        <button
-          v-else
-          class="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md shadow-sm hover:bg-red-700"
-          @click="confirmingClear = true"
-        >
-          Clear History
-        </button>
-      </div>
-    </div>
+        <p class="message-body">{{ msg.content }}</p>
 
-    <!-- Filters -->
-    <div class="mb-4 flex flex-wrap gap-3 items-end">
-      <div class="flex-1 min-w-[200px]">
-        <label class="block text-xs text-gray-500 mb-1">Search</label>
-        <input
-          v-model="store.search"
-          type="text"
-          placeholder="Search messages…"
-          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          @keydown.enter="store.applyFilters()"
-        />
-      </div>
-      <div>
-        <label class="block text-xs text-gray-500 mb-1">From</label>
-        <input
-          v-model="store.startDate"
-          type="date"
-          class="px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-        />
-      </div>
-      <div>
-        <label class="block text-xs text-gray-500 mb-1">To</label>
-        <input
-          v-model="store.endDate"
-          type="date"
-          class="px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-        />
-      </div>
-      <button
-        class="px-3 py-2 text-sm bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700"
-        @click="store.applyFilters()"
-      >
-        Search
-      </button>
-      <button
-        class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 text-gray-700"
-        @click="store.clearFilters()"
-      >
-        Clear Filters
-      </button>
-    </div>
-
-    <!-- Loading state -->
-    <div v-if="store.loading" class="text-gray-500">Loading messages…</div>
-
-    <div v-else>
-      <!-- Messages list -->
-      <div class="space-y-3">
-        <div
-          v-for="msg in store.messages"
-          :key="msg.id"
-          class="bg-white rounded-lg shadow p-4"
-        >
-          <!-- Message header -->
-          <div class="flex items-center gap-3 mb-2">
+        <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="tool-section">
+          <div class="label tool-section-label">tool calls · {{ msg.toolCalls.length }}</div>
+          <div v-for="(tool, ti) in msg.toolCalls" :key="ti" class="tool-block">
+            <button class="tool-toggle" @click="toggleToolCall(msg.id, ti)">
+              <span class="chevron" :class="{ open: isToolExpanded(msg.id, ti) }">›</span>
+              <span class="tool-name">{{ tool.name }}</span>
+            </button>
             <span
-              class="px-2 py-0.5 text-xs font-medium rounded-full"
-              :class="roleBadgeClass(msg.role)"
+              v-if="extractMemoryPath(tool.name, tool.inputs)"
+              class="link-memory memory-link-row"
+              @click="openMemoryPath(tool.name, tool.inputs)"
             >
-              {{ msg.role }}
+              open in memory →
             </span>
-            <span class="text-xs text-gray-500">{{ formatTime(msg.timestamp) }}</span>
-          </div>
-
-          <!-- Message content -->
-          <p class="text-sm text-gray-800 whitespace-pre-wrap">{{ msg.content }}</p>
-
-          <!-- Tool calls -->
-          <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="mt-3">
-            <p class="text-xs font-medium text-gray-500 mb-1">Tool Calls ({{ msg.toolCalls.length }})</p>
-            <div
-              v-for="(tool, ti) in msg.toolCalls"
-              :key="ti"
-              class="border border-gray-200 rounded-md mb-1"
-            >
-              <button
-                class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50"
-                @click="toggleToolCall(msg.id, ti)"
-              >
-                <svg
-                  class="w-3 h-3 text-gray-400 transition-transform"
-                  :class="{ 'rotate-90': isToolExpanded(msg.id, ti) }"
-                  fill="currentColor" viewBox="0 0 20 20"
-                >
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
-                <span class="font-mono text-blue-700">{{ tool.name }}</span>
-              </button>
-              <div v-if="isToolExpanded(msg.id, ti)" class="px-3 pb-3 border-t border-gray-100">
-                <div class="mt-2">
-                  <p class="text-xs font-medium text-gray-500 mb-1">Inputs</p>
-                  <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ formatJson(tool.inputs) }}</pre>
-                </div>
-                <div class="mt-2">
-                  <p class="text-xs font-medium text-gray-500 mb-1">Outputs</p>
-                  <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ formatJson(tool.outputs) }}</pre>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Subagent calls -->
-          <div v-if="msg.subagentCalls && msg.subagentCalls.length > 0" class="mt-3">
-            <p class="text-xs font-medium text-gray-500 mb-1">Subagent Calls ({{ msg.subagentCalls.length }})</p>
-            <div
-              v-for="(sub, si) in msg.subagentCalls"
-              :key="si"
-              class="border border-purple-200 rounded-md mb-1"
-            >
-              <button
-                class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-purple-50"
-                @click="toggleSubagent(msg.id, si)"
-              >
-                <svg
-                  class="w-3 h-3 text-purple-400 transition-transform"
-                  :class="{ 'rotate-90': isSubagentExpanded(msg.id, si) }"
-                  fill="currentColor" viewBox="0 0 20 20"
-                >
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                </svg>
-                <span class="font-mono text-purple-700">{{ sub.name }}</span>
-              </button>
-              <div v-if="isSubagentExpanded(msg.id, si)" class="px-3 pb-3 border-t border-purple-100">
-                <div v-if="sub.toolCalls && sub.toolCalls.length > 0" class="mt-2">
-                  <p class="text-xs font-medium text-gray-500 mb-1">Tool Calls</p>
-                  <div
-                    v-for="(stool, sti) in sub.toolCalls"
-                    :key="sti"
-                    class="ml-2 mb-2"
-                  >
-                    <p class="text-xs font-mono text-blue-700">{{ stool.name }}</p>
-                    <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto mt-1">Inputs: {{ formatJson(stool.inputs) }}</pre>
-                    <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto mt-1">Outputs: {{ formatJson(stool.outputs) }}</pre>
-                  </div>
-                </div>
-                <div class="mt-2">
-                  <p class="text-xs font-medium text-gray-500 mb-1">Result</p>
-                  <pre class="text-xs bg-gray-50 rounded p-2 overflow-x-auto">{{ sub.result }}</pre>
-                </div>
-              </div>
+            <div v-if="isToolExpanded(msg.id, ti)" class="tool-detail">
+              <div class="label detail-label">inputs</div>
+              <pre class="detail-code">{{ formatJson(tool.inputs) }}</pre>
+              <div class="label detail-label">outputs</div>
+              <pre class="detail-code">{{ formatJson(tool.outputs) }}</pre>
             </div>
           </div>
         </div>
 
-        <!-- Empty state -->
-        <div v-if="store.messages.length === 0" class="bg-white rounded-lg shadow p-8 text-center text-gray-400">
-          {{ store.search || store.startDate || store.endDate ? 'No messages match the filters' : 'No conversation history yet' }}
+        <div v-if="msg.subagentCalls && msg.subagentCalls.length > 0" class="tool-section">
+          <div class="label tool-section-label">subagents · {{ msg.subagentCalls.length }}</div>
+          <div v-for="(sub, si) in msg.subagentCalls" :key="si" class="tool-block subagent">
+            <button class="tool-toggle" @click="toggleSubagent(msg.id, si)">
+              <span class="chevron" :class="{ open: isSubagentExpanded(msg.id, si) }">›</span>
+              <span class="tool-name sub">{{ sub.name }}</span>
+            </button>
+            <div v-if="isSubagentExpanded(msg.id, si)" class="tool-detail">
+              <div v-if="sub.toolCalls && sub.toolCalls.length > 0">
+                <div class="label detail-label">tool calls</div>
+                <div v-for="(stool, sti) in sub.toolCalls" :key="sti" class="sub-tool">
+                  <p class="tool-name">{{ stool.name }}</p>
+                  <pre class="detail-code">{{ formatJson(stool.inputs) }}</pre>
+                </div>
+              </div>
+              <div class="label detail-label">result</div>
+              <pre class="detail-code">{{ sub.result }}</pre>
+            </div>
+          </div>
         </div>
+      </article>
+
+      <div v-if="store.messages.length === 0" class="empty-block">
+        {{ store.search || store.startDate || store.endDate ? 'no messages match the filters' : 'no conversation history yet' }}
       </div>
+    </div>
 
-      <!-- Pagination -->
-      <div v-if="store.totalPages > 1" class="flex items-center justify-between mt-4">
-        <p class="text-sm text-gray-500">
-          Page {{ store.currentPage + 1 }} of {{ store.totalPages }} ({{ store.totalElements }} messages)
-        </p>
-        <div class="flex gap-2">
-          <button
-            class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!store.hasPrevPage"
-            @click="store.prevPage()"
-          >
-            Previous
-          </button>
-          <button
-            class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!store.hasNextPage"
-            @click="store.nextPage()"
-          >
-            Next
-          </button>
-        </div>
+    <div v-if="store.totalPages > 1" class="pagination">
+      <span class="caption">page {{ store.currentPage + 1 }} of {{ store.totalPages }}</span>
+      <div>
+        <button class="link-muted" :disabled="!store.hasPrevPage" @click="store.prevPage()">← prev</button>
+        <button class="link-muted" :disabled="!store.hasNextPage" @click="store.nextPage()">next →</button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.history-page { max-width: 980px; }
+
+.page-hint {
+  color: var(--graphite-2);
+  font-size: 0.6875rem;
+  margin: 0 0 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Filter bar ──────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+.filter-field { display: flex; flex-direction: column; gap: 4px; }
+.flex-1 { flex: 1; min-width: 200px; }
+.micro-label {
+  font-size: 0.625rem;
+  color: var(--graphite-2);
+  letter-spacing: 0.06em;
+}
+
+/* ─── Empty / loading ──────────────────────────────────────── */
+.empty {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--graphite-2);
+}
+.empty-block {
+  text-align: center;
+  font-style: italic;
+  color: var(--graphite-2);
+  padding: 24px 0;
+}
+
+/* ─── Message list ─────────────────────────────────────────── */
+.message-list {
+  display: flex;
+  flex-direction: column;
+}
+.message {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.message:last-child { border-bottom: none; }
+
+.message-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.continue-link {
+  margin-left: auto;
+  font-size: 0.6875rem;
+}
+
+.message-body {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* ─── Tool / subagent blocks ──────────────────────────────── */
+.tool-section { margin-top: 12px; }
+.tool-section-label { color: var(--graphite-2); margin-bottom: 4px; }
+
+.tool-block {
+  border-left: 2px solid var(--paper-rule);
+  padding-left: 10px;
+  margin-top: 6px;
+}
+.tool-block.subagent { border-left-color: var(--gold-dim); }
+
+.tool-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+.tool-toggle:hover { color: var(--gold-dim); }
+
+.chevron {
+  color: var(--graphite-2);
+  transition: transform 80ms;
+  display: inline-block;
+}
+.chevron.open { transform: rotate(90deg); }
+
+.tool-name { color: var(--gold-dim); font-weight: 500; }
+.tool-name.sub { color: var(--gold); }
+
+.memory-link-row { display: block; margin: 2px 0 0 16px; }
+
+.tool-detail {
+  padding: 6px 0 8px 16px;
+  margin-top: 4px;
+}
+.detail-label { color: var(--graphite-2); margin: 8px 0 4px; }
+.detail-label:first-child { margin-top: 0; }
+.detail-code {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--paper-2);
+  border-left: 2px solid var(--paper-rule);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+/* ─── Pagination ──────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--paper-rule);
+}
+.pagination > div { display: flex; gap: 12px; }
+
+.link-action, .link-muted {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.link-action { color: var(--gold-dim); }
+.link-muted  { color: var(--graphite-2); }
+.link-muted:hover { color: var(--ink); }
+.link-muted:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useSettingsStore, settingDefs } from '@/stores/settings'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SectionCard from '@/components/SectionCard.vue'
 
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
@@ -197,115 +200,92 @@ function hasChanges(): boolean {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Settings</h1>
-    </div>
+  <div class="settings-page">
+    <NowStripe />
+    <PageHeader title="Settings" path="/settings" />
 
-    <div v-if="store.loading" class="text-gray-500">Loading settings...</div>
+    <div v-if="store.loading" class="text-muted">Loading settings...</div>
 
-    <div v-else-if="store.error" class="p-4 bg-red-50 text-red-700 rounded-lg text-sm">
+    <div v-else-if="store.error" class="alert-error card">
       Failed to load settings: {{ store.error }}
     </div>
 
     <form v-else @submit.prevent="save()">
-      <div v-for="(defs, groupName) in store.groups" :key="groupName" class="mb-8">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-          {{ groupName }}
-        </h2>
-        <div class="bg-white rounded-lg shadow divide-y divide-gray-100">
-          <div
-            v-for="def in defs"
-            :key="def.key"
-            class="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-2"
-          >
-            <div class="sm:w-1/3">
-              <label :for="'setting-' + def.key" class="text-sm font-medium text-gray-900">
-                {{ def.label }}
-              </label>
-              <p class="text-xs text-gray-500 mt-0.5">{{ def.description }}</p>
-            </div>
-            <div class="sm:flex-1">
-              <input
-                :id="'setting-' + def.key"
-                v-model="form[def.key]"
-                :type="def.secret ? 'password' : 'text'"
-                :placeholder="def.placeholder"
-                :autocomplete="def.secret ? 'off' : undefined"
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+      <SectionCard
+        v-for="(defs, groupName) in store.groups"
+        :key="groupName"
+        :label="String(groupName)"
+        class="settings-group settings-group--rows"
+      >
+        <div
+          v-for="def in defs"
+          :key="def.key"
+          class="setting-row"
+        >
+          <div class="setting-label-col">
+            <label :for="'setting-' + def.key" class="setting-label">
+              {{ def.label }}
+            </label>
+            <p class="setting-desc">{{ def.description }}</p>
+          </div>
+          <div class="setting-input-col">
+            <input
+              :id="'setting-' + def.key"
+              v-model="form[def.key]"
+              :type="def.secret ? 'password' : 'text'"
+              :placeholder="def.placeholder"
+              :autocomplete="def.secret ? 'off' : undefined"
+              class="input"
+            />
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       <!-- Model & Provider -->
-      <div class="mb-8">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-          Model & Provider
-        </h2>
-        <div class="bg-white rounded-lg shadow px-5 py-4">
-          <div v-if="modelLoading" class="text-sm text-gray-500">Checking model status...</div>
-          <div v-else-if="!modelStatus" class="text-sm text-gray-500">Bot is offline — model switching unavailable</div>
-          <div v-else>
-            <!-- Current model -->
-            <div class="flex items-center gap-3 mb-4">
-              <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>
-              <span class="text-sm font-medium text-gray-900">
+      <SectionCard label="Model & Provider" tone="gold" glyph="gold" class="settings-group">
+        <div v-if="modelLoading" class="text-muted text-sm">Checking model status...</div>
+        <div v-else-if="!modelStatus" class="text-muted text-sm">Bot is offline — model switching unavailable</div>
+        <div v-else>
+            <div class="model-active">
+              <span class="status-dot status-dot--live"></span>
+              <span class="text-sm font-medium">
                 Active: {{ modelStatus.provider }}/{{ modelStatus.model }}
               </span>
             </div>
 
-            <!-- Provider + Model selectors -->
-            <div class="flex flex-col sm:flex-row gap-3 mb-3">
-              <div class="sm:w-1/3">
-                <label for="model-provider" class="block text-xs font-medium text-gray-500 mb-1">Provider</label>
-                <select
-                  id="model-provider"
-                  v-model="selectedProvider"
-                  @change="onProviderChange"
-                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
+            <div class="model-selectors">
+              <div class="selector-col">
+                <label for="model-provider" class="filter-label">Provider</label>
+                <select id="model-provider" v-model="selectedProvider" @change="onProviderChange" class="input">
                   <option v-for="p in availableProviders" :key="p" :value="p">{{ p }}</option>
                 </select>
               </div>
-              <div class="sm:flex-1">
-                <label for="model-name" class="block text-xs font-medium text-gray-500 mb-1">Model</label>
-                <input
-                  id="model-name"
-                  v-model="selectedModel"
-                  type="text"
-                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
+              <div class="selector-col flex-1">
+                <label for="model-name" class="filter-label">Model</label>
+                <input id="model-name" v-model="selectedModel" type="text" class="input" />
               </div>
             </div>
 
-            <!-- Switch button -->
-            <div class="flex items-center gap-3">
+            <div class="model-actions">
               <button
                 type="button"
                 :disabled="modelSwitching || (selectedProvider === modelStatus.provider && selectedModel === modelStatus.model)"
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                class="btn-primary"
                 @click="switchModel"
               >
                 {{ modelSwitching ? 'Switching...' : 'Switch Model' }}
               </button>
-              <span v-if="modelMessage" class="text-sm font-medium" :class="modelMessage.startsWith('Switched') ? 'text-green-600' : 'text-red-600'">
+              <span v-if="modelMessage" class="text-sm" :class="modelMessage.startsWith('Switched') ? 'status-ok' : 'status-err'">
                 {{ modelMessage }}
               </span>
             </div>
-          </div>
         </div>
-      </div>
+      </SectionCard>
 
       <!-- Google Workspace Auth -->
-      <div class="mb-8">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-          Google Account
-        </h2>
-        <div class="bg-white rounded-lg shadow px-5 py-4">
-          <div v-if="gwsLoading" class="text-sm text-gray-500">Checking Google connection...</div>
-          <div v-else-if="gwsStatus">
+      <SectionCard label="Google Account" tone="info" glyph="info" class="settings-group">
+        <div v-if="gwsLoading" class="text-muted text-sm">Checking Google connection...</div>
+        <div v-else-if="gwsStatus">
             <!-- Status indicator -->
             <div class="flex items-center gap-3 mb-3">
               <span
@@ -380,38 +360,22 @@ function hasChanges(): boolean {
               Install with: <code class="bg-gray-100 px-1 py-0.5 rounded">brew install googleworkspace-cli</code>
             </p>
           </div>
-        </div>
-      </div>
+      </SectionCard>
 
       <!-- Action bar -->
-      <div class="flex items-center gap-3 mt-6">
-        <button
-          type="submit"
-          :disabled="store.saving || !hasChanges()"
-          class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
+      <div class="action-bar">
+        <button type="submit" :disabled="store.saving || !hasChanges()" class="btn-primary">
           {{ store.saving ? 'Saving...' : 'Save Changes' }}
         </button>
-        <button
-          type="button"
-          :disabled="!hasChanges()"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-          @click="reset()"
-        >
+        <button type="button" :disabled="!hasChanges()" class="btn-secondary" @click="reset()">
           Reset
         </button>
-        <span
-          v-if="store.saved"
-          class="text-sm text-green-600 font-medium"
-        >
-          Settings saved
-        </span>
+        <span v-if="store.saved" class="status-ok text-sm font-medium">Settings saved</span>
       </div>
 
-      <!-- Info note -->
-      <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <p class="text-xs text-gray-500">
-          <span class="font-medium text-gray-700">Note:</span>
+      <div class="info-note card">
+        <p class="info-text">
+          <strong>Note:</strong>
           Some settings (persona, timezone, max context tokens) take effect on the next bot restart.
           Obsidian vault path, weather location, and Google credentials take effect immediately.
         </p>
@@ -419,3 +383,127 @@ function hasChanges(): boolean {
     </form>
   </div>
 </template>
+
+<style scoped>
+.settings-page { max-width: 980px; }
+
+.text-muted { color: var(--color-text-muted); }
+.text-sm { font-size: 0.875rem; }
+.font-medium { font-weight: 500; }
+.flex-1 { flex: 1; }
+
+.alert-error {
+  padding: 16px;
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.settings-group {
+  margin-bottom: 28px;
+}
+
+/* Dynamic groups render row-style rather than padded body — cancel the
+   SectionCard body padding so .setting-row's own padding rules the spacing. */
+.settings-group--rows :deep(.section-card__body) {
+  padding: 0;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--paper-3);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+@media (min-width: 640px) {
+  .setting-row {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.setting-label-col {
+  flex: 0 0 33%;
+}
+
+.setting-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.setting-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 2px 0 0;
+}
+
+.setting-input-col {
+  flex: 1;
+}
+
+.filter-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.model-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.model-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 640px) {
+  .model-selectors {
+    flex-direction: row;
+  }
+}
+
+.selector-col {
+  flex: 0 0 33%;
+}
+
+.model-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-ok { color: #15803d; }
+.status-err { color: #dc2626; }
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.info-note {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--color-surface);
+}
+
+.info-text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+</style>

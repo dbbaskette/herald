@@ -170,17 +170,37 @@ public class HeraldAgentConfig {
     @Bean
     public com.herald.agent.MemoryApprovalGate memoryApprovalGate(
             Optional<MessageSender> messageSenderOpt,
-            HeraldConfig config) {
+            HeraldConfig config,
+            com.herald.agent.PendingApprovalRegistry approvalRegistry,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+            Optional<com.herald.api.ChatNotificationsHub> notificationsHubOpt) {
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         Path memoryLogPath = memoriesDir.resolve("log.md");
         com.herald.agent.MemoryApprovalGate.MessageSenderLike sink = messageSenderOpt
                 .<com.herald.agent.MemoryApprovalGate.MessageSenderLike>map(s -> s::sendMessage)
                 .orElse(null);
         com.herald.agent.MemoryApprovalPolicy policy = config.resolveMemoryApprovalPolicy();
-        log.info("Memory approval gate: {} (timeout={}s)",
-                sink == null ? "disabled (no MessageSender)" : "enabled",
-                policy.timeoutSeconds());
-        return new com.herald.agent.MemoryApprovalGate(sink, policy, memoriesDir, memoryLogPath);
+        com.herald.agent.ApprovalPromptHandler webPromptHandler = approval -> {
+            if (approval.conversationId() == null) {
+                return;
+            }
+            notificationsHubOpt.ifPresent(hub -> {
+                try {
+                    hub.publish(approval.conversationId(), "approval_required",
+                            objectMapper.writeValueAsString(approval));
+                } catch (Exception e) {
+                    log.warn("Failed to publish approval_required SSE: {}", e.getMessage());
+                }
+            });
+        };
+        log.info("Memory approval gate: {} (timeout={}s, web inbox={})",
+                sink == null && !policy.byType().values().stream()
+                        .anyMatch(m -> m == com.herald.agent.MemoryApprovalPolicy.Mode.CONFIRM_DIFF)
+                        ? "auto-only" : "enabled",
+                policy.timeoutSeconds(),
+                notificationsHubOpt.isPresent() ? "yes" : "no");
+        return new com.herald.agent.MemoryApprovalGate(
+                sink, policy, memoriesDir, memoryLogPath, approvalRegistry, webPromptHandler);
     }
 
     @Bean

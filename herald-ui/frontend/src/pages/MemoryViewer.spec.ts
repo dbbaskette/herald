@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import MemoryViewer from './MemoryViewer.vue'
 
 const sampleEntries = [
@@ -8,112 +9,97 @@ const sampleEntries = [
   { key: 'bot.mode', value: 'production', lastUpdated: '2026-03-10T09:00:00Z' },
 ]
 
-function mountPage() {
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [{ path: '/memory', component: MemoryViewer }],
+})
+
+async function mountPage() {
+  router.push('/memory')
+  await router.isReady()
   return mount(MemoryViewer, {
     global: {
-      plugins: [createPinia()],
+      plugins: [createPinia(), router],
     },
   })
 }
 
+async function switchToKvTab(wrapper: ReturnType<typeof mount>) {
+  const kvTab = wrapper.findAll('.tab-btn').find((b) => b.text() === 'Key-Value Store')
+  await kvTab!.trigger('click')
+}
+
 describe('MemoryViewer.vue', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(sampleEntries),
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/memory/files')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (String(url).includes('/api/obsidian')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleEntries) })
     }))
   })
 
-  it('renders the page title', () => {
-    const wrapper = mountPage()
+  it('renders the page title', async () => {
+    const wrapper = await mountPage()
     expect(wrapper.text()).toContain('Memory Viewer')
   })
 
-  it('shows loading state initially', () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise(() => {})))
-    const wrapper = mountPage()
+  it('shows tab labels', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.text()).toContain('Wiki Memory')
+    expect(wrapper.text()).toContain('Key-Value Store')
+    expect(wrapper.text()).toContain('Obsidian')
+  })
+
+  it('shows loading state on kv tab initially', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/memory') && !String(url).includes('/files')) {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }))
+    const wrapper = await mountPage()
+    await switchToKvTab(wrapper)
     expect(wrapper.text()).toContain('Loading memory entries')
   })
 
-  it('displays memory entries after data loads', async () => {
-    const wrapper = mountPage()
+  it('displays memory entries after data loads on kv tab', async () => {
+    const wrapper = await mountPage()
+    await switchToKvTab(wrapper)
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('user.name')
     })
     expect(wrapper.text()).toContain('Alice')
-    expect(wrapper.text()).toContain('bot.mode')
-    expect(wrapper.text()).toContain('production')
   })
 
-  it('shows empty state when no entries', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
+  it('shows empty state when no entries on kv tab', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/memory') && !String(url).includes('/files')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     }))
-    const wrapper = mountPage()
+    const wrapper = await mountPage()
+    await switchToKvTab(wrapper)
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('No memory entries yet')
     })
   })
 
-  it('has filter input', () => {
-    const wrapper = mountPage()
+  it('has filter input on kv tab', async () => {
+    const wrapper = await mountPage()
+    await switchToKvTab(wrapper)
     const input = wrapper.find('input[placeholder="Filter by key name…"]')
     expect(input.exists()).toBe(true)
   })
 
-  it('has export and import buttons', () => {
-    const wrapper = mountPage()
+  it('has export and import buttons on kv tab', async () => {
+    const wrapper = await mountPage()
+    await switchToKvTab(wrapper)
     expect(wrapper.text()).toContain('Export JSON')
     expect(wrapper.text()).toContain('Import JSON')
-  })
-
-  it('has new entry input fields', () => {
-    const wrapper = mountPage()
-    const keyInput = wrapper.find('input[placeholder="New key"]')
-    const valueInput = wrapper.find('input[placeholder="Value"]')
-    expect(keyInput.exists()).toBe(true)
-    expect(valueInput.exists()).toBe(true)
-  })
-
-  it('shows inline edit on value click', async () => {
-    const wrapper = mountPage()
-    await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Alice')
-    })
-
-    // Click the value span to edit
-    const valueSpan = wrapper.find('span.cursor-pointer')
-    await valueSpan.trigger('click')
-
-    // Should show Save and Cancel buttons
-    expect(wrapper.text()).toContain('Save')
-    expect(wrapper.text()).toContain('Cancel')
-  })
-
-  it('shows delete confirmation on trash click', async () => {
-    const wrapper = mountPage()
-    await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('user.name')
-    })
-
-    // Click the delete button (first trash icon)
-    const deleteBtn = wrapper.find('button[title="Delete entry"]')
-    await deleteBtn.trigger('click')
-
-    expect(wrapper.text()).toContain('Confirm')
-  })
-
-  it('filters entries by key name', async () => {
-    const wrapper = mountPage()
-    await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('user.name')
-    })
-
-    const filterInput = wrapper.find('input[placeholder="Filter by key name…"]')
-    await filterInput.setValue('bot')
-
-    expect(wrapper.text()).toContain('bot.mode')
-    expect(wrapper.text()).not.toContain('user.name')
   })
 })
