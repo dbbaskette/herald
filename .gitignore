@@ -41,5 +41,6 @@ dist/
 
 # Environment / secrets
 .env
+smoke/.env.smoke
 herald.yaml
 .worktrees/
