@@ -35,6 +35,19 @@ async function decline(id: string) {
 function formatTool(name: string): string {
   return name.replace(/^memory/i, 'Memory ').replace(/([A-Z])/g, ' $1').trim()
 }
+
+function isBotOfflineError(err: string): boolean {
+  // Suppress error banners that are downstream of the bot being unreachable.
+  // The NowStripe already shows "Bot offline" — we don't need to repeat it.
+  const lower = err.toLowerCase()
+  return (
+    lower.includes('http 5') ||
+    lower.includes('network') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('connection') ||
+    lower.includes('econnrefused')
+  )
+}
 </script>
 
 <template>
@@ -47,7 +60,11 @@ function formatTool(name: string): string {
     <div v-if="store.loading && store.items.length === 0" class="inbox-muted">
       Checking for pending edits…
     </div>
-    <div v-else-if="store.error" class="inbox-error">{{ store.error }}</div>
+    <!-- Suppress error banner when the cause is the bot being offline
+         (HTTP 500 or network) — NowStripe already communicates that. -->
+    <div v-else-if="store.error && !isBotOfflineError(store.error)" class="inbox-error">
+      {{ store.error }}
+    </div>
     <div v-else-if="store.items.length === 0 && !compact" class="inbox-muted">
       No memory edits awaiting approval.
     </div>

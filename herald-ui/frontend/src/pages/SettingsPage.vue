@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useSettingsStore, settingDefs } from '@/stores/settings'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SectionCard from '@/components/SectionCard.vue'
 
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
@@ -197,10 +200,9 @@ function hasChanges(): boolean {
 </script>
 
 <template>
-  <div>
-    <div class="page-header">
-      <h1 class="page-title">Settings</h1>
-    </div>
+  <div class="settings-page">
+    <NowStripe />
+    <PageHeader title="Settings" path="/settings" />
 
     <div v-if="store.loading" class="text-muted">Loading settings...</div>
 
@@ -209,41 +211,41 @@ function hasChanges(): boolean {
     </div>
 
     <form v-else @submit.prevent="save()">
-      <div v-for="(defs, groupName) in store.groups" :key="groupName" class="settings-group">
-        <h2 class="section-label group-title">{{ groupName }}</h2>
-        <div class="card settings-card">
-          <div
-            v-for="def in defs"
-            :key="def.key"
-            class="setting-row"
-          >
-            <div class="setting-label-col">
-              <label :for="'setting-' + def.key" class="setting-label">
-                {{ def.label }}
-              </label>
-              <p class="setting-desc">{{ def.description }}</p>
-            </div>
-            <div class="setting-input-col">
-              <input
-                :id="'setting-' + def.key"
-                v-model="form[def.key]"
-                :type="def.secret ? 'password' : 'text'"
-                :placeholder="def.placeholder"
-                :autocomplete="def.secret ? 'off' : undefined"
-                class="input"
-              />
-            </div>
+      <SectionCard
+        v-for="(defs, groupName) in store.groups"
+        :key="groupName"
+        :label="String(groupName)"
+        class="settings-group settings-group--rows"
+      >
+        <div
+          v-for="def in defs"
+          :key="def.key"
+          class="setting-row"
+        >
+          <div class="setting-label-col">
+            <label :for="'setting-' + def.key" class="setting-label">
+              {{ def.label }}
+            </label>
+            <p class="setting-desc">{{ def.description }}</p>
+          </div>
+          <div class="setting-input-col">
+            <input
+              :id="'setting-' + def.key"
+              v-model="form[def.key]"
+              :type="def.secret ? 'password' : 'text'"
+              :placeholder="def.placeholder"
+              :autocomplete="def.secret ? 'off' : undefined"
+              class="input"
+            />
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       <!-- Model & Provider -->
-      <div class="settings-group">
-        <h2 class="section-label group-title">Model & Provider</h2>
-        <div class="card settings-card padded">
-          <div v-if="modelLoading" class="text-muted text-sm">Checking model status...</div>
-          <div v-else-if="!modelStatus" class="text-muted text-sm">Bot is offline — model switching unavailable</div>
-          <div v-else>
+      <SectionCard label="Model & Provider" tone="gold" glyph="gold" class="settings-group">
+        <div v-if="modelLoading" class="text-muted text-sm">Checking model status...</div>
+        <div v-else-if="!modelStatus" class="text-muted text-sm">Bot is offline — model switching unavailable</div>
+        <div v-else>
             <div class="model-active">
               <span class="status-dot status-dot--live"></span>
               <span class="text-sm font-medium">
@@ -277,16 +279,13 @@ function hasChanges(): boolean {
                 {{ modelMessage }}
               </span>
             </div>
-          </div>
         </div>
-      </div>
+      </SectionCard>
 
       <!-- Google Workspace Auth -->
-      <div class="settings-group">
-        <h2 class="section-label group-title">Google Account</h2>
-        <div class="card settings-card padded">
-          <div v-if="gwsLoading" class="text-muted text-sm">Checking Google connection...</div>
-          <div v-else-if="gwsStatus">
+      <SectionCard label="Google Account" tone="info" glyph="info" class="settings-group">
+        <div v-if="gwsLoading" class="text-muted text-sm">Checking Google connection...</div>
+        <div v-else-if="gwsStatus">
             <!-- Status indicator -->
             <div class="flex items-center gap-3 mb-3">
               <span
@@ -361,8 +360,7 @@ function hasChanges(): boolean {
               Install with: <code class="bg-gray-100 px-1 py-0.5 rounded">brew install googleworkspace-cli</code>
             </p>
           </div>
-        </div>
-      </div>
+      </SectionCard>
 
       <!-- Action bar -->
       <div class="action-bar">
@@ -387,9 +385,7 @@ function hasChanges(): boolean {
 </template>
 
 <style scoped>
-.page-header {
-  margin-bottom: 24px;
-}
+.settings-page { max-width: 980px; }
 
 .text-muted { color: var(--color-text-muted); }
 .text-sm { font-size: 0.875rem; }
@@ -403,27 +399,25 @@ function hasChanges(): boolean {
 }
 
 .settings-group {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
-.group-title {
-  margin-bottom: 12px;
-}
-
-.settings-card {
-  overflow: hidden;
-}
-
-.settings-card.padded {
-  padding: 20px;
+/* Dynamic groups render row-style rather than padded body — cancel the
+   SectionCard body padding so .setting-row's own padding rules the spacing. */
+.settings-group--rows :deep(.section-card__body) {
+  padding: 0;
 }
 
 .setting-row {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border-light);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--paper-3);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
 }
 
 @media (min-width: 640px) {
@@ -431,10 +425,6 @@ function hasChanges(): boolean {
     flex-direction: row;
     align-items: center;
   }
-}
-
-.setting-row:last-child {
-  border-bottom: none;
 }
 
 .setting-label-col {

@@ -2,6 +2,9 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useSkillsStore } from '@/stores/skills'
 import DiffEditor from '@/components/DiffEditor.vue'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import StatusGlyph from '@/components/StatusGlyph.vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
@@ -270,20 +273,19 @@ function formatTime(ts: string | null): string {
 
 <template>
   <div class="skills-page">
-    <!-- Header bar -->
-    <header class="skills-header">
-      <div class="header-left">
-        <h1 class="page-title">Skills</h1>
-        <span class="skill-count" v-if="store.skillNames.length">{{ store.skillNames.length }} files</span>
-      </div>
-      <div class="header-right">
-        <div class="sse-chip" :class="'sse-' + sseStatus">
-          <span class="sse-dot"></span>
-          <span class="sse-label">{{ sseStatus === 'connected' ? 'Live' : sseStatus === 'error' ? 'Error' : 'Offline' }}</span>
-          <span v-if="lastLoaded && sseStatus === 'connected'" class="sse-time">{{ formatTime(lastLoaded) }}</span>
-        </div>
-      </div>
-    </header>
+    <NowStripe />
+    <PageHeader title="Skills" path="/skills">
+      <template #right>
+        <span v-if="store.skillNames.length" class="header-count">{{ store.skillNames.length }} files</span>
+        <span class="header-sep">·</span>
+        <StatusGlyph
+          :kind="sseStatus === 'connected' ? 'live-pulse' : sseStatus === 'error' ? 'err' : 'idle'"
+          size="sm"
+        />
+        <span>{{ sseStatus === 'connected' ? 'live' : sseStatus === 'error' ? 'error' : 'offline' }}</span>
+        <span v-if="lastLoaded && sseStatus === 'connected'" class="header-time">{{ formatTime(lastLoaded) }}</span>
+      </template>
+    </PageHeader>
 
     <!-- Error banner -->
     <div v-if="store.error" class="error-banner">
@@ -508,18 +510,17 @@ function formatTime(ts: string | null): string {
   gap: 10px;
 }
 
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.02em;
+.header-count {
+  font-size: 0.6875rem;
+  color: var(--graphite-2);
 }
-
-.skill-count {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+.header-sep {
+  color: var(--paper-rule);
+  user-select: none;
+}
+.header-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--graphite-2);
 }
 
 /* SSE Status Chip */

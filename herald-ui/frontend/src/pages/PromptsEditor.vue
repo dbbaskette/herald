@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import DiffEditor from '@/components/DiffEditor.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import NowStripe from '@/components/NowStripe.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 interface PromptSummary {
   name: string
@@ -236,12 +238,9 @@ onMounted(() => {
       @confirm="onConfirmModal()"
       @cancel="confirmOpen = false"
     />
-    <header class="prompts-header">
-      <div>
-        <h1 class="page-title">Prompts</h1>
-        <p class="page-subtitle">View and edit Herald's system prompts and your personal context.</p>
-      </div>
-    </header>
+    <NowStripe />
+    <PageHeader title="Prompts" path="/prompts" />
+    <p class="page-hint">View and edit Herald's system prompts and your personal context.</p>
 
     <div class="prompts-layout">
       <!-- Left: list -->
@@ -360,23 +359,11 @@ onMounted(() => {
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-.prompts-header {
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8e5df;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-
-.page-subtitle {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 4px 0 0 0;
+.page-hint {
+  color: var(--graphite-2);
+  font-size: 0.6875rem;
+  margin: 0 0 18px;
+  letter-spacing: 0.02em;
 }
 
 .prompts-layout {
