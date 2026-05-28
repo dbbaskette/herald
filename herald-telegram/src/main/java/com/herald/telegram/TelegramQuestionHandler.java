@@ -35,20 +35,28 @@ import java.util.concurrent.atomic.AtomicReference;
 public class TelegramQuestionHandler implements AskUserQuestionTool.QuestionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramQuestionHandler.class);
-    public static final long DEFAULT_TIMEOUT_MINUTES = 5;
+    /**
+     * 30 minutes — long enough to step away from your phone without losing context.
+     * The agent is parked on a CountDownLatch while waiting, but that's an executor
+     * thread now (#TBD), not the poller, so the bot stays responsive to other
+     * messages and slash commands during the wait.
+     */
+    public static final long DEFAULT_TIMEOUT_MINUTES = 30;
 
     private final TelegramSender sender;
     private final long timeoutMinutes;
     private final AtomicReference<PendingQuestion> pendingQuestion = new AtomicReference<>();
 
     @Autowired
-    public TelegramQuestionHandler(TelegramSender sender) {
-        this(sender, DEFAULT_TIMEOUT_MINUTES);
-    }
-
-    TelegramQuestionHandler(TelegramSender sender, long timeoutMinutes) {
+    public TelegramQuestionHandler(TelegramSender sender,
+            @org.springframework.beans.factory.annotation.Value("${herald.telegram.question-timeout-minutes:30}") long timeoutMinutes) {
         this.sender = sender;
         this.timeoutMinutes = timeoutMinutes;
+    }
+
+    /** Test/internal convenience — defaults to {@link #DEFAULT_TIMEOUT_MINUTES}. */
+    TelegramQuestionHandler(TelegramSender sender) {
+        this(sender, DEFAULT_TIMEOUT_MINUTES);
     }
 
     record PendingQuestion(String questionId, CompletableFuture<String> future) {

@@ -45,8 +45,24 @@ class TelegramPollerTest {
                 null,
                 new HeraldConfig.Telegram("test-token", "12345"),
                 null, null, null, null, null, null, null, null);
+        // Same-thread executor so test assertions run after the agent submit
+        // completes — the production code uses a single-thread ExecutorService
+        // for true async behavior.
         poller = new TelegramPoller(bot, config, sender, questionHandler, commandHandler, agentService,
-                java.util.Optional.empty());
+                java.util.Optional.empty(), sameThreadExecutor());
+    }
+
+    /** ExecutorService that runs Runnables on the caller's thread — keeps tests sync. */
+    private static java.util.concurrent.ExecutorService sameThreadExecutor() {
+        return new java.util.concurrent.AbstractExecutorService() {
+            private volatile boolean shut;
+            @Override public void shutdown() { shut = true; }
+            @Override public java.util.List<Runnable> shutdownNow() { shut = true; return java.util.List.of(); }
+            @Override public boolean isShutdown() { return shut; }
+            @Override public boolean isTerminated() { return shut; }
+            @Override public boolean awaitTermination(long t, java.util.concurrent.TimeUnit u) { return true; }
+            @Override public void execute(Runnable r) { r.run(); }
+        };
     }
 
     @Test

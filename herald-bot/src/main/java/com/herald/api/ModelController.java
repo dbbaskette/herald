@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -25,7 +26,8 @@ class ModelController {
         return new ModelStatus(
                 modelSwitcher.getActiveProvider(),
                 modelSwitcher.getActiveModel(),
-                modelSwitcher.getAvailableProviderDefaults());
+                modelSwitcher.getAvailableProviderDefaults(),
+                modelSwitcher.getProviderModelCatalog());
     }
 
     @PostMapping
@@ -35,10 +37,13 @@ class ModelController {
             return ResponseEntity.ok(status());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(
-                    new ModelStatus(req.provider(), req.model(), Map.of("error", e.getMessage())));
+                    new ModelStatus(req.provider(), req.model(),
+                            Map.of("error", e.getMessage()), Map.of()));
         }
     }
 
-    record ModelStatus(String provider, String model, Map<String, String> available) {}
+    record ModelStatus(String provider, String model,
+                       Map<String, String> available,
+                       Map<String, List<String>> catalog) {}
     record SwitchRequest(String provider, String model) {}
 }

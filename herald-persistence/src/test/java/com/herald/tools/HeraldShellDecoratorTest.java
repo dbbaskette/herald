@@ -79,6 +79,60 @@ class HeraldShellDecoratorTest {
         assertThat(result).doesNotStartWith("DENIED");
     }
 
+    @Test
+    void stderrIsKeptSeparateFromStdoutOnSuccess() {
+        String result = decorator.shell_exec("echo out; echo err 1>&2");
+        assertThat(result).isEqualTo("out");
+    }
+
+    @Test
+    void stderrIsSurfacedOnNonZeroExit() {
+        String result = decorator.shell_exec("echo boom 1>&2; exit 7");
+        assertThat(result).contains("Exit code: 7");
+        assertThat(result).contains("--- stderr ---");
+        assertThat(result).contains("boom");
+    }
+
+    @Test
+    void googleApiErrorEnvelopeGetsSummaryPrefix() {
+        // Success exit but JSON error body (matches what gws returns for some API errors)
+        String json = "{\\\"error\\\":{\\\"code\\\":404,\\\"message\\\":\\\"Not found.\\\",\\\"status\\\":\\\"NOT_FOUND\\\"}}";
+        String result = decorator.shell_exec("printf '%s' \"" + json + "\"");
+        assertThat(result).startsWith("ERROR 404 NOT_FOUND: Not found.");
+        assertThat(result).contains("verify the ID/name");
+        assertThat(result).contains("\"error\"");
+    }
+
+    @Test
+    void unauthenticatedErrorIncludesReconnectHint() {
+        String json = "{\\\"error\\\":{\\\"code\\\":401,\\\"message\\\":\\\"Request had invalid authentication credentials.\\\",\\\"status\\\":\\\"UNAUTHENTICATED\\\"}}";
+        String result = decorator.shell_exec("printf '%s' \"" + json + "\"");
+        assertThat(result).startsWith("ERROR 401 UNAUTHENTICATED");
+        assertThat(result).contains("Reconnect via Settings");
+        assertThat(result).contains("./run.sh auth");
+    }
+
+    @Test
+    void serviceDisabledErrorPointsAtCloudConsole() {
+        String json = "{\\\"error\\\":{\\\"code\\\":403,\\\"message\\\":\\\"Gmail API has not been used in project 123 before or it is disabled.\\\",\\\"status\\\":\\\"SERVICE_DISABLED\\\"}}";
+        String result = decorator.shell_exec("printf '%s' \"" + json + "\"");
+        assertThat(result).contains("not enabled in this GCP project");
+        assertThat(result).contains("console.cloud.google.com");
+    }
+
+    @Test
+    void googleApiErrorEnvelopeAtArrayTopLevelGetsSummaryPrefix() {
+        String json = "[{\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"Bad request.\\\",\\\"status\\\":\\\"INVALID_ARGUMENT\\\"}}]";
+        String result = decorator.shell_exec("printf '%s' '" + json.replace("\\\"", "\"") + "'");
+        assertThat(result).startsWith("ERROR 400 INVALID_ARGUMENT: Bad request.");
+    }
+
+    @Test
+    void normalJsonOutputIsNotMisclassifiedAsError() {
+        String result = decorator.shell_exec("printf '%s' '{\"items\":[1,2,3]}'");
+        assertThat(result).isEqualTo("{\"items\":[1,2,3]}");
+    }
+
     // --- Null / blank input ---
 
     @Test

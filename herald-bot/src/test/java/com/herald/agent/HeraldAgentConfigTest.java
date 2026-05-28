@@ -134,6 +134,7 @@ class HeraldAgentConfigTest {
                         "claude-sonnet-4-5", "claude-haiku-4-5",
                         "claude-sonnet-4-5", "claude-opus-4-5",
                         "gpt-4o", "llama3.2", "gemini-2.5-flash", "qwen/qwen3.5-35b-a3b",
+                        "", "", "", "", "",
                         "system_and_tools",
                         "daily",
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),

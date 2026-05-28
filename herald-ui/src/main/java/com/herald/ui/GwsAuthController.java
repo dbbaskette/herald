@@ -3,7 +3,6 @@ package com.herald.ui;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,30 +11,41 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * Drives Google Workspace OAuth from the Settings UI. The "Connect Google"
+ * button hits {@link #login}; the page polls {@link #status} until the user
+ * completes consent. We shell out to {@code gws} for the heavy lifting —
+ * Herald never sees user OAuth tokens directly.
+ */
 @RestController
 @RequestMapping("/api/gws")
 class GwsAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(GwsAuthController.class);
-    private final JdbcTemplate jdbcTemplate;
+    /** Default scope set when the UI doesn't pass one — covers every Workspace service Herald touches. */
+    static final String DEFAULT_SCOPES = "gmail,calendar,drive,docs,sheets,tasks,people";
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
+
     private volatile Process loginProcess;
 
-    GwsAuthController(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    GwsAuthController() {
     }
 
     @GetMapping("/status")
     ResponseEntity<Map<String, Object>> status() {
         Map<String, Object> result = new LinkedHashMap<>();
 
-        // Check if gws is installed
         if (!isGwsInstalled()) {
             result.put("installed", false);
             result.put("authenticated", false);
@@ -44,30 +54,43 @@ class GwsAuthController {
         }
         result.put("installed", true);
 
-        // Check if client credentials are configured
-        String clientId = getSetting("google.client-id");
-        boolean hasCredentials = clientId != null && !clientId.isBlank();
-        result.put("clientConfigured", hasCredentials);
+        String envClientId = System.getenv("GOOGLE_WORKSPACE_CLI_CLIENT_ID");
+        result.put("clientConfigured", envClientId != null && !envClientId.isBlank());
 
-        // Check auth status
         try {
-            String output = runGws(List.of("gws", "auth", "status"), buildGwsEnv());
-            // auth_method is "none" when not authenticated, "oauth2" when connected
-            boolean authenticated = !output.contains("\"auth_method\": \"none\"")
-                    && !output.contains("\"auth_method\":\"none\"")
-                    && (output.contains("\"auth_method\": \"oauth2\"")
-                        || output.contains("\"auth_method\":\"oauth2\""));
+            String output = runGws(List.of("gws", "auth", "status"));
+            JsonNode root = parseGwsJson(output);
+            if (root == null) {
+                result.put("authenticated", false);
+                result.put("message", "Could not parse gws auth status output");
+                return ResponseEntity.ok(result);
+            }
+            boolean tokenValid = root.path("token_valid").asBoolean(false);
+            boolean hasRefresh = root.path("has_refresh_token").asBoolean(false);
+            String authMethod = root.path("auth_method").asString("none");
+            boolean authenticated = !"none".equals(authMethod) && tokenValid;
             result.put("authenticated", authenticated);
+            result.put("tokenValid", tokenValid);
+            result.put("hasRefreshToken", hasRefresh);
+            result.put("user", root.path("user").asString(""));
+            result.put("projectId", root.path("project_id").asString(""));
+            result.put("authMethod", authMethod);
+            result.put("credentialSource", root.path("credential_source").asString(""));
+            result.put("keyringBackend", root.path("keyring_backend").asString(""));
+            result.put("scopeCount", root.path("scope_count").asInt(0));
+            result.put("scopes", asStringList(root.path("scopes")));
+            result.put("enabledApiCount", root.path("enabled_api_count").asInt(0));
+            result.put("enabledApis", asStringList(root.path("enabled_apis")));
         } catch (Exception e) {
+            log.warn("gws auth status failed: {}", e.getMessage());
             result.put("authenticated", false);
             result.put("error", e.getMessage());
         }
-
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/login")
-    ResponseEntity<Map<String, String>> login() {
+    ResponseEntity<Map<String, String>> login(@RequestBody(required = false) Map<String, String> body) {
         Map<String, String> result = new LinkedHashMap<>();
 
         if (!isGwsInstalled()) {
@@ -76,15 +99,18 @@ class GwsAuthController {
             return ResponseEntity.ok(result);
         }
 
-        String clientId = getSetting("google.client-id");
-        String clientSecret = getSetting("google.client-secret");
-        if (clientId == null || clientId.isBlank() || clientSecret == null || clientSecret.isBlank()) {
+        String envClientId = System.getenv("GOOGLE_WORKSPACE_CLI_CLIENT_ID");
+        String envClientSecret = System.getenv("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET");
+        if (envClientId == null || envClientId.isBlank() || envClientSecret == null || envClientSecret.isBlank()) {
             result.put("status", "error");
-            result.put("message", "Google client ID and secret must be configured in Settings first");
+            result.put("message", "GOOGLE_WORKSPACE_CLI_CLIENT_ID and GOOGLE_WORKSPACE_CLI_CLIENT_SECRET must be set in .env, then restart with ./run.sh all");
             return ResponseEntity.ok(result);
         }
 
-        // Kill stale login process if it's still hanging around
+        String scopes = body != null && body.get("scopes") != null && !body.get("scopes").isBlank()
+                ? body.get("scopes") : DEFAULT_SCOPES;
+
+        // Kill stale login process — only one in-flight OAuth flow at a time.
         if (loginProcess != null) {
             if (loginProcess.isAlive()) {
                 loginProcess.destroyForcibly();
@@ -94,40 +120,23 @@ class GwsAuthController {
         }
 
         try {
-            ProcessBuilder pb = new ProcessBuilder("gws", "auth", "login", "-s", "gmail,calendar,drive");
-            pb.environment().putAll(buildGwsEnv());
+            ProcessBuilder pb = new ProcessBuilder("gws", "auth", "login", "-s", scopes);
+            // No env injection — gws reads GOOGLE_WORKSPACE_CLI_CLIENT_ID/SECRET
+            // from the process env, which run.sh populates from .env.
             pb.redirectErrorStream(true);
             loginProcess = pb.start();
 
-            // Read stdout to capture the auth URL — gws prints it instead of opening a browser.
-            // IMPORTANT: Do NOT close the reader/stream — gws needs it open to receive
-            // the OAuth callback and write credentials. The process cleans up on exit.
-            String authUrl = null;
-            try {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(loginProcess.getInputStream(), StandardCharsets.UTF_8));
-                long deadline = System.currentTimeMillis() + 5000;
-                while (System.currentTimeMillis() < deadline) {
-                    if (reader.ready()) {
-                        String line = reader.readLine();
-                        if (line != null && line.trim().startsWith("http")) {
-                            authUrl = line.trim();
-                            break;
-                        }
-                    } else {
-                        Thread.sleep(100);
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-
+            // gws prints the auth URL on stdout, then blocks waiting for the OAuth
+            // callback. DO NOT close the stream — gws needs it open to complete. We
+            // peek the first ~5s to grab the URL and return it to the UI; the
+            // subprocess keeps running until the user finishes (or we kill it).
+            String authUrl = readAuthUrl(loginProcess, 5_000);
+            result.put("status", "launched");
+            result.put("scopes", scopes);
             if (authUrl != null) {
-                result.put("status", "launched");
                 result.put("authUrl", authUrl);
                 result.put("message", "Click the link to sign in with Google.");
             } else {
-                result.put("status", "launched");
                 result.put("message", "Login started — check your browser or terminal for the auth URL.");
             }
         } catch (Exception e) {
@@ -143,7 +152,7 @@ class GwsAuthController {
     ResponseEntity<Map<String, String>> logout() {
         Map<String, String> result = new LinkedHashMap<>();
         try {
-            runGws(List.of("gws", "auth", "logout"), buildGwsEnv());
+            runGws(List.of("gws", "auth", "logout"));
             result.put("status", "ok");
             result.put("message", "Google account disconnected");
         } catch (Exception e) {
@@ -151,25 +160,6 @@ class GwsAuthController {
             result.put("message", e.getMessage());
         }
         return ResponseEntity.ok(result);
-    }
-
-    private Map<String, String> buildGwsEnv() {
-        Map<String, String> env = new LinkedHashMap<>();
-        String clientId = getSetting("google.client-id");
-        String clientSecret = getSetting("google.client-secret");
-        if (clientId != null && !clientId.isBlank()) {
-            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_ID", clientId);
-        }
-        if (clientSecret != null && !clientSecret.isBlank()) {
-            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET", clientSecret);
-        }
-        return env;
-    }
-
-    private String getSetting(String key) {
-        List<String> values = jdbcTemplate.queryForList(
-                "SELECT value FROM settings WHERE key = ?", String.class, key);
-        return values.isEmpty() ? null : values.get(0);
     }
 
     private boolean isGwsInstalled() {
@@ -181,10 +171,10 @@ class GwsAuthController {
         }
     }
 
-    private String runGws(List<String> command, Map<String, String> extraEnv) throws Exception {
+    private String runGws(List<String> command) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
-        pb.environment().putAll(extraEnv);
+        // No env override — inherits process env (loaded from .env by run.sh).
         Process process = pb.start();
         String output;
         try (BufferedReader reader = new BufferedReader(
@@ -197,5 +187,52 @@ class GwsAuthController {
             throw new RuntimeException("gws command timed out");
         }
         return output;
+    }
+
+    private static String readAuthUrl(Process p, long timeoutMillis) {
+        try {
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8));
+            long deadline = System.currentTimeMillis() + timeoutMillis;
+            while (System.currentTimeMillis() < deadline) {
+                if (reader.ready()) {
+                    String line = reader.readLine();
+                    if (line != null && line.trim().startsWith("http")) {
+                        return line.trim();
+                    }
+                } else {
+                    Thread.sleep(100);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception ignored) {
+            // fall through — caller treats null as "URL not captured"
+        }
+        return null;
+    }
+
+    /**
+     * {@code gws auth status} prefixes its JSON with a "Using keyring backend: …"
+     * line. Skip past it to the first {@code {} before handing to Jackson.
+     */
+    static JsonNode parseGwsJson(String output) {
+        if (output == null) return null;
+        int start = output.indexOf('{');
+        if (start < 0) return null;
+        try {
+            return JSON.readTree(output.substring(start));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static List<String> asStringList(JsonNode node) {
+        List<String> out = new java.util.ArrayList<>();
+        if (node == null || !node.isArray()) return out;
+        for (JsonNode item : node) {
+            out.add(item.asString(""));
+        }
+        return out;
     }
 }

@@ -11,7 +11,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
-![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--SNAPSHOT-blueviolet.svg)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M5-blueviolet.svg)
 ![Status](https://img.shields.io/badge/status-active-success)
 
 ---
@@ -138,12 +138,12 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 - ❓ **Clarify-before-act** — `AskUserQuestionTool` with Telegram inline-keyboard integration ([Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool))
 - ✅ **Structured task tracking** — `TodoWriteTool` with per-step progress messages ([Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite))
 - ⏰ **Proactive scheduling** — morning briefings, reminders, cron-driven outreach
-- 📧 **Google Workspace** — Gmail and Calendar via the `gws` CLI
+- 📧 **Google Workspace** — Gmail, Calendar, Drive, Docs, Sheets, Tasks, and Contacts via the `gws` CLI. One-command OAuth (`./run.sh auth`) or a **Connect Google** button in the console; credentials live solely in `.env`. Google API errors are mapped to actionable hints the agent surfaces to you (expired token → reconnect, missing scope, disabled API)
 - 📋 **Apple Reminders** — read, create, complete, and delete reminders via the `reminders` CLI (macOS only); morning briefings surface today's + overdue items
 - 🐚 **Shell & file access** — with regex-blocked destructive commands, sensitive-value redaction, and confirmation gating
 
 **Models**
-- 🤖 **Multi-provider** — Anthropic, OpenAI, Gemini, Ollama (local), LM Studio (local). Switch at runtime with `/model`
+- 🤖 **Multi-provider** — Anthropic, OpenAI, Gemini, Ollama (local), LM Studio (local). Switch at runtime with `/model` in Telegram or the console's per-provider model dropdown (each provider expands to a configurable catalog of models)
 - 💰 **Tiered routing** — Haiku / Sonnet / Opus tiers for subagents so cheap work stays cheap
 - 🔁 **Model failover chain** — opt-in `FailoverChatModel` transparently retries the next chain entry on 429 / 5xx / timeout / unavailable, with a per-entry circuit breaker
 
@@ -349,9 +349,10 @@ Builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `her
 ./run.sh onboard
 ```
 
-Walks you through the Anthropic API key, Telegram bot token, and chat ID
+Walks you through the Anthropic API key, Telegram bot token, chat ID
 auto-detection (just send your bot a message — the wizard polls Telegram for
-you). Idempotent — re-run anytime to update values without clobbering hand-edits.
+you), memory directory, and optional Google Workspace OAuth credentials.
+Idempotent — re-run anytime to update values without clobbering hand-edits.
 
 **Or, manual:**
 
@@ -372,14 +373,18 @@ HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ### Step 4 — Run
 
 ```bash
-./run.sh          # starts both bot + ui (default)
-./run.sh bot      # bot only (port 8081)
-./run.sh ui       # ui only (port 8080)
-./run.sh stop     # stops all services
-./run.sh build    # builds all modules
-./run.sh doctor   # diagnose common misconfig (--json, --quiet)
-./run.sh onboard  # interactive setup wizard (writes .env)
+./run.sh           # starts both bot + ui (default)
+./run.sh bot       # bot only (port 8081)
+./run.sh ui        # ui only (port 8080)
+./run.sh stop      # stops everything (broad sweep — see below)
+./run.sh restart [bot|ui|all]
+./run.sh build     # builds all modules
+./run.sh doctor    # diagnose common misconfig (--json, --quiet)
+./run.sh onboard   # interactive setup wizard (writes .env)
+./run.sh auth [scopes]  # Google OAuth — one flow for all Workspace scopes
 ```
+
+`bot`, `ui`, and `all` **recompile the requested modules first** (via `mvn -am install -DskipTests`), so local edits in shared modules are always picked up. They also **kill any prior Herald instances** before starting — stale `./run.sh` shells, orphaned `mvn`/`spring-boot:run` JVMs, leftover log tails, and anything on ports 8080/8081 — so you never end up with two bots polling Telegram at once. `./run.sh stop` runs the same broad sweep.
 
 **If something breaks, run `./run.sh doctor` first.** It checks Java, API keys,
 the SQLite file, memory dir, skills, optional CLIs (gws, reminders, whisper,
@@ -423,7 +428,26 @@ Then open [http://localhost:8080](http://localhost:8080).
 
 ### Step 7 — Google Workspace (optional)
 
-Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup.md](docs/gws-setup.md).
+Herald talks to Gmail, Calendar, Drive, Docs, Sheets, Tasks, and Contacts through the [`gws` CLI](https://github.com/googleworkspace/google-workspace-cli) (`brew install googleworkspace-cli`).
+
+**`.env` is the single source of truth for the OAuth client.** Set the two values, and `./run.sh` keeps `~/.config/gws/client_secret.json` in sync automatically:
+
+```bash
+# In .env — from Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID (Desktop):
+GOOGLE_WORKSPACE_CLI_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_WORKSPACE_CLI_CLIENT_SECRET=GOCSPX-...
+```
+
+Then authenticate — one flow covers every scope Herald uses:
+
+```bash
+./run.sh auth          # gmail,calendar,drive,docs,sheets,tasks,people
+./run.sh auth gmail,calendar   # or limit to specific services
+```
+
+Or click **Connect Google** on the console's Settings page (`http://localhost:8080`) — it drives the same OAuth flow and shows your connected account, scopes, and GCP project once linked.
+
+When a Google call fails, Herald maps the error to an actionable hint the agent relays to you — e.g. *token expired → reconnect*, *missing scope*, or *API not enabled in this GCP project*. Headless/container deployments can switch to the encrypted-file keyring (`GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file`). Full walkthrough: [docs/gws-setup.md](docs/gws-setup.md).
 
 ## Environment Variables
 
@@ -443,8 +467,13 @@ Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup
 | `HERALD_MODEL_OPENAI` | OpenAI subagent tier | No | `gpt-4o` |
 | `HERALD_MODEL_OLLAMA` | Ollama (local) subagent tier | No | `llama3.2` |
 | `HERALD_MODEL_GEMINI` | Gemini subagent tier | No | `gemini-2.5-flash` |
-| `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Gmail/Calendar | No | — |
+| `HERALD_MODEL_CATALOG_<PROVIDER>` | Comma-separated model list shown in the console switcher (`ANTHROPIC`, `OPENAI`, `GEMINI`, ...) | No | Curated per provider |
+| `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Google Workspace (`.env` is the source of truth) | No | — |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` | OAuth client secret | No | — |
+| `GOOGLE_WORKSPACE_CLI_TOKEN` | Pre-obtained OAuth2 access token (alternate to the client-id flow) | No | — |
+| `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE` | Path to an OAuth/service-account JSON instead of `~/.config/gws/` | No | — |
+| `GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND` | Token storage: `keyring` (default) or `file` (headless/containers; needs `GOG_KEYRING_PASSWORD`) | No | `keyring` |
+| `HERALD_GWS_SCOPES` | Default scope set for `./run.sh auth` | No | `gmail,calendar,drive,docs,sheets,tasks,people` |
 | `HERALD_WEB_SEARCH_API_KEY` | Brave Search API key | No | — |
 | `HERALD_CRON_TIMEZONE` | Timezone for cron scheduler | No | `America/New_York` |
 | `HERALD_AGENT_PERSONA` | Override agent persona | No | Built-in default |
@@ -453,6 +482,7 @@ Herald supports Gmail and Google Calendar via the `gws` CLI. See [docs/gws-setup
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_ANTHROPIC_CACHE_STRATEGY` | Anthropic prompt-cache strategy: `none` / `tools_only` / `system_only` / `system_and_tools` / `conversation_history` | No | `system_and_tools` |
 | `HERALD_MEMORY_CONSOLIDATION_TRIGGER` | First-turn-of-day memory consolidation reminder: `daily` / `off` | No | `daily` |
+| `HERALD_TELEGRAM_QUESTION_TIMEOUT_MINUTES` | How long an `AskUserQuestion` waits for a Telegram reply | No | `30` |
 | `HERALD_MODEL_FAILOVER_ENABLED` | Enable opt-in failover chain (configure chain in `application.yaml`) | No | `false` |
 | `HERALD_SERVER_PORT` | Port for the bot's actuator / health endpoint | No | `8081` |
 | `HERALD_MEMORIES_DIR` | Long-term memory directory (can be an Obsidian vault folder) | No | `~/.herald/memories` |
@@ -551,7 +581,7 @@ flowchart TB
 | Pattern | Blog Post | Status | Herald Implementation |
 |---------|-----------|--------|----------------------|
 | **Agent Skills** | [Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | ✅ ↗ | `ReloadableSkillsTool` wraps upstream `SkillsTool` with a `WatchService`-based hot-reload (`SkillsWatcher`, 250ms debounce). Skills live in `skills/` as Markdown + YAML front matter. |
-| **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 5-minute timeout. |
+| **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 30-minute timeout (`herald.telegram.question-timeout-minutes`). The agent turn runs on a dedicated executor so a pending question never stalls Telegram polling. |
 | **TodoWrite** | [Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with `pending → in_progress → completed` states. A `todoEventHandler` dispatches formatted progress to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
 | **Subagent Orchestration** | [Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model tier routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus a custom **research** agent (Opus, deep analysis + web search) in `.claude/agents/`. |
 | **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Remote A2A agents configured under `herald.a2a.agents`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — `AgentCard` fetched on first delegation. |
@@ -571,7 +601,7 @@ Beyond the seven blog patterns, Herald adds capabilities specific to an always-o
 | **/save command** | Files the current Telegram conversation into long-term memory as a wiki note, with slug hint support |
 | **Proactive scheduling** | `CronService` runs agent prompts on schedules — briefings, reminders, outreach with no user input |
 | **Shell security** | `HeraldShellDecorator` with regex blocklist, Telegram confirmation gate for `sudo`/system writes, sensitive-value redaction, configurable timeouts |
-| **Runtime model switching** | `/model` command switches between Anthropic, OpenAI, Ollama, Gemini, LM Studio at runtime; persisted in the `settings` table |
+| **Runtime model switching** | `/model` (Telegram) or the console's per-provider model dropdown switches between Anthropic, OpenAI, Ollama, Gemini, LM Studio at runtime; persisted in the `model_overrides` table. Each provider exposes a configurable model catalog (`HERALD_MODEL_CATALOG_<PROVIDER>`) |
 | **Management console** | Vue 3 web UI for skills editing, file-based memory browsing grouped by type, cron jobs, conversation history, live status via SSE |
 | **Google Workspace** | Gmail and Calendar via `gws` CLI |
 | **Multi-tier model routing** | Haiku / Sonnet / Opus tiers configured per subagent type so cheap work uses cheap models |

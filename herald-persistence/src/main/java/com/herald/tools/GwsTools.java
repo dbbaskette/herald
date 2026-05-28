@@ -3,7 +3,6 @@ package com.herald.tools;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -34,18 +33,27 @@ public class GwsTools {
     record ProcessResult(int exitCode, String output, boolean timedOut) {}
 
     private final GwsAvailabilityChecker gwsAvailabilityChecker;
-    private final JdbcTemplate jdbcTemplate;
     private final ProcessRunner processRunner;
 
     @Autowired
-    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, JdbcTemplate jdbcTemplate) {
-        this(gwsAvailabilityChecker, jdbcTemplate, GwsTools::executeProcess);
+    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker,
+                    @SuppressWarnings("unused") JdbcTemplate jdbcTemplate) {
+        // jdbcTemplate param kept so existing callers + @ConditionalOnBean still
+        // wire correctly. No longer used — Google creds come from the process
+        // env, not the settings table.
+        this(gwsAvailabilityChecker, GwsTools::executeProcess);
     }
 
-    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, JdbcTemplate jdbcTemplate, ProcessRunner processRunner) {
+    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker, ProcessRunner processRunner) {
         this.gwsAvailabilityChecker = gwsAvailabilityChecker;
-        this.jdbcTemplate = jdbcTemplate;
         this.processRunner = processRunner;
+    }
+
+    /** Test-only overload kept for existing call sites; jdbcTemplate ignored. */
+    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker,
+             @SuppressWarnings("unused") JdbcTemplate jdbcTemplate,
+             ProcessRunner processRunner) {
+        this(gwsAvailabilityChecker, processRunner);
     }
 
     @Tool(description = "List Gmail threads. Returns JSON array of recent email threads with subject, sender, and snippet. Output is always JSON.")
@@ -69,8 +77,9 @@ public class GwsTools {
             return UNAVAILABLE_ERROR;
         }
         try {
-            Map<String, String> env = buildGwsEnv();
-            ProcessResult result = processRunner.run(command, env);
+            // No env override — gws inherits GOOGLE_WORKSPACE_CLI_* from the
+            // process env (loaded from .env by run.sh).
+            ProcessResult result = processRunner.run(command, java.util.Map.of());
             if (result.timedOut()) {
                 return "{\"error\": \"Command timed out after " + TIMEOUT_SECONDS + " seconds\"}";
             }
@@ -86,34 +95,6 @@ public class GwsTools {
         } catch (Exception e) {
             log.error("Failed to execute gws command {}: {}", command, e.getMessage());
             return "{\"error\": \"Failed to execute gws command: " + escapeJson(e.getMessage()) + "\"}";
-        }
-    }
-
-    /**
-     * Build env vars for gws commands. Prefers credentials from the Settings DB
-     * (configured via the UI), falls back to process environment vars from .env.
-     */
-    private Map<String, String> buildGwsEnv() {
-        Map<String, String> env = new LinkedHashMap<>();
-        String clientId = getSetting("google.client-id");
-        String clientSecret = getSetting("google.client-secret");
-        if (clientId != null && !clientId.isBlank()) {
-            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_ID", clientId);
-        }
-        if (clientSecret != null && !clientSecret.isBlank()) {
-            env.put("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET", clientSecret);
-        }
-        return env;
-    }
-
-    private String getSetting(String key) {
-        try {
-            List<String> values = jdbcTemplate.queryForList(
-                    "SELECT value FROM settings WHERE key = ?", String.class, key);
-            return values.isEmpty() ? null : values.get(0);
-        } catch (Exception e) {
-            log.debug("Could not read setting '{}': {}", key, e.getMessage());
-            return null;
         }
     }
 

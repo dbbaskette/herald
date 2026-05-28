@@ -41,13 +41,66 @@ if [ -d "$BUNDLED_SKILLS_DIR" ]; then
     done
 fi
 
+# ── Sync gws client_secret.json from .env ────────────────────────────
+# The .env file is the single source of truth for the Google Workspace
+# OAuth client. Without this step, `gws` and Herald can drift: the env
+# vars hold one client_id, the on-disk client_secret.json holds another,
+# and which one wins depends on whether the caller sourced .env. We
+# regenerate the file from .env on every run so both sources agree.
+sync_gws_client_secret() {
+    local gws_dir="$HOME/.config/gws"
+    local secret_file="$gws_dir/client_secret.json"
+    local env_id="${GOOGLE_WORKSPACE_CLI_CLIENT_ID:-}"
+    local env_secret="${GOOGLE_WORKSPACE_CLI_CLIENT_SECRET:-}"
+
+    if [ -z "$env_id" ] || [ -z "$env_secret" ]; then
+        return 0  # nothing to sync; let gws use whatever's on disk
+    fi
+    if ! command -v python3 &>/dev/null; then
+        echo "  ⚠  python3 not found — skipping gws client_secret sync."
+        return 0
+    fi
+
+    mkdir -p "$gws_dir"
+    GWS_ENV_ID="$env_id" GWS_ENV_SECRET="$env_secret" GWS_SECRET_FILE="$secret_file" python3 - <<'PY'
+import json, os, sys
+env_id = os.environ["GWS_ENV_ID"]
+env_secret = os.environ["GWS_ENV_SECRET"]
+path = os.environ["GWS_SECRET_FILE"]
+try:
+    with open(path) as f:
+        doc = json.load(f)
+    installed = doc.get("installed") or doc.get("web") or {}
+    if installed.get("client_id") == env_id and installed.get("client_secret") == env_secret:
+        sys.exit(0)  # already in sync
+    backup = f"{path}.bak.runsh"
+    os.replace(path, backup)
+    print(f"  ⓘ  Updating {path} from .env (old saved to {backup}).")
+except FileNotFoundError:
+    doc = {"installed": {}}
+    installed = doc["installed"]
+    print(f"  ⓘ  Creating {path} from .env.")
+installed["client_id"] = env_id
+installed["client_secret"] = env_secret
+installed.setdefault("auth_uri", "https://accounts.google.com/o/oauth2/auth")
+installed.setdefault("token_uri", "https://oauth2.googleapis.com/token")
+installed.setdefault("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs")
+installed.setdefault("redirect_uris", ["http://localhost"])
+doc["installed"] = installed
+with open(path, "w") as f:
+    json.dump(doc, f, indent=2)
+os.chmod(path, 0o600)
+PY
+}
+sync_gws_client_secret
+
 # ── Check Google Workspace CLI auth ──────────────────────────────────
 if command -v gws &>/dev/null; then
     gws_auth=$(gws auth status 2>/dev/null | grep -o '"auth_method": "[^"]*"' | cut -d'"' -f4)
     if [ "$gws_auth" = "none" ] || [ -z "$gws_auth" ]; then
         echo "  ⚠  Google Workspace CLI (gws) installed but not authenticated."
         echo "     Gmail/Calendar/Drive skills will be unavailable."
-        echo "     Run: source .env && gws auth login -s gmail,calendar,drive"
+        echo "     Run: ./run.sh auth"
         echo "     See: docs/gws-setup.md"
         echo ""
     fi
@@ -110,6 +163,69 @@ stop_module() {
     pkill -9 -f "classworlds.*${module}" 2>/dev/null || true
 }
 
+# Broad-sweep cleanup — catches everything stop_module misses:
+#   * suspended/orphaned ./run.sh from prior shell sessions (relative or absolute path)
+#   * orphaned `tail -f .../herald-*.log` from old `./run.sh all` runs
+#   * mvn / spring-boot:run JVMs still warming up before they bind a port
+#   * stray Herald* JVMs that drifted off the expected port
+#   * anything on BOT_PORT or UI_PORT regardless of name
+# Skips this process ($$) and its parent so we never SIGKILL ourselves.
+kill_all_herald() {
+    echo "Killing any prior Herald instances..."
+    local self=$$
+    local parent
+    parent=$(ps -o ppid= -p $self 2>/dev/null | tr -d ' ')
+    # We want to skip our own shell + the herald `tail -f` we may have just
+    # spawned in this very run — anything older than ~3s is fair game.
+    local skip_re="^(${self}|${parent})$"
+
+    # 1. Other ./run.sh wrappers — match the basename loosely so we catch BOTH
+    #    `bash /full/path/run.sh` AND `bash ./run.sh` invocations. The
+    #    `run\.sh` literal anchors enough that unrelated scripts won't match.
+    local pids
+    pids=$(pgrep -f "run\.sh( |$)" 2>/dev/null | grep -vE "$skip_re" || true)
+    if [ -n "$pids" ]; then
+        echo "  Killing prior ./run.sh: $(echo $pids | tr '\n' ' ')"
+        echo "$pids" | xargs kill 2>/dev/null || true
+        sleep 1
+        pids=$(pgrep -f "run\.sh( |$)" 2>/dev/null | grep -vE "$skip_re" || true)
+        [ -n "$pids" ] && echo "$pids" | xargs kill -9 2>/dev/null || true
+    fi
+
+    # 2. Orphaned `tail -f .../herald-*.log` log followers from prior
+    #    `./run.sh all` runs. These accumulate fast because they outlive their
+    #    parent shell when ^C'd from a different terminal.
+    pids=$(pgrep -f "tail -f .*herald-(bot|ui)\.log" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        echo "  Killing orphaned log tails: $(echo $pids | tr '\n' ' ')"
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+    fi
+
+    # 3. Any mvn/spring-boot:run processes targeting our modules.
+    pkill -f "mvnw.*herald-bot" 2>/dev/null || true
+    pkill -f "mvnw.*herald-ui" 2>/dev/null || true
+    pkill -f "classworlds.*herald-bot" 2>/dev/null || true
+    pkill -f "classworlds.*herald-ui" 2>/dev/null || true
+    pkill -f "spring-boot.*herald-bot" 2>/dev/null || true
+    pkill -f "spring-boot.*herald-ui" 2>/dev/null || true
+
+    # 4. Herald JVMs by class name (catches ones not bound to expected ports).
+    kill_java_procs "HeraldApplication"
+    kill_java_procs "HeraldUiApplication"
+    kill_java_procs "herald-bot"
+    kill_java_procs "herald-ui"
+
+    # 5. Whatever is left on the canonical ports.
+    kill_on_port "$BOT_PORT"
+    kill_on_port "$UI_PORT"
+
+    # 6. Force-kill any survivors from steps 3+4.
+    pkill -9 -f "mvnw.*herald-bot" 2>/dev/null || true
+    pkill -9 -f "mvnw.*herald-ui" 2>/dev/null || true
+    pkill -9 -f "classworlds.*herald-bot" 2>/dev/null || true
+    pkill -9 -f "classworlds.*herald-ui" 2>/dev/null || true
+}
+
 wait_for_port() {
     local port=$1
     local name=$2
@@ -146,25 +262,40 @@ check_env() {
 # ── Parse command ────────────────────────────────────────────────────
 cmd="${1:-all}"
 
+recompile_modules() {
+    # spring-boot:run resolves sibling modules from ~/.m2, so we install
+    # the requested modules (and their dependencies) first to make sure
+    # local edits in shared modules (herald-core, herald-persistence, ...)
+    # are picked up. -DskipTests keeps the loop tight; remove if you want
+    # tests to gate the run.
+    local modules="$1"
+    echo "  Recompiling $modules..."
+    if ! ./mvnw -pl "$modules" -am -q -DskipTests install; then
+        echo "  Build failed. Aborting."
+        return 1
+    fi
+}
+
 case "$cmd" in
     bot)
         check_env
-        stop_module "herald-bot" "$BOT_PORT"
-        echo "Starting herald-bot on port $BOT_PORT..."
+        kill_all_herald
         cd "$SCRIPT_DIR"
+        recompile_modules "herald-bot" || exit 1
+        echo "Starting herald-bot on port $BOT_PORT..."
         ./mvnw -pl herald-bot spring-boot:run
         ;;
     ui)
-        stop_module "herald-ui" "$UI_PORT"
-        echo "Starting herald-ui on port $UI_PORT..."
+        kill_all_herald
         cd "$SCRIPT_DIR"
+        recompile_modules "herald-ui" || exit 1
+        echo "Starting herald-ui on port $UI_PORT..."
         ./mvnw -pl herald-ui spring-boot:run
         ;;
     all)
         check_env
         mkdir -p "$LOG_DIR"
-        stop_module "herald-bot" "$BOT_PORT"
-        stop_module "herald-ui" "$UI_PORT"
+        kill_all_herald
         sleep 1
 
         echo ""
@@ -173,6 +304,8 @@ case "$cmd" in
         echo ""
 
         cd "$SCRIPT_DIR"
+
+        recompile_modules "herald-bot,herald-ui" || exit 1
 
         # Start both modules, log to files
         ./mvnw -pl herald-bot spring-boot:run > "$LOG_DIR/herald-bot.log" 2>&1 &
@@ -239,10 +372,20 @@ case "$cmd" in
         wait $BOT_PID $UI_PID 2>/dev/null
         kill $TAIL1 $TAIL2 2>/dev/null || true
         ;;
+    auth)
+        # Single-flow Google OAuth — covers every Workspace service Herald uses.
+        # Override with: ./run.sh auth "gmail,calendar"  or set HERALD_GWS_SCOPES.
+        if ! command -v gws &>/dev/null; then
+            echo "gws CLI not installed. Install with: brew install googleworkspace-cli"
+            exit 1
+        fi
+        scopes="${2:-${HERALD_GWS_SCOPES:-gmail,calendar,drive,docs,sheets,tasks,people}}"
+        echo "Running OAuth flow for scopes: $scopes"
+        gws auth login -s "$scopes"
+        ;;
     stop)
         echo "Stopping herald services..."
-        stop_module "herald-bot" "$BOT_PORT"
-        stop_module "herald-ui" "$UI_PORT"
+        kill_all_herald
         echo "Done."
         ;;
     status)
@@ -303,8 +446,13 @@ case "$cmd" in
         ;;
     onboard)
         # Interactive setup wizard — prompts for Anthropic key, Telegram
-        # bot token + chat ID (auto-detected via getUpdates), and memory dir,
-        # then writes them to .env. Idempotent — safe to re-run.
+        # bot token + chat ID (auto-detected via getUpdates), memory dir,
+        # and Google client_id/secret, then writes them to .env. Idempotent.
+        #
+        # Kill any live Herald first: a running bot keeps polling Telegram
+        # getUpdates, so it'll grab the test messages the wizard's
+        # chat-ID auto-detect is listening for. Stop it before the wizard runs.
+        kill_all_herald
         cd "$SCRIPT_DIR"
         shift || true
         # Discover the built JAR by glob so version bumps don't break the wrapper.
@@ -354,6 +502,7 @@ case "$cmd" in
         echo "  build          Build all modules"
         echo "  doctor [flags] Run diagnostic checks (--json | --quiet)"
         echo "  onboard        Interactive setup wizard (writes .env)"
+        echo "  auth [scopes]  Run Google OAuth (default: gmail,calendar,drive,docs,sheets,tasks,people)"
         exit 1
         ;;
 esac

@@ -131,7 +131,7 @@ public class HeraldAgentConfig {
             Optional<RemindersTools> remindersTools,
             RemindersAvailabilityChecker remindersAvailabilityChecker) {
         List<String> names = new ArrayList<>(List.of(
-                "shell", "filesystem", "todoWrite", "askUserQuestion",
+                "shell", "filesystem", "TodoWrite", "askUserQuestion",
                 "task", "taskOutput", "skills", "web", "toolSearchTool",
                 "validateSkill",
                 "MemoryView", "MemoryCreate", "MemoryStrReplace",
@@ -172,7 +172,7 @@ public class HeraldAgentConfig {
             Optional<MessageSender> messageSenderOpt,
             HeraldConfig config,
             com.herald.agent.PendingApprovalRegistry approvalRegistry,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+            tools.jackson.databind.ObjectMapper objectMapper,
             Optional<com.herald.api.ChatNotificationsHub> notificationsHubOpt) {
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         Path memoryLogPath = memoriesDir.resolve("log.md");
@@ -258,6 +258,11 @@ public class HeraldAgentConfig {
             @Value("${herald.agent.model.ollama:llama3.2}") String ollamaModel,
             @Value("${herald.agent.model.gemini:gemini-2.5-flash}") String geminiModel,
             @Value("${herald.agent.model.lmstudio:qwen/qwen3.5-35b-a3b}") String lmstudioModel,
+            @Value("${herald.agent.model-catalog.anthropic:claude-opus-4-5,claude-sonnet-4-5,claude-haiku-4-5}") String anthropicCatalog,
+            @Value("${herald.agent.model-catalog.openai:gpt-4o,gpt-4o-mini}") String openaiCatalog,
+            @Value("${herald.agent.model-catalog.gemini:gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.1-flash-lite,gemini-3.5-flash}") String geminiCatalog,
+            @Value("${herald.agent.model-catalog.ollama:}") String ollamaCatalog,
+            @Value("${herald.agent.model-catalog.lmstudio:}") String lmstudioCatalog,
             @Value("${herald.agent.anthropic.cache-strategy:system_and_tools}") String anthropicCacheStrategyName,
             @Value("${herald.agent.memory.consolidation-trigger:daily}") String memoryConsolidationMode,
             @Qualifier("openaiChatModel") Optional<ChatModel> openaiChatModel,
@@ -452,6 +457,16 @@ public class HeraldAgentConfig {
         if (geminiChatModel.isPresent()) providerDefaultModels.put("gemini", geminiModel);
         if (lmstudioChatModel.isPresent()) providerDefaultModels.put("lmstudio", lmstudioModel);
 
+        // Selectable-model catalog per provider for the UI switcher. Each list is
+        // the configured catalog unioned with the provider's default model, so the
+        // active default always appears even if it's missing from the catalog env.
+        Map<String, List<String>> providerModelCatalog = new LinkedHashMap<>();
+        providerModelCatalog.put("anthropic", mergeCatalog(anthropicCatalog, defaultModel));
+        if (openaiChatModel.isPresent()) providerModelCatalog.put("openai", mergeCatalog(openaiCatalog, openaiModel));
+        if (ollamaChatModel.isPresent()) providerModelCatalog.put("ollama", mergeCatalog(ollamaCatalog, ollamaModel));
+        if (geminiChatModel.isPresent()) providerModelCatalog.put("gemini", mergeCatalog(geminiCatalog, geminiModel));
+        if (lmstudioChatModel.isPresent()) providerModelCatalog.put("lmstudio", mergeCatalog(lmstudioCatalog, lmstudioModel));
+
         // Resolve the default provider from env var (falls back to anthropic)
         String requestedProvider = config.defaultProvider();
         String initialProvider;
@@ -486,7 +501,8 @@ public class HeraldAgentConfig {
                         initialChatModel, initialModel, config.anthropicSkills(), cacheStrategy))
                 .build();
 
-        var switcher = new ModelSwitcher(availableModels, providerDefaultModels, jdbcTemplateOpt.orElse(null),
+        var switcher = new ModelSwitcher(availableModels, providerDefaultModels, providerModelCatalog,
+                jdbcTemplateOpt.orElse(null),
                 clientBuilderFactory, initialClient, initialProvider, initialModel, config.anthropicSkills());
         switcher.loadPersistedOverride();
         return switcher;
@@ -729,6 +745,26 @@ public class HeraldAgentConfig {
             return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
         }
         return Path.of(path);
+    }
+
+    /**
+     * Parse a comma-separated catalog string into an ordered, de-duplicated list,
+     * guaranteeing {@code defaultModel} is present (prepended if missing). Blank
+     * catalog → just the default. Keeps the UI switcher from ever omitting the
+     * provider's active default model.
+     */
+    static List<String> mergeCatalog(String csv, String defaultModel) {
+        java.util.LinkedHashSet<String> models = new java.util.LinkedHashSet<>();
+        if (defaultModel != null && !defaultModel.isBlank()) {
+            models.add(defaultModel.trim());
+        }
+        if (csv != null) {
+            for (String m : csv.split(",")) {
+                String t = m.trim();
+                if (!t.isEmpty()) models.add(t);
+            }
+        }
+        return List.copyOf(models);
     }
 
     /**

@@ -28,6 +28,8 @@ public class ModelSwitcher {
 
     private final Map<String, ChatModel> availableModels;
     private final Map<String, String> providerDefaultModels;
+    /** provider → selectable model IDs for the UI switcher. Never null/empty per provider. */
+    private final Map<String, List<String>> providerModelCatalog;
     private final JdbcTemplate jdbcTemplate;
     private final Function<ChatModel, ChatClient.Builder> clientBuilderFactory;
     private final List<String> anthropicSkills;
@@ -71,8 +73,22 @@ public class ModelSwitcher {
                   String defaultProvider,
                   String defaultModel,
                   List<String> anthropicSkills) {
+        this(availableModels, providerDefaultModels, Map.of(), jdbcTemplate, clientBuilderFactory,
+                initialClient, defaultProvider, defaultModel, anthropicSkills);
+    }
+
+    ModelSwitcher(Map<String, ChatModel> availableModels,
+                  Map<String, String> providerDefaultModels,
+                  Map<String, List<String>> providerModelCatalog,
+                  JdbcTemplate jdbcTemplate,
+                  Function<ChatModel, ChatClient.Builder> clientBuilderFactory,
+                  ChatClient initialClient,
+                  String defaultProvider,
+                  String defaultModel,
+                  List<String> anthropicSkills) {
         this.availableModels = new LinkedHashMap<>(availableModels);
         this.providerDefaultModels = new LinkedHashMap<>(providerDefaultModels);
+        this.providerModelCatalog = new LinkedHashMap<>(providerModelCatalog);
         this.jdbcTemplate = jdbcTemplate;
         this.clientBuilderFactory = clientBuilderFactory;
         this.activeClient = initialClient;
@@ -184,6 +200,24 @@ public class ModelSwitcher {
 
     public Map<String, String> getAvailableProviderDefaults() {
         return Map.copyOf(providerDefaultModels);
+    }
+
+    /**
+     * provider → list of selectable model IDs for the UI switcher. Falls back to
+     * the single configured default for any provider without an explicit catalog,
+     * so callers always get at least one model per available provider.
+     */
+    public Map<String, List<String>> getProviderModelCatalog() {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (String provider : availableModels.keySet()) {
+            List<String> models = providerModelCatalog.get(provider);
+            if (models == null || models.isEmpty()) {
+                String fallback = providerDefaultModels.get(provider);
+                models = fallback == null ? List.of() : List.of(fallback);
+            }
+            out.put(provider, models);
+        }
+        return out;
     }
 
     /**

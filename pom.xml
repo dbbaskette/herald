@@ -87,12 +87,12 @@
             <dependency>
                 <groupId>org.springaicommunity</groupId>
                 <artifactId>spring-ai-agent-utils</artifactId>
-                <version>0.7.0</version>
+                <version>0.8.0</version>
             </dependency>
             <dependency>
                 <groupId>org.springaicommunity</groupId>
                 <artifactId>spring-ai-agent-utils-a2a</artifactId>
-                <version>0.7.0</version>
+                <version>0.8.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

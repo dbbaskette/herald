@@ -49,7 +49,25 @@ public class ModelProviderConfig {
         String apiKey = geminiConfig.apiKey() != null ? geminiConfig.apiKey() : "";
         String baseUrl = geminiConfig.baseUrl() != null ? geminiConfig.baseUrl()
                 : "https://generativelanguage.googleapis.com/v1beta/openai";
-        return buildOpenAiChatModel(apiKey, baseUrl);
+        // Gemini 3.x requires thought_signature round-trip on assistant tool_calls.
+        // Wrap the OpenAI HttpClient with an interceptor that captures + replays it.
+        GeminiThoughtSignatureHttpClient sharedSig = new GeminiThoughtSignatureHttpClient(
+                com.openai.client.okhttp.OkHttpClient.builder()
+                        .timeout(AbstractOpenAiOptions.DEFAULT_TIMEOUT)
+                        .build());
+        Credential credential = BearerTokenCredential.create(apiKey);
+        OpenAIClient syncClient = OpenAiSetup.setupSyncClient(
+                baseUrl, null, credential, null, null, null, false, false,
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null)
+                .withOptions(b -> b.httpClient(sharedSig));
+        OpenAIClientAsync asyncClient = OpenAiSetup.setupAsyncClient(
+                baseUrl, null, credential, null, null, null, false, false,
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null)
+                .withOptions(b -> b.httpClient(sharedSig));
+        return OpenAiChatModel.builder()
+                .openAiClient(syncClient)
+                .openAiClientAsync(asyncClient)
+                .build();
     }
 
     @Bean("lmstudioChatModel")

@@ -8,7 +8,7 @@
 -->
 # Task Management
 
-You have access to the `todoWrite` tool to plan and track multi-step work. Use it VERY frequently when the work is non-trivial — decompose 3+ step requests into a todo list BEFORE starting, keep the user visible on your progress, and mark items `completed` the moment they are done (never batch completions).
+You have access to the `TodoWrite` tool to plan and track multi-step work. Use it VERY frequently when the work is non-trivial — decompose 3+ step requests into a todo list BEFORE starting, keep the user visible on your progress, and mark items `completed` the moment they are done (never batch completions).
 
 Rules:
 - For any request that requires 3 or more distinct steps, create a todo list first.

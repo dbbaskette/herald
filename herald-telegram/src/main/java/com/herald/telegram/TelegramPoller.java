@@ -14,6 +14,7 @@ import com.pengrad.telegrambot.request.GetFile;
 import com.pengrad.telegrambot.request.GetUpdates;
 import com.pengrad.telegrambot.response.GetFileResponse;
 import com.pengrad.telegrambot.response.GetUpdatesResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,8 +22,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import okhttp3.OkHttpClient;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
@@ -45,11 +51,75 @@ public class TelegramPoller {
     private final java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy;
     private int offset = 0;
 
+    /**
+     * Runs agent turns off the poller thread so the @Scheduled poll() can keep
+     * fetching updates while a turn is in flight. Single-threaded so concurrent
+     * messages serialize (the chat memory is one-conversation), and so an
+     * AskUserQuestion that blocks on user input never blocks polling — fixes
+     * the "bot looks offline mid-question" symptom.
+     */
+    private final ExecutorService agentExecutor;
+
+    /**
+     * Shared OkHttp client backing the {@link TelegramBot}. When we see a
+     * sustained burst of poll failures (TLS handshake errors, NoRouteToHost,
+     * Connection reset, …) it usually means a half-open socket got cached
+     * during a network blip. Evicting the connection pool forces the next
+     * poll to open a brand-new socket. May be {@code null} in tests.
+     */
+    private final OkHttpClient telegramOkHttpClient;
+
+    private static final int EVICT_AFTER_CONSECUTIVE_FAILURES = 3;
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+
+    @Autowired
     public TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
                           TelegramQuestionHandler questionHandler,
                           SlashCommandDispatcher commandHandler,
                           AgentService agentService,
-                          java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy) {
+                          java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy,
+                          OkHttpClient telegramOkHttpClient) {
+        this(bot, config, sender, questionHandler, commandHandler, agentService, budgetPolicy,
+                Executors.newSingleThreadExecutor(r -> {
+                    Thread t = new Thread(r, "herald-telegram-agent");
+                    t.setDaemon(true);
+                    return t;
+                }),
+                telegramOkHttpClient);
+    }
+
+    /** Test-friendly constructor — lets tests pass a same-thread executor and skip eviction. */
+    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
+                   TelegramQuestionHandler questionHandler,
+                   SlashCommandDispatcher commandHandler,
+                   AgentService agentService,
+                   java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy,
+                   ExecutorService agentExecutor) {
+        this(bot, config, sender, questionHandler, commandHandler, agentService, budgetPolicy,
+                agentExecutor, null);
+    }
+
+    /** Test-only overload kept for {@code validateConfig} smoke tests. */
+    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
+                   TelegramQuestionHandler questionHandler,
+                   SlashCommandDispatcher commandHandler,
+                   AgentService agentService,
+                   java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy) {
+        this(bot, config, sender, questionHandler, commandHandler, agentService, budgetPolicy,
+                Executors.newSingleThreadExecutor(r -> {
+                    Thread t = new Thread(r, "herald-telegram-agent-test");
+                    t.setDaemon(true);
+                    return t;
+                }), null);
+    }
+
+    TelegramPoller(TelegramBot bot, HeraldConfig config, TelegramSender sender,
+                   TelegramQuestionHandler questionHandler,
+                   SlashCommandDispatcher commandHandler,
+                   AgentService agentService,
+                   java.util.Optional<com.herald.agent.BudgetPolicy> budgetPolicy,
+                   ExecutorService agentExecutor,
+                   OkHttpClient telegramOkHttpClient) {
         this.bot = bot;
         this.allowedChatId = config.telegram().allowedChatId();
         this.sender = sender;
@@ -57,6 +127,8 @@ public class TelegramPoller {
         this.commandHandler = commandHandler;
         this.agentService = agentService;
         this.budgetPolicy = budgetPolicy;
+        this.agentExecutor = agentExecutor;
+        this.telegramOkHttpClient = telegramOkHttpClient;
     }
 
     @PostConstruct
@@ -73,6 +145,9 @@ public class TelegramPoller {
         try {
             GetUpdatesResponse response = bot.execute(
                     new GetUpdates().offset(offset).limit(100).timeout(0));
+            // Any successful round-trip clears the consecutive-failure counter,
+            // even if Telegram returned no updates.
+            consecutiveFailures.set(0);
 
             if (!response.isOk()) {
                 log.warn("GetUpdates failed: {}", response.description());
@@ -89,7 +164,14 @@ public class TelegramPoller {
                 processUpdate(update);
             }
         } catch (Exception e) {
-            log.error("Error polling Telegram updates: {}", e.getMessage(), e);
+            int n = consecutiveFailures.incrementAndGet();
+            log.error("Error polling Telegram updates ({} consecutive): {}", n, e.getMessage(), e);
+            if (n >= EVICT_AFTER_CONSECUTIVE_FAILURES && telegramOkHttpClient != null) {
+                log.warn("Evicting Telegram connection pool after {} consecutive failures "
+                        + "(forces fresh socket on next poll)", n);
+                telegramOkHttpClient.connectionPool().evictAll();
+                consecutiveFailures.set(0);
+            }
         }
     }
 
@@ -153,14 +235,33 @@ public class TelegramPoller {
             }
         }
 
-        // Pass message to agent loop, streaming the response back
+        // Hand the agent turn off to the dedicated executor and return so the
+        // next poll() tick can fetch new updates. The executor is single-thread
+        // so concurrent messages serialize behind whatever turn is in flight —
+        // critical when a turn is parked inside an AskUserQuestion waiting on
+        // the user's reply: polling keeps running and the reply still flows in.
+        agentExecutor.submit(() -> {
+            try {
+                sender.sendStreamingMessage(
+                        agentService.streamChat(text, payload.attachments(),
+                                com.herald.agent.AgentService.DEFAULT_CONVERSATION_ID));
+            } catch (Exception e) {
+                log.error("Agent loop error: {}", e.getMessage(), e);
+                sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");
+            }
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        agentExecutor.shutdown();
         try {
-            sender.sendStreamingMessage(
-                    agentService.streamChat(text, payload.attachments(),
-                            com.herald.agent.AgentService.DEFAULT_CONVERSATION_ID));
-        } catch (Exception e) {
-            log.error("Agent loop error: {}", e.getMessage(), e);
-            sender.sendMessage("Sorry, something went wrong processing your message. Please try again.");
+            if (!agentExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                agentExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            agentExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -266,8 +367,13 @@ public class TelegramPoller {
         String mime = document.mimeType() == null ? "" : document.mimeType();
         String inlined = tryExtractDocumentText(localPath, mime);
         if (inlined != null) {
+            // Surface the on-disk path alongside the extracted text so the agent
+            // knows it can re-process the file with a richer tool (markitdown,
+            // OCR, page-range extraction, etc.) on subsequent turns. Without
+            // this the model thinks the chat-only handoff is all it has.
             if (text.length() > 0) text.append("\n\n");
-            text.append(String.format("[Document: %s]%n%s", document.fileName(), inlined));
+            text.append(String.format("[Document: %s — saved to %s]%n%s",
+                    document.fileName(), localPath, inlined));
         } else {
             if (text.length() > 0) text.append("\n\n");
             String hint = "application/pdf".equals(mime)

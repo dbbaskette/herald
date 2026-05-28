@@ -48,21 +48,9 @@ export const settingDefs: SettingDef[] = [
     placeholder: 'Raleigh, NC',
     group: 'Integrations',
   },
-  {
-    key: 'google.client-id',
-    label: 'Google OAuth Client ID',
-    description: 'From Google Cloud Console → APIs & Services → Credentials',
-    placeholder: 'xxxx.apps.googleusercontent.com',
-    group: 'Google Workspace',
-  },
-  {
-    key: 'google.client-secret',
-    label: 'Google OAuth Client Secret',
-    description: 'From the same OAuth 2.0 Client ID',
-    placeholder: 'GOCSPX-...',
-    group: 'Google Workspace',
-    secret: true,
-  },
+  // Google client-id / client-secret removed — .env is the single source of
+  // truth (run.sh syncs ~/.config/gws/client_secret.json from it). Connect /
+  // Disconnect lives in the "Google Account" panel further down the page.
 ]
 
 export const useSettingsStore = defineStore('settings', () => {

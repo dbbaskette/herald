@@ -56,6 +56,15 @@ public class TelegramSender implements MessageSender {
     private final String chatId;
     private final MessageFormatter formatter;
 
+    /**
+     * Last successfully edited (messageId, text) — short-circuits a repeat edit
+     * with identical content. Streaming flushes often produce a "final" edit
+     * whose text equals the last interim push, which Telegram rejects with
+     * "message is not modified". Skipping saves a round-trip and a log line.
+     */
+    private volatile int lastEditedMessageId = -1;
+    private volatile String lastEditedText = null;
+
     public TelegramSender(TelegramBot bot, HeraldConfig config, MessageFormatter formatter) {
         this.bot = bot;
         this.chatId = config.telegram().allowedChatId();
@@ -248,14 +257,21 @@ public class TelegramSender implements MessageSender {
 
     /** Best-effort plain-text edit used for interim streaming updates. */
     private boolean editPlain(int messageId, String text) {
+        if (messageId == lastEditedMessageId && text != null && text.equals(lastEditedText)) {
+            return true; // no change since last successful edit — skip the API call
+        }
         try {
             BaseResponse response = bot.execute(new EditMessageText(chatId, messageId, text));
             if (response.isOk()) {
+                lastEditedMessageId = messageId;
+                lastEditedText = text;
                 return true;
             }
             // "message is not modified" is fine; rate limits will be retried on next tick
             if (response.errorCode() == 400 && response.description() != null
                     && response.description().contains("message is not modified")) {
+                lastEditedMessageId = messageId;
+                lastEditedText = text;
                 return true;
             }
             log.debug("Interim edit failed (code={}): {}", response.errorCode(), response.description());
@@ -267,11 +283,17 @@ public class TelegramSender implements MessageSender {
     }
 
     private void editWithRetry(int messageId, String text) {
+        // Fast-path: identical content already pushed → nothing to do.
+        if (messageId == lastEditedMessageId && text != null && text.equals(lastEditedText)) {
+            return;
+        }
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
                 BaseResponse response = bot.execute(
                         new EditMessageText(chatId, messageId, text).parseMode(ParseMode.MarkdownV2));
                 if (response.isOk()) {
+                    lastEditedMessageId = messageId;
+                    lastEditedText = text;
                     return;
                 }
                 if (response.errorCode() == 429) {
@@ -280,6 +302,8 @@ public class TelegramSender implements MessageSender {
                 }
                 if (response.errorCode() == 400 && response.description() != null
                         && response.description().contains("message is not modified")) {
+                    lastEditedMessageId = messageId;
+                    lastEditedText = text;
                     return;
                 }
                 // MarkdownV2 parse failed — try with escaped text
@@ -287,11 +311,23 @@ public class TelegramSender implements MessageSender {
                 BaseResponse escapedResponse = bot.execute(
                         new EditMessageText(chatId, messageId, escaped).parseMode(ParseMode.MarkdownV2));
                 if (escapedResponse.isOk()) {
+                    lastEditedMessageId = messageId;
+                    lastEditedText = text;
                     return;
                 }
                 // Fall back to plain text
                 BaseResponse plain = bot.execute(new EditMessageText(chatId, messageId, text));
                 if (plain.isOk()) {
+                    lastEditedMessageId = messageId;
+                    lastEditedText = text;
+                    return;
+                }
+                // "message is not modified" on the plain fallback is also benign —
+                // the prior interim edit already carried this text.
+                if (plain.errorCode() == 400 && plain.description() != null
+                        && plain.description().contains("message is not modified")) {
+                    lastEditedMessageId = messageId;
+                    lastEditedText = text;
                     return;
                 }
                 log.error("Final edit failed: {}", plain.description());

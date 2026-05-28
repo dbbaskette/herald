@@ -24,7 +24,12 @@ const dragActive = ref(false)
 const attachmentError = ref('')
 
 // Model badge state
-const modelStatus = ref<{ provider: string; model: string; available: Record<string, string> } | null>(null)
+const modelStatus = ref<{
+  provider: string
+  model: string
+  available: Record<string, string>
+  catalog?: Record<string, string[]>
+} | null>(null)
 const modelSwitching = ref(false)
 const modelMenuOpen = ref(false)
 
@@ -200,20 +205,28 @@ const availableProviders = computed(() =>
   modelStatus.value ? Object.keys(modelStatus.value.available).filter(k => k !== 'error') : []
 )
 
-async function switchModel(provider: string) {
+// Models selectable per provider — prefer the catalog, fall back to the single
+// default so the menu always lists at least one model.
+function modelsFor(provider: string): string[] {
+  const cat = modelStatus.value?.catalog?.[provider]
+  if (cat && cat.length) return cat
+  const def = modelStatus.value?.available[provider]
+  return def ? [def] : []
+}
+
+async function switchModel(provider: string, model: string) {
   if (!modelStatus.value) return
-  if (provider === modelStatus.value.provider) {
+  if (provider === modelStatus.value.provider && model === modelStatus.value.model) {
     modelMenuOpen.value = false
     return
   }
-  const targetModel = modelStatus.value.available[provider]
-  if (!targetModel) return
+  if (!model) return
   modelSwitching.value = true
   try {
     const res = await fetch('/api/model', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model: targetModel }),
+      body: JSON.stringify({ provider, model }),
     })
     if (res.ok) modelStatus.value = await res.json()
   } catch { /* ignore */ }
@@ -405,20 +418,22 @@ onUnmounted(() => {
               </svg>
             </button>
             <div v-if="modelMenuOpen" class="model-menu">
-              <div class="model-menu-header">Switch provider</div>
-              <button
-                v-for="p in availableProviders"
-                :key="p"
-                class="model-menu-item"
-                :class="{ 'is-active': p === modelStatus.provider }"
-                @click="switchModel(p)"
-              >
-                <span class="model-menu-radio">
-                  <span v-if="p === modelStatus.provider" class="model-menu-radio-fill"></span>
-                </span>
-                <span class="model-menu-name">{{ p }}</span>
-                <span class="model-menu-model">{{ modelStatus.available[p] }}</span>
-              </button>
+              <div class="model-menu-header">Switch model</div>
+              <template v-for="p in availableProviders" :key="p">
+                <div class="model-menu-provider">{{ p }}</div>
+                <button
+                  v-for="m in modelsFor(p)"
+                  :key="p + '/' + m"
+                  class="model-menu-item"
+                  :class="{ 'is-active': p === modelStatus.provider && m === modelStatus.model }"
+                  @click="switchModel(p, m)"
+                >
+                  <span class="model-menu-radio">
+                    <span v-if="p === modelStatus.provider && m === modelStatus.model" class="model-menu-radio-fill"></span>
+                  </span>
+                  <span class="model-menu-model">{{ m }}</span>
+                </button>
+              </template>
             </div>
           </div>
           <button class="header-btn" @click="store.newConversation()" title="New conversation">
@@ -811,12 +826,22 @@ onUnmounted(() => {
   padding: 6px 10px 4px;
 }
 
+.model-menu-provider {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 8px 10px 2px;
+  opacity: 0.7;
+}
+
 .model-menu-item {
   display: grid;
-  grid-template-columns: 14px 1fr auto;
+  grid-template-columns: 14px 1fr;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 10px 7px 16px;
   border: none;
   background: transparent;
   text-align: left;
@@ -860,8 +885,12 @@ onUnmounted(() => {
 
 .model-menu-model {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  color: var(--color-text-primary);
+}
+
+.model-menu-item.is-active .model-menu-model {
+  font-weight: 600;
 }
 
 .header-btn {

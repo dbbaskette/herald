@@ -35,6 +35,8 @@ public class Onboard {
     static final String KEY_BOT_TOKEN = "bot-token";
     static final String KEY_CHAT_ID = "chat-id";
     static final String KEY_MEMORIES = "memories-dir";
+    static final String KEY_GOOGLE_CLIENT_ID = "google-client-id";
+    static final String KEY_GOOGLE_CLIENT_SECRET = "google-client-secret";
 
     public static void main(String[] args) {
         Map<String, String> presets = parseAnswers(args);
@@ -74,7 +76,7 @@ public class Onboard {
         Map<String, String> updates = new LinkedHashMap<>();
 
         // Step 1 — Anthropic key.
-        prompter.println("▸ Step 1/4 — Anthropic API key");
+        prompter.println("▸ Step 1/5 — Anthropic API key");
         prompter.println("  Get one at https://console.anthropic.com");
         String apiKey = prompter.promptSecret("  Paste it here, or press Enter to skip: (" + KEY_ANTHROPIC + ")").trim();
         if (!apiKey.isEmpty()) {
@@ -89,7 +91,7 @@ public class Onboard {
         prompter.println("");
 
         // Step 2 — Telegram bot token (skippable for task-agent-only installs).
-        prompter.println("▸ Step 2/4 — Telegram bot token (optional)");
+        prompter.println("▸ Step 2/5 — Telegram bot token (optional)");
         prompter.println("  Chat with @BotFather on Telegram, send /newbot, paste the token here.");
         prompter.println("  Skip with Enter to run as task-agent only (no Telegram).");
         String botToken = prompter.promptSecret("  Token: (" + KEY_BOT_TOKEN + ")").trim();
@@ -106,7 +108,7 @@ public class Onboard {
 
                 // Step 3 — chat id auto-detect.
                 prompter.println("");
-                prompter.println("▸ Step 3/4 — Telegram chat ID");
+                prompter.println("▸ Step 3/5 — Telegram chat ID");
                 prompter.println("  On Telegram, open a chat with @" + (username == null ? "your-bot" : username) + " and send any message.");
                 chatId = autoDetectChatId(botToken);
                 if (chatId == null) {
@@ -129,13 +131,41 @@ public class Onboard {
         prompter.println("");
 
         // Step 4 — memories dir (default vs custom path).
-        prompter.println("▸ Step 4/4 — Memory directory");
+        prompter.println("▸ Step 4/5 — Memory directory");
         prompter.println("  Where should long-term memory live? (default: ~/.herald/memories)");
         prompter.println("  Tip: point this at an Obsidian vault folder to enable wikilink mode.");
         String memDir = prompter.prompt("  Path, or Enter to keep the default: (" + KEY_MEMORIES + ")").trim();
         if (!memDir.isEmpty()) {
             updates.put("HERALD_MEMORIES_DIR", memDir);
             prompter.println("  ✓ Saved.");
+        }
+        prompter.println("");
+
+        // Step 5 — Google Workspace OAuth (optional, skippable).
+        //
+        // Frictionless path: get the user's OAuth client into .env in one go, so
+        // they can just run `./run.sh auth` immediately after to complete the flow.
+        // We don't try to drive GCP from here — creating the project + OAuth
+        // client still lives in the console; we just collect the two values.
+        prompter.println("▸ Step 5/5 — Google Workspace (optional)");
+        prompter.println("  Skip if you don't want Gmail/Calendar/Drive access yet.");
+        prompter.println("  Otherwise: in Google Cloud Console → APIs & Services → Credentials,");
+        prompter.println("  create an OAuth 2.0 Client ID of type \"Desktop\" and download the JSON.");
+        prompter.println("  Full walkthrough: docs/gws-setup.md");
+        String googleClientId = prompter.prompt("  Client ID, or Enter to skip: (" + KEY_GOOGLE_CLIENT_ID + ")").trim();
+        boolean googleConfigured = false;
+        if (!googleClientId.isEmpty()) {
+            String googleClientSecret = prompter.promptSecret("  Client Secret: (" + KEY_GOOGLE_CLIENT_SECRET + ")").trim();
+            if (googleClientSecret.isEmpty()) {
+                prompter.println("  ⚠  No secret entered — skipping Google for now.");
+            } else {
+                updates.put("GOOGLE_WORKSPACE_CLI_CLIENT_ID", googleClientId);
+                updates.put("GOOGLE_WORKSPACE_CLI_CLIENT_SECRET", googleClientSecret);
+                googleConfigured = true;
+                prompter.println("  ✓ Saved. Run `./run.sh auth` after start to complete OAuth.");
+            }
+        } else {
+            prompter.println("  Skipped — re-run `./run.sh onboard` later, or paste into .env directly.");
         }
         prompter.println("");
 
@@ -159,7 +189,12 @@ public class Onboard {
         prompter.println("Next:");
         prompter.println("  1. `./run.sh doctor` to verify the setup.");
         prompter.println("  2. `./run.sh` to start Herald.");
-        prompter.println("  3. Send your bot a message on Telegram — you should get a reply from Claude.");
+        if (googleConfigured) {
+            prompter.println("  3. `./run.sh auth` to complete the Google OAuth flow.");
+            prompter.println("  4. Send your bot a message on Telegram — you should get a reply from Claude.");
+        } else {
+            prompter.println("  3. Send your bot a message on Telegram — you should get a reply from Claude.");
+        }
         return 0;
     }
 

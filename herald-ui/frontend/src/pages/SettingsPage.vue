@@ -9,7 +9,12 @@ const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
 
 // Model switcher state
-const modelStatus = ref<{ provider: string; model: string; available: Record<string, string> } | null>(null)
+const modelStatus = ref<{
+  provider: string
+  model: string
+  available: Record<string, string>
+  catalog?: Record<string, string[]>
+} | null>(null)
 const modelLoading = ref(false)
 const modelSwitching = ref(false)
 const modelMessage = ref('')
@@ -19,6 +24,15 @@ const selectedModel = ref('')
 const availableProviders = computed(() =>
   modelStatus.value ? Object.keys(modelStatus.value.available).filter(k => k !== 'error') : []
 )
+
+// Catalog of selectable models for the chosen provider — powers the <datalist>
+// autocomplete on the free-text model input.
+const modelsForSelectedProvider = computed(() => {
+  const cat = modelStatus.value?.catalog?.[selectedProvider.value]
+  if (cat && cat.length) return cat
+  const def = modelStatus.value?.available[selectedProvider.value]
+  return def ? [def] : []
+})
 
 async function fetchModelStatus() {
   modelLoading.value = true
@@ -59,53 +73,70 @@ async function switchModel() {
   finally { modelSwitching.value = false }
 }
 
-const gwsStatus = ref<{ installed: boolean; clientConfigured: boolean; authenticated: boolean; message?: string } | null>(null)
+type GwsStatus = {
+  installed: boolean
+  clientConfigured?: boolean
+  authenticated: boolean
+  tokenValid?: boolean
+  hasRefreshToken?: boolean
+  user?: string
+  projectId?: string
+  authMethod?: string
+  credentialSource?: string
+  keyringBackend?: string
+  scopeCount?: number
+  scopes?: string[]
+  enabledApiCount?: number
+  enabledApis?: string[]
+  message?: string
+  error?: string
+}
+const gwsStatus = ref<GwsStatus | null>(null)
+
+// Friendly mapping: full scope URL → short label, used in the "Connected"
+// chip list so users see "Gmail, Calendar" not the raw OAuth URLs.
+const SCOPE_LABELS: Record<string, string> = {
+  'https://www.googleapis.com/auth/gmail.modify': 'Gmail',
+  'https://www.googleapis.com/auth/gmail.readonly': 'Gmail (read)',
+  'https://www.googleapis.com/auth/gmail.send': 'Gmail (send)',
+  'https://www.googleapis.com/auth/calendar': 'Calendar',
+  'https://www.googleapis.com/auth/calendar.readonly': 'Calendar (read)',
+  'https://www.googleapis.com/auth/drive': 'Drive',
+  'https://www.googleapis.com/auth/drive.file': 'Drive (file)',
+  'https://www.googleapis.com/auth/drive.readonly': 'Drive (read)',
+  'https://www.googleapis.com/auth/documents': 'Docs',
+  'https://www.googleapis.com/auth/spreadsheets': 'Sheets',
+  'https://www.googleapis.com/auth/presentations': 'Slides',
+  'https://www.googleapis.com/auth/tasks': 'Tasks',
+  'https://www.googleapis.com/auth/contacts.readonly': 'Contacts (read)',
+  'https://www.googleapis.com/auth/contacts': 'Contacts',
+  'https://www.googleapis.com/auth/userinfo.email': 'Email',
+  'https://www.googleapis.com/auth/cloud-platform': 'Cloud Platform',
+  'openid': 'OpenID',
+  'email': 'Email',
+}
+function scopeLabel(s: string): string {
+  return SCOPE_LABELS[s] || s.replace(/^https?:\/\/www\.googleapis\.com\/auth\//, '')
+}
+const connectedScopeLabels = computed(() => {
+  const list = gwsStatus.value?.scopes ?? []
+  // De-dup + drop the boilerplate scopes that just confirm sign-in
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const s of list) {
+    if (s === 'openid' || s === 'email' || s === 'https://www.googleapis.com/auth/userinfo.email') continue
+    const label = scopeLabel(s)
+    if (!seen.has(label)) { seen.add(label); out.push(label) }
+  }
+  return out
+})
 const gwsLoading = ref(false)
 const gwsActionMessage = ref('')
 const gwsAuthUrl = ref('')
-const clientSecretFileInput = ref<HTMLInputElement | null>(null)
-const clientSecretMessage = ref('')
 
-function uploadClientSecret() {
-  clientSecretFileInput.value?.click()
-}
-
-async function onClientSecretFile(event: Event) {
-  clientSecretMessage.value = ''
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  try {
-    const text = await file.text()
-    const json = JSON.parse(text)
-
-    // Google client_secret.json has either "installed" or "web" key
-    const creds = json.installed || json.web
-    if (!creds?.client_id || !creds?.client_secret) {
-      clientSecretMessage.value = 'Invalid file — no client_id/client_secret found'
-      return
-    }
-
-    // Save to settings
-    await store.saveSettings({
-      'google.client-id': creds.client_id,
-      'google.client-secret': creds.client_secret,
-    })
-
-    // Update form fields
-    form.value['google.client-id'] = creds.client_id
-    form.value['google.client-secret'] = creds.client_secret
-
-    clientSecretMessage.value = 'Credentials imported successfully'
-    await fetchGwsStatus()
-  } catch (e: any) {
-    clientSecretMessage.value = 'Failed to parse file: ' + e.message
-  } finally {
-    // Reset file input so the same file can be re-selected
-    target.value = ''
-  }
-}
+// Client-secret upload removed — .env is the single source of truth.
+// Users set GOOGLE_WORKSPACE_CLI_CLIENT_ID/SECRET in .env, then restart with
+// ./run.sh all (which syncs ~/.config/gws/client_secret.json from .env).
 
 async function fetchGwsStatus() {
   gwsLoading.value = true
@@ -262,7 +293,11 @@ function hasChanges(): boolean {
               </div>
               <div class="selector-col flex-1">
                 <label for="model-name" class="filter-label">Model</label>
-                <input id="model-name" v-model="selectedModel" type="text" class="input" />
+                <input id="model-name" v-model="selectedModel" type="text" class="input"
+                       list="model-catalog" autocomplete="off" />
+                <datalist id="model-catalog">
+                  <option v-for="m in modelsForSelectedProvider" :key="m" :value="m" />
+                </datalist>
               </div>
             </div>
 
@@ -293,36 +328,43 @@ function hasChanges(): boolean {
                 :class="gwsStatus.authenticated ? 'bg-green-500' : gwsStatus.installed ? 'bg-yellow-500' : 'bg-red-500'"
               ></span>
               <span class="text-sm font-medium text-gray-900">
-                <template v-if="gwsStatus.authenticated">Connected — Gmail, Calendar, Drive</template>
+                <template v-if="gwsStatus.authenticated">
+                  Connected<template v-if="gwsStatus.user"> as <span class="font-mono">{{ gwsStatus.user }}</span></template>
+                </template>
                 <template v-else-if="!gwsStatus.installed">gws CLI not installed</template>
                 <template v-else-if="!gwsStatus.clientConfigured">OAuth credentials not configured — enter Client ID and Secret above, save, then connect</template>
+                <template v-else-if="gwsStatus.hasRefreshToken && !gwsStatus.tokenValid">Token expired — reconnect to refresh</template>
                 <template v-else>Not connected</template>
               </span>
             </div>
 
-            <!-- Upload client_secret.json -->
+            <!-- Connected scopes + project (when authenticated) -->
+            <div v-if="gwsStatus.authenticated" class="mb-3 text-xs text-gray-600">
+              <div v-if="connectedScopeLabels.length" class="flex flex-wrap gap-1 mb-1">
+                <span
+                  v-for="label in connectedScopeLabels"
+                  :key="label"
+                  class="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200"
+                >{{ label }}</span>
+              </div>
+              <div v-if="gwsStatus.projectId" class="text-gray-500">
+                Project: <span class="font-mono">{{ gwsStatus.projectId }}</span>
+              </div>
+            </div>
+
+            <!-- Credentials missing — point at .env -->
             <div v-if="!gwsStatus.clientConfigured && gwsStatus.installed" class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p class="text-sm text-gray-700 mb-2">
-                Upload your <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">client_secret.json</code> from Google Cloud Console
-                (APIs &amp; Services &rarr; Credentials &rarr; OAuth 2.0 Client ID &rarr; Download JSON)
+              <p class="text-sm text-gray-700">
+                Set
+                <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">GOOGLE_WORKSPACE_CLI_CLIENT_ID</code>
+                and
+                <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">GOOGLE_WORKSPACE_CLI_CLIENT_SECRET</code>
+                in <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">.env</code>
+                (download <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">client_secret.json</code>
+                from Google Cloud Console &rarr; Credentials &rarr; OAuth 2.0 Client ID,
+                copy the two values), then restart with
+                <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">./run.sh all</code>.
               </p>
-              <input
-                ref="clientSecretFileInput"
-                type="file"
-                accept=".json,application/json"
-                class="hidden"
-                @change="onClientSecretFile"
-              />
-              <button
-                type="button"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-                @click="uploadClientSecret()"
-              >
-                Upload client_secret.json
-              </button>
-              <span v-if="clientSecretMessage" class="ml-3 text-sm" :class="clientSecretMessage.includes('success') ? 'text-green-600' : 'text-red-600'">
-                {{ clientSecretMessage }}
-              </span>
             </div>
 
             <!-- Action buttons -->
@@ -377,7 +419,8 @@ function hasChanges(): boolean {
         <p class="info-text">
           <strong>Note:</strong>
           Some settings (persona, timezone, max context tokens) take effect on the next bot restart.
-          Obsidian vault path, weather location, and Google credentials take effect immediately.
+          Obsidian vault path and weather location take effect immediately.
+          Google credentials live in <code>.env</code> — set them there and restart with <code>./run.sh all</code>.
         </p>
       </div>
     </form>
