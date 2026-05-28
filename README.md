@@ -59,6 +59,7 @@ Browse long-term memory grouped by type, edit skills with live reload, and manag
 ## Table of Contents
 
 - [Why Herald](#why-herald)
+- [Agentic Patterns — Spring AI Agent Utils](#agentic-patterns--spring-ai-agent-utils)
 - [Quick Start](#quick-start)
 - [Features](#features)
 - [The Memory System](#the-memory-system)
@@ -68,7 +69,6 @@ Browse long-term memory grouped by type, edit skills with live reload, and manag
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
 - [Task Agent Mode](#task-agent-mode)
-- [Agentic Patterns — Spring AI Agent Utils](#agentic-patterns--spring-ai-agent-utils)
 - [Project Structure](#project-structure)
 - [Technology Stack](#technology-stack)
 - [Contributing](#contributing)
@@ -83,6 +83,86 @@ Most agent projects pick one personality: "chatty assistant" **or** "scripted ta
 - **Hybrid** — turn either dial up or down. Keep the DB but drop Telegram. Add Telegram to a task agent for notifications. Pick what you need, skip what you don't.
 
 The reference implementation of [Spring AI's Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) series, adapted for personal use.
+
+## Agentic Patterns — Spring AI Agent Utils
+
+Herald is a reference implementation of the architectural patterns in the [Spring AI Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) blog series by Christian Tzolov. The series documents the [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils) toolkit — composable building blocks for AI agents, inspired by Claude Code's architecture. Herald adopts all seven patterns, adapting each for a Telegram-native, always-on personal assistant.
+
+### Blog Series
+
+1. **Part 1**: [Agent Skills — Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/)
+2. **Part 2**: [AskUserQuestionTool — Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/)
+3. **Part 3**: [TodoWriteTool — Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/)
+4. **Part 4**: [Subagent Orchestration — Hierarchical Agent Architectures](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/)
+5. **Part 5**: [A2A Protocol — Building Interoperable Agents](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/)
+6. **Part 6**: [AutoMemoryTools — Persistent Agent Memory Across Sessions](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/)
+7. **Part 7**: [Session API — Event-Sourced Short-Term Memory with Context Compaction](https://spring.io/blog/2026/04/15/spring-ai-session-management/)
+
+> **Deep dive:** See [docs/herald-patterns-comparison.md](docs/herald-patterns-comparison.md) for a feature-by-feature comparison of every blog pattern against Herald's implementation.
+
+### The Pattern
+
+Truly agentic behavior emerges from composition — not a single monolithic prompt, but a set of small, focused tools and advisors the LLM orchestrates through its tool-calling loop:
+
+```mermaid
+flowchart TB
+    subgraph Agent Loop
+        A["ChatClient.prompt()"] --> B["Advisor Chain<br/>(DateTime → Context → HotMd → AutoMemory → Compaction)"]
+        B --> C["LLM Call"]
+        C --> D{Tool calls?}
+        D -->|yes| E["Execute Tools"]
+        E --> C
+        D -->|no| F["Return Response"]
+    end
+
+    subgraph Tools
+        G["SkillsTool (hot-reload)"]
+        H["TaskTool / TaskOutputTool"]
+        I["AskUserQuestionTool"]
+        J["TodoWriteTool"]
+        K["Shell / FileSystem / Web"]
+        L["AutoMemoryTools (logged)"]
+    end
+
+    E --> Tools
+```
+
+### Pattern Coverage
+
+| Pattern | Blog Post | Status | Herald Implementation |
+|---------|-----------|--------|----------------------|
+| **Agent Skills** | [Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | ✅ ↗ | `ReloadableSkillsTool` wraps upstream `SkillsTool` with a `WatchService`-based hot-reload (`SkillsWatcher`, 250ms debounce). Skills live in `skills/` as Markdown + YAML front matter. |
+| **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 30-minute timeout (`herald.telegram.question-timeout-minutes`). The agent turn runs on a dedicated executor so a pending question never stalls Telegram polling. |
+| **TodoWrite** | [Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with `pending → in_progress → completed` states. A `todoEventHandler` dispatches formatted progress to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
+| **Subagent Orchestration** | [Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model tier routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus a custom **research** agent (Opus, deep analysis + web search) in `.claude/agents/`. |
+| **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Remote A2A agents configured under `herald.a2a.agents`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — `AgentCard` fetched on first delegation. |
+| **AutoMemoryTools** | [Part 6](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/) | ✅ ↗ | Herald-owned `HeraldAutoMemoryAdvisor` replaces the upstream advisor and decorates each mutating `ToolCallback` so successful ops append to `log.md`. Extended taxonomy (`concept`, `entity`, `source`) beyond the blog's four types. `MEMORY.md` is a type-grouped catalog. Sibling `wiki-ingest` / `wiki-query` / `wiki-lint` skills close the compounding-knowledge loop. Optional `obsidian-vault` mode switches new pages to `[[wikilinks]]`. |
+| **Session API** | [Part 7](https://spring.io/blog/2026/04/15/spring-ai-session-management/) | ⏳ | Targets Spring AI 2.1 (Nov 2026). Today Herald uses `OneShotMemoryAdvisor` + `ContextCompactionAdvisor` over `ChatMemory`/`MessageWindowChatMemory` — functionally similar (windowed history + auto-compaction) but lacks turn-safe boundaries, pluggable compaction strategies, and `conversation_search`. Migration tracked in the comparison doc. |
+
+**Legend:** ✅ Adopted — ↗ Herald extension beyond upstream — ⏳ Planned
+
+### Herald-Specific Extensions
+
+Beyond the seven blog patterns, Herald adds capabilities specific to an always-on personal assistant:
+
+| Extension | Description |
+|-----------|-------------|
+| **Advisor chain** | Layered `CallAdvisor` pipeline: `DateTimePromptAdvisor` → `ContextMdAdvisor` (standing brief from `~/.herald/CONTEXT.md`) → `HotMdAdvisor` (session-continuity note) → `HeraldAutoMemoryAdvisor` (memory tools + MEMORY.md) → `ContextCompactionAdvisor` (compacts near token limits; writes summary to `log.md` + refreshes `hot.md`) → `OneShotMemoryAdvisor` (conversation history) |
+| **Compounding wiki skills** | `wiki-ingest` / `wiki-query` / `wiki-lint` turn the memories dir into a first-class knowledge base — ingest URLs/files/conversations, answer with citations, audit for orphans/staleness |
+| **/save command** | Files the current Telegram conversation into long-term memory as a wiki note, with slug hint support |
+| **Proactive scheduling** | `CronService` runs agent prompts on schedules — briefings, reminders, outreach with no user input |
+| **Shell security** | `HeraldShellDecorator` with regex blocklist, Telegram confirmation gate for `sudo`/system writes, sensitive-value redaction, configurable timeouts |
+| **Runtime model switching** | `/model` (Telegram) or the console's per-provider model dropdown switches between Anthropic, OpenAI, Ollama, Gemini, LM Studio at runtime; persisted in the `model_overrides` table. Each provider exposes a configurable model catalog (`HERALD_MODEL_CATALOG_<PROVIDER>`) |
+| **Management console** | Vue 3 web UI for skills editing, file-based memory browsing grouped by type, cron jobs, conversation history, live status via SSE |
+| **Google Workspace** | Gmail, Calendar, Drive, Docs, Sheets, Tasks, and Contacts via the `gws` CLI — single-source `.env` creds, `./run.sh auth`, in-console Connect Google, error→action hints |
+| **Multi-tier model routing** | Haiku / Sonnet / Opus tiers configured per subagent type so cheap work uses cheap models |
+
+### Tool Registration Architecture
+
+Herald separates tools into two categories matching how Spring AI handles them:
+
+- **`@Tool`-annotated POJOs** (via `.defaultTools()`) — `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool` (upstream), `TodoWriteTool` (upstream), `CronTools`, `GwsTools`, `TelegramSendTool`
+- **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool`, and the logging-decorated memory callbacks from `HeraldAutoMemoryAdvisor`
 
 ## Quick Start
 
@@ -532,86 +612,6 @@ The only required env var is `ANTHROPIC_API_KEY` (or the key for whichever provi
 | Both | Full personal assistant mode |
 
 See [`examples/`](examples/) for ready-to-use agent definitions (`cf-analyzer.md`, `code-reviewer.md`, `csv-reporter.md`, `report-writer.md`) and [`docs/agents-md-spec.md`](docs/agents-md-spec.md) for the full format.
-
-## Agentic Patterns — Spring AI Agent Utils
-
-Herald is a reference implementation of the architectural patterns in the [Spring AI Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) blog series by Christian Tzolov. The series documents the [spring-ai-agent-utils](https://github.com/spring-ai-community/spring-ai-agent-utils) toolkit — composable building blocks for AI agents, inspired by Claude Code's architecture. Herald adopts all seven patterns, adapting each for a Telegram-native, always-on personal assistant.
-
-### Blog Series
-
-1. **Part 1**: [Agent Skills — Modular, Reusable Capabilities](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/)
-2. **Part 2**: [AskUserQuestionTool — Agents That Clarify Before Acting](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/)
-3. **Part 3**: [TodoWriteTool — Why Your AI Agent Forgets Tasks](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/)
-4. **Part 4**: [Subagent Orchestration — Hierarchical Agent Architectures](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/)
-5. **Part 5**: [A2A Protocol — Building Interoperable Agents](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/)
-6. **Part 6**: [AutoMemoryTools — Persistent Agent Memory Across Sessions](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/)
-7. **Part 7**: [Session API — Event-Sourced Short-Term Memory with Context Compaction](https://spring.io/blog/2026/04/15/spring-ai-session-management/)
-
-> **Deep dive:** See [docs/herald-patterns-comparison.md](docs/herald-patterns-comparison.md) for a feature-by-feature comparison of every blog pattern against Herald's implementation.
-
-### The Pattern
-
-Truly agentic behavior emerges from composition — not a single monolithic prompt, but a set of small, focused tools and advisors the LLM orchestrates through its tool-calling loop:
-
-```mermaid
-flowchart TB
-    subgraph Agent Loop
-        A["ChatClient.prompt()"] --> B["Advisor Chain<br/>(DateTime → Context → HotMd → AutoMemory → Compaction)"]
-        B --> C["LLM Call"]
-        C --> D{Tool calls?}
-        D -->|yes| E["Execute Tools"]
-        E --> C
-        D -->|no| F["Return Response"]
-    end
-
-    subgraph Tools
-        G["SkillsTool (hot-reload)"]
-        H["TaskTool / TaskOutputTool"]
-        I["AskUserQuestionTool"]
-        J["TodoWriteTool"]
-        K["Shell / FileSystem / Web"]
-        L["AutoMemoryTools (logged)"]
-    end
-
-    E --> Tools
-```
-
-### Pattern Coverage
-
-| Pattern | Blog Post | Status | Herald Implementation |
-|---------|-----------|--------|----------------------|
-| **Agent Skills** | [Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) | ✅ ↗ | `ReloadableSkillsTool` wraps upstream `SkillsTool` with a `WatchService`-based hot-reload (`SkillsWatcher`, 250ms debounce). Skills live in `skills/` as Markdown + YAML front matter. |
-| **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 30-minute timeout (`herald.telegram.question-timeout-minutes`). The agent turn runs on a dedicated executor so a pending question never stalls Telegram polling. |
-| **TodoWrite** | [Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with `pending → in_progress → completed` states. A `todoEventHandler` dispatches formatted progress to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
-| **Subagent Orchestration** | [Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model tier routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus a custom **research** agent (Opus, deep analysis + web search) in `.claude/agents/`. |
-| **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Remote A2A agents configured under `herald.a2a.agents`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — `AgentCard` fetched on first delegation. |
-| **AutoMemoryTools** | [Part 6](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/) | ✅ ↗ | Herald-owned `HeraldAutoMemoryAdvisor` replaces the upstream advisor and decorates each mutating `ToolCallback` so successful ops append to `log.md`. Extended taxonomy (`concept`, `entity`, `source`) beyond the blog's four types. `MEMORY.md` is a type-grouped catalog. Sibling `wiki-ingest` / `wiki-query` / `wiki-lint` skills close the compounding-knowledge loop. Optional `obsidian-vault` mode switches new pages to `[[wikilinks]]`. |
-| **Session API** | [Part 7](https://spring.io/blog/2026/04/15/spring-ai-session-management/) | ⏳ | Targets Spring AI 2.1 (Nov 2026). Today Herald uses `OneShotMemoryAdvisor` + `ContextCompactionAdvisor` over `ChatMemory`/`MessageWindowChatMemory` — functionally similar (windowed history + auto-compaction) but lacks turn-safe boundaries, pluggable compaction strategies, and `conversation_search`. Migration tracked in the comparison doc. |
-
-**Legend:** ✅ Adopted — ↗ Herald extension beyond upstream — ⏳ Planned
-
-### Herald-Specific Extensions
-
-Beyond the seven blog patterns, Herald adds capabilities specific to an always-on personal assistant:
-
-| Extension | Description |
-|-----------|-------------|
-| **Advisor chain** | Layered `CallAdvisor` pipeline: `DateTimePromptAdvisor` → `ContextMdAdvisor` (standing brief from `~/.herald/CONTEXT.md`) → `HotMdAdvisor` (session-continuity note) → `HeraldAutoMemoryAdvisor` (memory tools + MEMORY.md) → `ContextCompactionAdvisor` (compacts near token limits; writes summary to `log.md` + refreshes `hot.md`) → `OneShotMemoryAdvisor` (conversation history) |
-| **Compounding wiki skills** | `wiki-ingest` / `wiki-query` / `wiki-lint` turn the memories dir into a first-class knowledge base — ingest URLs/files/conversations, answer with citations, audit for orphans/staleness |
-| **/save command** | Files the current Telegram conversation into long-term memory as a wiki note, with slug hint support |
-| **Proactive scheduling** | `CronService` runs agent prompts on schedules — briefings, reminders, outreach with no user input |
-| **Shell security** | `HeraldShellDecorator` with regex blocklist, Telegram confirmation gate for `sudo`/system writes, sensitive-value redaction, configurable timeouts |
-| **Runtime model switching** | `/model` (Telegram) or the console's per-provider model dropdown switches between Anthropic, OpenAI, Ollama, Gemini, LM Studio at runtime; persisted in the `model_overrides` table. Each provider exposes a configurable model catalog (`HERALD_MODEL_CATALOG_<PROVIDER>`) |
-| **Management console** | Vue 3 web UI for skills editing, file-based memory browsing grouped by type, cron jobs, conversation history, live status via SSE |
-| **Google Workspace** | Gmail and Calendar via `gws` CLI |
-| **Multi-tier model routing** | Haiku / Sonnet / Opus tiers configured per subagent type so cheap work uses cheap models |
-
-### Tool Registration Architecture
-
-Herald separates tools into two categories matching how Spring AI handles them:
-
-- **`@Tool`-annotated POJOs** (via `.defaultTools()`) — `HeraldShellDecorator`, `FileSystemTools`, `WebTools`, `AskUserQuestionTool` (upstream), `TodoWriteTool` (upstream), `CronTools`, `GwsTools`, `TelegramSendTool`
-- **Raw `ToolCallback` objects** (via `.defaultToolCallbacks()`) — `TaskTool`, `TaskOutputTool`, `ReloadableSkillsTool`, and the logging-decorated memory callbacks from `HeraldAutoMemoryAdvisor`
 
 ## A2A Agents (remote subagents)
 
