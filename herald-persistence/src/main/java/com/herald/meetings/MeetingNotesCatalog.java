@@ -46,6 +46,16 @@ public class MeetingNotesCatalog {
      * MeetingNotes isn't installed or its database is missing.
      */
     public List<MeetingDigest> findByDate(LocalDate date) {
+        return findByDateRange(date, date);
+    }
+
+    /**
+     * Every non-deleted meeting whose {@code started_at} date falls within
+     * {@code [from, to]} inclusive. Same enrichment as {@link #findByDate} — summary
+     * and action items attached when present. Returns an empty list (never throws)
+     * when MeetingNotes isn't installed or its database is missing.
+     */
+    public List<MeetingDigest> findByDateRange(LocalDate from, LocalDate to) {
         Path dbPath = expand(config.meetingNotesDbPath());
         if (!Files.exists(dbPath)) {
             log.debug("MeetingNotes catalog not found at {} — returning no meetings", dbPath);
@@ -56,7 +66,7 @@ public class MeetingNotesCatalog {
             JdbcTemplate jdbc = readOnlyTemplate(dbPath);
             List<Row> rows = jdbc.query(
                     "SELECT id, slug, title, started_at, duration_s, status FROM meetings "
-                            + "WHERE date(started_at) = ? AND deleted_at IS NULL ORDER BY started_at",
+                            + "WHERE date(started_at) BETWEEN ? AND ? AND deleted_at IS NULL ORDER BY started_at",
                     (rs, n) -> {
                         // duration_s has INTEGER affinity but SQLite stores it as a
                         // float (e.g. 1827.306667), so read defensively as a double.
@@ -66,7 +76,7 @@ public class MeetingNotesCatalog {
                                 rs.getString("id"), rs.getString("slug"), rs.getString("title"),
                                 rs.getString("started_at"), dur, rs.getString("status"));
                     },
-                    date.toString());
+                    from.toString(), to.toString());
 
             List<MeetingDigest> out = new ArrayList<>(rows.size());
             for (Row r : rows) {

@@ -67,6 +67,50 @@ public class MeetingIngestService {
         return true;
     }
 
+    /**
+     * Backfill a batch of meetings <b>sequentially</b> — one small agent turn at a
+     * time, each completing before the next starts. This is deliberately not the
+     * concurrent {@link #claimAndIngest} path: a local model (LM Studio / Ollama)
+     * can OOM or stall if asked to process several meetings at once, and one big
+     * multi-meeting turn is even worse. Looping in Java with focused per-meeting
+     * turns keeps each request small and the model happy, and the ledger ensures
+     * meetings already ingested are skipped. Runs on a single background thread so
+     * the HTTP trigger returns immediately; progress is delivered as it goes.
+     *
+     * @return the number of meetings that will be processed (not already ingested)
+     */
+    public int backfillAsync(List<MeetingDigest> meetings, String source) {
+        List<MeetingDigest> todo = new java.util.ArrayList<>();
+        for (MeetingDigest m : meetings) {
+            if (ledger.claim(m.id(), m.slug(), m.title(), m.startedAt(), source)) {
+                todo.add(m);
+            }
+        }
+        int skipped = meetings.size() - todo.size();
+        if (todo.isEmpty()) {
+            log.info("Backfill: nothing to do ({} already ingested)", skipped);
+            return 0;
+        }
+        backgroundExecutor.submit(() -> {
+            log.info("Backfill starting: {} meeting(s) to enrich, {} already ingested", todo.size(), skipped);
+            if (messageSender != null) {
+                messageSender.sendMessage("📥 Bringing in " + todo.size()
+                        + " meeting(s), one at a time…");
+            }
+            int done = 0;
+            for (MeetingDigest m : todo) {
+                runIngestTurn(m); // blocking — strictly one meeting at a time
+                done++;
+            }
+            log.info("Backfill complete: {} enriched, {} already ingested", done, skipped);
+            if (messageSender != null) {
+                messageSender.sendMessage("✅ Backfill done — " + done + " meeting(s) brought into memory"
+                        + (skipped > 0 ? " (" + skipped + " were already there)." : "."));
+            }
+        });
+        return todo.size();
+    }
+
     private void runIngestTurn(MeetingDigest meeting) {
         String conversationId = "meeting-" + meeting.id();
         try {

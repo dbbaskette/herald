@@ -83,14 +83,46 @@ public class MeetingsController {
         return meetings;
     }
 
+    /**
+     * Deterministic bulk backfill: enrich every completed meeting in a date range,
+     * <b>one small agent turn at a time</b> (server-side loop), rather than asking
+     * the model to handle a whole batch in one turn. Gentle on local models, and
+     * the ledger skips meetings already in memory. Returns immediately (202);
+     * progress is delivered to Telegram / the console as each meeting lands.
+     *
+     * <p>Defaults to the last 7 days. Override with {@code ?from=&to=} (YYYY-MM-DD)
+     * or {@code ?days=N}.</p>
+     */
+    @PostMapping(value = "/backfill", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<BackfillAck> backfill(
+            @RequestParam(name = "from", required = false) String from,
+            @RequestParam(name = "to", required = false) String to,
+            @RequestParam(name = "days", required = false) Integer days) {
+        LocalDate end = parseDateOr(to, LocalDate.now(timezone));
+        LocalDate start = (from != null && !from.isBlank())
+                ? parseDateOr(from, end)
+                : end.minusDays((days != null && days > 0 ? days : 7) - 1L);
+
+        List<MeetingDigest> all = catalog.findByDateRange(start, end);
+        List<MeetingDigest> ready = all.stream()
+                .filter(m -> "done".equalsIgnoreCase(m.status()) && m.summaryMarkdown() != null)
+                .toList();
+        int queued = ingestService.backfillAsync(ready, "backfill");
+        log.info("Backfill {}..{}: {} completed meeting(s), {} queued", start, end, ready.size(), queued);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(new BackfillAck(start.toString(), end.toString(), ready.size(), queued));
+    }
+
     private LocalDate parseDateOrToday(String date) {
-        if (date == null || date.isBlank()) {
-            return LocalDate.now(timezone);
-        }
+        return parseDateOr(date, LocalDate.now(timezone));
+    }
+
+    private LocalDate parseDateOr(String date, LocalDate fallback) {
+        if (date == null || date.isBlank()) return fallback;
         try {
             return LocalDate.parse(date.trim());
         } catch (Exception e) {
-            return LocalDate.now(timezone);
+            return fallback;
         }
     }
 
@@ -131,4 +163,8 @@ public class MeetingsController {
             @JsonProperty("due_date") String dueDate) {}
 
     public record IngestAck(String status, String meetingId) {}
+
+    /** Result of kicking off a backfill: the resolved range, completed meetings found,
+     *  and how many were queued for enrichment (the rest were already in memory). */
+    public record BackfillAck(String from, String to, int found, int queued) {}
 }

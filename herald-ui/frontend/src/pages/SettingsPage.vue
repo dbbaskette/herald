@@ -56,6 +56,32 @@ async function rescanModels() {
   }
 }
 
+// MeetingNotes backfill — kicks off the server-side per-meeting loop. The bot
+// processes one meeting at a time and reports progress in chat/Telegram, so this
+// just fires the request and shows the acknowledgement.
+const backfillDays = ref(7)
+const backfilling = ref(false)
+const backfillMsg = ref('')
+async function backfillMeetings() {
+  backfilling.value = true
+  backfillMsg.value = ''
+  try {
+    const res = await fetch(`/api/meetings/backfill?days=${backfillDays.value}`, { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      backfillMsg.value = data.queued > 0
+        ? `Bringing in ${data.queued} meeting(s) from ${data.from}…${data.to} — watch chat for progress.`
+        : `Found ${data.found} completed meeting(s) in ${data.from}…${data.to}; all already in memory.`
+    } else {
+      backfillMsg.value = data.error || 'Backfill failed'
+    }
+  } catch {
+    backfillMsg.value = 'Bot unreachable'
+  } finally {
+    backfilling.value = false
+  }
+}
+
 type GwsStatus = {
   installed: boolean
   clientConfigured?: boolean
@@ -307,6 +333,27 @@ function hasChanges(): boolean {
                 {{ modelMessage }}
               </span>
             </div>
+        </div>
+      </SectionCard>
+
+      <!-- MeetingNotes backfill -->
+      <SectionCard label="Meetings" tone="gold" glyph="gold" class="settings-group">
+        <p class="text-sm text-muted" style="margin: 0 0 10px;">
+          Bring completed MeetingNotes meetings into memory — one at a time, so it works
+          even on a local model. New meetings arrive automatically via the webhook; use
+          this to catch up on a range.
+        </p>
+        <div class="model-actions">
+          <label class="filter-label" for="backfill-days">Last</label>
+          <input id="backfill-days" v-model.number="backfillDays" type="number" min="1" max="60"
+                 class="input" style="width: 64px;" />
+          <span class="text-sm text-muted">days</span>
+          <button type="button" class="btn-primary" :disabled="backfilling" @click="backfillMeetings">
+            {{ backfilling ? 'Starting…' : 'Bring into memory' }}
+          </button>
+          <span v-if="backfillMsg" class="text-sm" :class="/already|Bringing|Found/.test(backfillMsg) ? 'status-ok' : 'status-err'">
+            {{ backfillMsg }}
+          </span>
         </div>
       </SectionCard>
 
