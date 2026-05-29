@@ -50,7 +50,13 @@ public class LmStudioModelDiscovery {
     public LmStudioModelDiscovery(
             @Value("${herald.providers.lmstudio.base-url:}") String baseUrl,
             ModelSwitcher modelSwitcher) {
-        this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
+        // Force IPv4: `localhost` resolves to ::1 first on macOS, but LM Studio
+        // binds 127.0.0.1 only. java.net.http.HttpClient stalls on the dead IPv6
+        // address until timeout (unlike curl/OkHttp, which fall back), so target
+        // the loopback IPv4 address directly. Inference goes through OkHttp and is
+        // unaffected, so we normalize only this discovery client's URL.
+        String b = baseUrl == null ? "" : baseUrl.trim();
+        this.baseUrl = b.replace("://localhost", "://127.0.0.1");
         this.modelSwitcher = modelSwitcher;
     }
 
