@@ -110,3 +110,14 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('cron.timezone', 'America/Ne
 INSERT OR IGNORE INTO settings (key, value) VALUES ('agent.max-context-tokens', '200000');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('google.client-id', '');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('google.client-secret', '');
+
+-- MeetingNotes integration: dedup ledger so a meeting that arrives via both the
+-- real-time webhook and the daily date-query backstop is only enriched once.
+CREATE TABLE IF NOT EXISTS meetings_ingested (
+    meeting_id   TEXT PRIMARY KEY,
+    slug         TEXT,
+    title        TEXT,
+    started_at   TEXT,
+    source       TEXT,
+    ingested_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);

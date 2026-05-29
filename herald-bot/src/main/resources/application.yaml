@@ -172,6 +172,17 @@ herald:
     keep-recent-messages: 5
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
+  meetingnotes:
+    # Optional integration with the MeetingNotes desktop app. db-path is the
+    # read-only SQLite catalog used for the date-query backstop; dir is the
+    # library root holding per-meeting folders (…/meetings/{slug}/summary.md).
+    # Real-time ingestion arrives via the webhook receiver and needs neither.
+    db-path: ${HERALD_MEETINGNOTES_DB_PATH:~/Documents/MeetingNotes/db.sqlite}
+    dir: ${HERALD_MEETINGNOTES_DIR:~/Documents/MeetingNotes}
+    # Daily backstop: re-checks the day's meetings and ingests any the webhook
+    # missed (e.g. Herald was down). Silent no-op when nothing was missed.
+    # Set to "-" to disable.
+    catchup-cron: ${HERALD_MEETINGNOTES_CATCHUP_CRON:0 0 18 * * *}
   web:
     search-api-key: ${HERALD_WEB_SEARCH_API_KEY:}
   security:

@@ -9,20 +9,40 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
 @ConfigurationProperties(prefix = "herald")
 public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
                            Weather weather, Obsidian obsidian, Vault vault, Archival archival,
-                           LongTermMemory longTermMemory, A2a a2a) {
+                           LongTermMemory longTermMemory, A2a a2a, MeetingNotes meetingnotes) {
 
     @ConstructorBinding
     public HeraldConfig {}
 
     /**
+     * Backwards-compatible constructor for callers that predate the MeetingNotes
+     * addition. Delegates with a null meetingnotes value.
+     */
+    public HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
+                        Weather weather, Obsidian obsidian, Vault vault, Archival archival,
+                        LongTermMemory longTermMemory, A2a a2a) {
+        this(memory, telegram, agent, providers, cron, weather, obsidian, vault, archival, longTermMemory, a2a, null);
+    }
+
+    /**
      * Backwards-compatible constructor for callers that predate the A2A addition.
-     * Delegates to the canonical constructor with a null a2a value so existing
-     * test fixtures and wiring code keep working unchanged.
+     * Delegates with null a2a and meetingnotes values so existing test fixtures
+     * and wiring code keep working unchanged.
      */
     public HeraldConfig(Memory memory, Telegram telegram, Agent agent, Providers providers, Cron cron,
                         Weather weather, Obsidian obsidian, Vault vault, Archival archival,
                         LongTermMemory longTermMemory) {
-        this(memory, telegram, agent, providers, cron, weather, obsidian, vault, archival, longTermMemory, null);
+        this(memory, telegram, agent, providers, cron, weather, obsidian, vault, archival, longTermMemory, null, null);
+    }
+
+    /**
+     * Optional integration with the MeetingNotes desktop app: where its SQLite
+     * catalog and meeting folders live, so Herald can ingest completed meetings
+     * into long-term memory. See issue #373.
+     */
+    public record MeetingNotes(String dbPath, String dir) {
+        @ConstructorBinding
+        public MeetingNotes {}
     }
 
     public record A2a(List<A2aAgent> agents, Server server) {
@@ -442,6 +462,22 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
             return memory.dbPath();
         }
         return "~/.herald/herald.db";
+    }
+
+    /** Path to the MeetingNotes SQLite catalog (default ~/Documents/MeetingNotes/db.sqlite). */
+    public String meetingNotesDbPath() {
+        if (meetingnotes != null && meetingnotes.dbPath() != null && !meetingnotes.dbPath().isBlank()) {
+            return meetingnotes.dbPath();
+        }
+        return "~/Documents/MeetingNotes/db.sqlite";
+    }
+
+    /** Path to the MeetingNotes library dir holding per-meeting folders. */
+    public String meetingNotesDir() {
+        if (meetingnotes != null && meetingnotes.dir() != null && !meetingnotes.dir().isBlank()) {
+            return meetingnotes.dir();
+        }
+        return "~/Documents/MeetingNotes";
     }
 
     /**
