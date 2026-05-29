@@ -76,7 +76,7 @@ class HeraldAgentConfigTest {
 
         assertThat(result).doesNotContain("{task_management_guidance}");
         assertThat(result).contains("# Task Management");
-        assertThat(result).contains("todoWrite");
+        assertThat(result).contains("TodoWrite");
     }
 
     @Test

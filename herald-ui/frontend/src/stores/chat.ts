@@ -434,6 +434,13 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function cancel() {
+    // Tell the bot to dispose the in-flight turn server-side — closing the
+    // EventSource alone leaves the agent loop running until its next emit.
+    if (sending.value) {
+      const url = new URL('/api/chat/cancel', window.location.origin)
+      url.searchParams.set('conversationId', conversationId.value)
+      fetch(url.toString(), { method: 'POST' }).catch(() => { /* best-effort */ })
+    }
     if (currentStream) {
       currentStream.close()
       currentStream = null
@@ -447,6 +454,8 @@ export const useChatStore = defineStore('chat', () => {
     if (last && last.streaming) {
       finalizeMessage(last.id)
     }
+    processing.active = false
+    processing.label = ''
     sending.value = false
   }
 

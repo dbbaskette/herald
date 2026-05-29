@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useSettingsStore, settingDefs } from '@/stores/settings'
+import { useModelStatus } from '@/composables/useModelStatus'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -8,69 +9,39 @@ import SectionCard from '@/components/SectionCard.vue'
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
 
-// Model switcher state
-const modelStatus = ref<{
-  provider: string
-  model: string
-  available: Record<string, string>
-  catalog?: Record<string, string[]>
-} | null>(null)
-const modelLoading = ref(false)
-const modelSwitching = ref(false)
-const modelMessage = ref('')
+// Model switcher — shared logic via the composable (same source as the chat
+// header). The Settings form keeps its own selected provider/model fields.
+const {
+  modelStatus,
+  loading: modelLoading,
+  switching: modelSwitching,
+  message: modelMessage,
+  availableProviders,
+  modelsFor,
+  fetchStatus,
+  switchModel: switchModelTo,
+} = useModelStatus()
 const selectedProvider = ref('')
 const selectedModel = ref('')
 
-const availableProviders = computed(() =>
-  modelStatus.value ? Object.keys(modelStatus.value.available).filter(k => k !== 'error') : []
-)
-
-// Catalog of selectable models for the chosen provider — powers the <datalist>
-// autocomplete on the free-text model input.
-const modelsForSelectedProvider = computed(() => {
-  const cat = modelStatus.value?.catalog?.[selectedProvider.value]
-  if (cat && cat.length) return cat
-  const def = modelStatus.value?.available[selectedProvider.value]
-  return def ? [def] : []
-})
+// Catalog of selectable models for the chosen provider — powers the <datalist>.
+const modelsForSelectedProvider = computed(() => modelsFor(selectedProvider.value))
 
 async function fetchModelStatus() {
-  modelLoading.value = true
-  try {
-    const res = await fetch('/api/model')
-    if (res.ok) {
-      modelStatus.value = await res.json()
-      selectedProvider.value = modelStatus.value!.provider
-      selectedModel.value = modelStatus.value!.model
-    }
-  } catch { /* bot offline */ }
-  finally { modelLoading.value = false }
-}
-
-function onProviderChange() {
-  if (modelStatus.value?.available[selectedProvider.value]) {
-    selectedModel.value = modelStatus.value.available[selectedProvider.value]
+  await fetchStatus()
+  if (modelStatus.value) {
+    selectedProvider.value = modelStatus.value.provider
+    selectedModel.value = modelStatus.value.model
   }
 }
 
+function onProviderChange() {
+  const def = modelStatus.value?.available[selectedProvider.value]
+  if (def) selectedModel.value = def
+}
+
 async function switchModel() {
-  modelSwitching.value = true
-  modelMessage.value = ''
-  try {
-    const res = await fetch('/api/model', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider.value, model: selectedModel.value })
-    })
-    const data = await res.json()
-    if (res.ok) {
-      modelStatus.value = data
-      modelMessage.value = `Switched to ${data.provider}/${data.model}`
-    } else {
-      modelMessage.value = data.available?.error || 'Switch failed'
-    }
-  } catch { modelMessage.value = 'Bot unreachable' }
-  finally { modelSwitching.value = false }
+  await switchModelTo(selectedProvider.value, selectedModel.value)
 }
 
 type GwsStatus = {

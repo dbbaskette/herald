@@ -5,14 +5,20 @@ import { useChatStore } from '@/stores/chat'
 import { useConversationsStore } from '@/stores/conversations'
 import ConversationList from '@/components/ConversationList.vue'
 import ToolCallCard from '@/components/ToolCallCard.vue'
+import ErrorActionCard from '@/components/ErrorActionCard.vue'
 import ApprovalInbox from '@/components/ApprovalInbox.vue'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApprovalsStore } from '@/stores/approvals'
+import { useModelStatus } from '@/composables/useModelStatus'
+import { useStatusStore } from '@/stores/status'
+import StatusHeader from '@/components/StatusHeader.vue'
+import SetupChecklist from '@/components/SetupChecklist.vue'
 
 const store = useChatStore()
 const conversations = useConversationsStore()
 const approvals = useApprovalsStore()
+const statusStore = useStatusStore()
 const showSidebar = ref(true)
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
 const input = ref('')
@@ -23,14 +29,16 @@ const attachments = ref<File[]>([])
 const dragActive = ref(false)
 const attachmentError = ref('')
 
-// Model badge state
-const modelStatus = ref<{
-  provider: string
-  model: string
-  available: Record<string, string>
-  catalog?: Record<string, string[]>
-} | null>(null)
-const modelSwitching = ref(false)
+// Model badge state — shared logic via the composable so the chat header and
+// the Settings page can't drift.
+const {
+  modelStatus,
+  switching: modelSwitching,
+  availableProviders,
+  modelsFor,
+  fetchStatus: fetchModelStatus,
+  switchModel: switchModelTo,
+} = useModelStatus()
 const modelMenuOpen = ref(false)
 
 // Per-message action state (#360)
@@ -193,47 +201,10 @@ function formatElapsed(s: number): string {
   return `${m}m ${sec.toString().padStart(2, '0')}s`
 }
 
-// --- Model status (badge + quick-switch) ---
-async function fetchModelStatus() {
-  try {
-    const res = await fetch('/api/model')
-    if (res.ok) modelStatus.value = await res.json()
-  } catch { /* bot offline */ }
-}
-
-const availableProviders = computed(() =>
-  modelStatus.value ? Object.keys(modelStatus.value.available).filter(k => k !== 'error') : []
-)
-
-// Models selectable per provider — prefer the catalog, fall back to the single
-// default so the menu always lists at least one model.
-function modelsFor(provider: string): string[] {
-  const cat = modelStatus.value?.catalog?.[provider]
-  if (cat && cat.length) return cat
-  const def = modelStatus.value?.available[provider]
-  return def ? [def] : []
-}
-
+// --- Model status (badge + quick-switch) — backed by useModelStatus() ---
 async function switchModel(provider: string, model: string) {
-  if (!modelStatus.value) return
-  if (provider === modelStatus.value.provider && model === modelStatus.value.model) {
-    modelMenuOpen.value = false
-    return
-  }
-  if (!model) return
-  modelSwitching.value = true
-  try {
-    const res = await fetch('/api/model', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model }),
-    })
-    if (res.ok) modelStatus.value = await res.json()
-  } catch { /* ignore */ }
-  finally {
-    modelSwitching.value = false
-    modelMenuOpen.value = false
-  }
+  await switchModelTo(provider, model)
+  modelMenuOpen.value = false
 }
 
 function toggleModelMenu() {
@@ -351,6 +322,8 @@ onMounted(() => {
   inputEl.value?.focus()
   store.ensureNotificationsConnected()
   fetchModelStatus()
+  statusStore.fetchStatus()
+  statusStore.connectSSE()
   conversations.fetchAll()
   approvals.startPolling(4000)
   document.addEventListener('click', onDocumentClick)
@@ -370,6 +343,7 @@ onMounted(() => {
 watch(() => store.sending, (sending, wasSending) => {
   if (wasSending && !sending) {
     conversationListRef.value?.refresh()
+    statusStore.fetchStatus()  // refresh the usage chip right after a turn
   }
 })
 
@@ -453,6 +427,7 @@ onUnmounted(() => {
     <div class="chat-main">
       <ConversationList v-if="showSidebar" ref="conversationListRef" class="chat-side" />
       <div class="chat-stage">
+    <StatusHeader />
     <!-- Memory approval prompt (web channel) -->
     <ApprovalInbox
       v-if="approvals.count > 0"
@@ -472,6 +447,7 @@ onUnmounted(() => {
         </div>
         <p class="empty-text">Send a message to start chatting with Herald</p>
         <p class="empty-hint">Same agent as Telegram — tools, memory, and skills are all available. Drop a file to attach it.</p>
+        <SetupChecklist />
       </div>
 
       <!-- Messages -->
@@ -526,6 +502,8 @@ onUnmounted(() => {
                 <button class="message-edit-btn primary" @click="submitEdit">Send</button>
               </div>
             </div>
+            <!-- Errors get a contextual action card (Connect Google, switch model, …) -->
+            <ErrorActionCard v-else-if="msg.role === 'error'" :text="msg.content" />
             <div
               v-else
               class="message-text"
@@ -650,6 +628,17 @@ onUnmounted(() => {
           @keydown="onInputKeydown"
         ></textarea>
         <button
+          v-if="store.sending"
+          class="send-btn stop-btn"
+          @click="store.cancel()"
+          title="Stop generating"
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor">
+            <rect x="4" y="4" width="8" height="8" rx="1.5"/>
+          </svg>
+        </button>
+        <button
+          v-else
           class="send-btn"
           :disabled="!canSend"
           @click="handleSend()"
@@ -1622,5 +1611,12 @@ onUnmounted(() => {
   background: var(--color-border);
   color: var(--color-text-muted);
   cursor: not-allowed;
+}
+
+.stop-btn {
+  background: #dc2626;
+}
+.stop-btn:hover {
+  background: #b91c1c;
 }
 </style>

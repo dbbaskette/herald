@@ -102,6 +102,49 @@ class FileMemoryController {
         }
     }
 
+    /**
+     * Lightweight health snapshot for the console widget: where memory actually
+     * resolves to, whether that dir exists, how many notes are there, when the
+     * last write happened, and whether the MEMORY.md index is present. Surfaces
+     * the kind of misconfig (wrong/escaped vault path) that otherwise fails
+     * silently — the resolved path being "wrong" is immediately visible.
+     */
+    @GetMapping("/health")
+    MemoryHealth health() {
+        String path = memoriesRoot.toString();
+        boolean exists = Files.isDirectory(memoriesRoot);
+        if (!exists) {
+            return new MemoryHealth(path, false, 0, null, false);
+        }
+        int count = 0;
+        String lastWrite = null;
+        long newest = Long.MIN_VALUE;
+        boolean hasIndex = Files.isRegularFile(memoriesRoot.resolve("MEMORY.md"));
+        try (Stream<Path> walk = Files.walk(memoriesRoot)) {
+            List<Path> pages = walk.filter(Files::isRegularFile)
+                    .filter(FileMemoryController::isMarkdownPage)
+                    .toList();
+            for (Path p : pages) {
+                String rel = memoriesRoot.relativize(p).toString().replace('\\', '/');
+                if (!rel.equals("MEMORY.md") && !rel.equals("log.md") && !rel.equals("hot.md")) {
+                    count++;
+                }
+                try {
+                    long mt = Files.getLastModifiedTime(p).toMillis();
+                    if (mt > newest) {
+                        newest = mt;
+                        lastWrite = Files.getLastModifiedTime(p).toInstant().toString();
+                    }
+                } catch (IOException ignored) {
+                    // skip unreadable file's mtime
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to compute memory health for {}: {}", memoriesRoot, e.getMessage());
+        }
+        return new MemoryHealth(path, true, count, lastWrite, hasIndex);
+    }
+
     private void addPage(Map<String, List<MemoryPage>> grouped, Path file) {
         try {
             Frontmatter fm = parseFrontmatter(file);
@@ -181,5 +224,9 @@ class FileMemoryController {
     }
 
     record Frontmatter(String name, String description, String type) {
+    }
+
+    record MemoryHealth(String path, boolean exists, int noteCount,
+                        String lastWrite, boolean hasIndex) {
     }
 }

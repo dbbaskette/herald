@@ -69,6 +69,32 @@ class ChatProxyController {
     }
 
     /**
+     * Proxy the Stop button — cancels the in-flight foreground turn on the bot.
+     */
+    @PostMapping(value = "/cancel", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<String> cancel(
+            @RequestParam(name = "conversationId", required = false) String conversationId) {
+        try {
+            String q = conversationId != null && !conversationId.isBlank()
+                    ? "?conversationId=" + java.net.URLEncoder.encode(conversationId, java.nio.charset.StandardCharsets.UTF_8)
+                    : "";
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(botUrl + "/api/chat/cancel" + q))
+                    .timeout(Duration.ofSeconds(10))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return ResponseEntity.status(response.statusCode())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response.body());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"reply\":null,\"error\":\"Bot unreachable\"}");
+        }
+    }
+
+    /**
      * Proxies the bot's notifications SSE channel — used by the web chat to
      * receive results of background document-processing turns. Long-lived
      * (30 min) so a single subscription covers a typical session.

@@ -12,6 +12,7 @@ import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionRule from '@/components/SectionRule.vue'
 import StatusGlyph from '@/components/StatusGlyph.vue'
+import MemoryHealthBar from '@/components/MemoryHealthBar.vue'
 
 type TabId = 'wiki' | 'kv' | 'obsidian'
 
@@ -154,6 +155,7 @@ function formatTime(ts: string | null): string {
 
     <!-- ── Wiki ─────────────────────────────────────────────────── -->
     <div v-show="activeTab === 'wiki'">
+      <MemoryHealthBar />
       <div v-if="fileMemory.error" class="alert alert-err">
         <StatusGlyph kind="err" /> {{ fileMemory.error }}
       </div>

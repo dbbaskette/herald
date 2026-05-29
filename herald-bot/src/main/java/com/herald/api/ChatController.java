@@ -46,6 +46,14 @@ public class ChatController {
     /** Virtual-thread executor for background document-processing turns. */
     private final ExecutorService backgroundExecutor =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("chat-async-", 0).factory());
+    /**
+     * In-flight foreground streaming turns, keyed by conversation id, so a Stop
+     * button can dispose the reactive subscription server-side (not just close
+     * the client's EventSource). Disposing halts further emission/tool execution;
+     * an LLM HTTP call already in flight finishes in the background and is dropped.
+     */
+    private final java.util.Map<String, reactor.core.Disposable> inflight =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     public ChatController(AgentService agentService,
                           ChatNotificationsHub notificationsHub,
@@ -326,9 +334,12 @@ public class ChatController {
                 SseSender.send(emitter, "tool_end", encodeToolEnd(end));
             }
         });
-        Runnable cleanup = () -> { try { unsubscribe.run(); } catch (Exception ignored) {} };
+        Runnable cleanup = () -> {
+            try { unsubscribe.run(); } catch (Exception ignored) {}
+            inflight.remove(conversationId);
+        };
 
-        stream.subscribe(
+        reactor.core.Disposable subscription = stream.subscribe(
                 chunk -> SseSender.send(emitter, "chunk", chunk),
                 err -> {
                     SseSender.send(emitter, "error",
@@ -340,6 +351,29 @@ public class ChatController {
                     cleanup.run();
                     SseSender.sendAndComplete(emitter, "done", "");
                 });
+        // Track for server-side cancel; also dispose if the client disconnects.
+        inflight.put(conversationId, subscription);
+        emitter.onCompletion(cleanup);
+        emitter.onTimeout(() -> { subscription.dispose(); cleanup.run(); });
+        emitter.onError(e -> { subscription.dispose(); cleanup.run(); });
+    }
+
+    /**
+     * Stop the in-flight foreground turn for a conversation. Disposes the
+     * reactive subscription so the agent loop stops emitting and the SSE stream
+     * completes. No-op if nothing is running.
+     */
+    @PostMapping("/cancel")
+    public ChatResponse cancel(
+            @RequestParam(name = "conversationId", required = false) String conversationId) {
+        String id = resolveConversationId(conversationId);
+        reactor.core.Disposable sub = inflight.remove(id);
+        if (sub != null && !sub.isDisposed()) {
+            sub.dispose();
+            log.info("Cancelled in-flight turn (conversation={})", id);
+            return new ChatResponse("cancelled", null);
+        }
+        return new ChatResponse("nothing-running", null);
     }
 
     private static String encodeToolStart(ToolEventBus.ToolStart e) {
