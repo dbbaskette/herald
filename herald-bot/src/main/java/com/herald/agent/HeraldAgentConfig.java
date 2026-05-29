@@ -803,9 +803,17 @@ public class HeraldAgentConfig {
 
         List<ToolCallback> aliases = new ArrayList<>();
 
-        // Static aliases: common hallucinated name → real tool + input rewrite
-        // "skill" → skills (singular vs plural)
+        // Static aliases: common hallucinated name → real tool + input rewrite.
+        // The system prompt instructs the model to call the tool "skills" (plural),
+        // but agent-utils registers it under a different name ("Skill") and only
+        // falls back to "skills" when no skills are loaded. Register both the
+        // "skill" and "skills" spellings as aliases so the prompt's documented call
+        // always resolves — guarding against the empty-state case where the real
+        // tool already owns the "skills" name (which would duplicate the callback).
         aliases.add(toolAlias("skill", skillsTool));
+        if (!"skills".equals(skillsTool.getToolDefinition().name())) {
+            aliases.add(toolAlias("skills", skillsTool));
+        }
 
         // Models often call skill names directly as tool names (e.g., "google-calendar",
         // "gmail", "obsidian", "weather") instead of calling "skills" with the skill name.
