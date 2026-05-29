@@ -83,8 +83,11 @@ and returned success this turn.
 ### 1. Save a durable memory note
 
 Capture the meeting so it's recallable weeks later. Use `memoryCreate` to write
-a `project`-type note named after the meeting (kebab-case slug from the title +
-date, e.g. `meeting-pm-marketing-sync-2026-05-28`). Include in the body:
+a `project`-type note. **Always save it under the `meetings/` folder** — pass the
+path `meetings/<kebab-slug>` (slug from the title + date), e.g.
+`meetings/meeting-pm-marketing-sync-2026-05-28`. Every meeting note lives in
+`meetings/` so they stay together; do **not** write it to the vault root. Include
+in the body:
 
 - Title, date/time, attendees.
 - A 2–4 bullet distillation of the summary — decisions, outcomes, and any
