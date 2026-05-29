@@ -1,5 +1,7 @@
 package com.herald.ui;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -10,6 +12,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Lists conversations grouped from the {@code SPRING_AI_CHAT_MEMORY} table.
@@ -22,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 class ConversationsController {
 
     private final JdbcTemplate jdbcTemplate;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     ConversationsController(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -59,15 +65,38 @@ class ConversationsController {
         return rows;
     }
 
-    /** Full message history for one conversation. */
+    /**
+     * Full message history for one conversation, rendered human-readable.
+     *
+     * <p>{@code JsonChatMemoryRepository} stores each row's {@code content} as a
+     * serialized message blob ({@code {"type":..,"content":..,"metadata":..}}) so
+     * the agent can round-trip tool calls. The web chat only wants the visible
+     * text, so we unwrap it here. Tool-response rows and tool-call-only assistant
+     * rows (no visible text) are dropped — they're internal plumbing, not turns a
+     * person should see when resuming a conversation.</p>
+     */
     @GetMapping("/{id}/messages")
     List<Map<String, Object>> messages(@PathVariable String id) {
-        return jdbcTemplate.queryForList("""
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT type AS role, content, timestamp
                   FROM SPRING_AI_CHAT_MEMORY
                  WHERE conversation_id = ?
               ORDER BY timestamp ASC
                 """, id);
+
+        List<Map<String, Object>> out = new ArrayList<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            String role = String.valueOf(row.get("role"));
+            if ("TOOL".equals(role)) continue; // tool-response plumbing
+            String text = extractText((String) row.get("content"));
+            if (text == null || text.isBlank()) continue; // e.g. tool-call-only assistant turn
+            Map<String, Object> clean = new LinkedHashMap<>();
+            clean.put("role", role);
+            clean.put("content", text);
+            clean.put("timestamp", row.get("timestamp"));
+            out.add(clean);
+        }
+        return out;
     }
 
     /** Hard-delete a conversation's history. */
@@ -79,17 +108,30 @@ class ConversationsController {
 
     /** Best-effort 40-char title from the first user message. */
     private static String summarize(String content) {
-        if (content == null) return "(empty)";
-        // Spring AI's JsonChatMemoryRepository stores serialized JSON; pull text.
-        String s = content;
-        int idx = s.indexOf("\"text\":\"");
-        if (idx >= 0) {
-            int start = idx + 8;
-            int end = s.indexOf('"', start);
-            if (end > start) s = s.substring(start, end);
-        }
-        s = s.replace("\\n", " ").replace("\\\"", "\"").trim();
+        String s = extractText(content);
+        if (s == null) return "(empty)";
+        s = s.replace("\n", " ").trim();
         if (s.length() > 40) s = s.substring(0, 40).trim() + "…";
         return s.isBlank() ? "(empty)" : s;
+    }
+
+    /**
+     * Unwrap the visible text from a stored chat-memory row. The repository
+     * serializes messages as {@code {"type":..,"content":..,"metadata":..}}; we
+     * return the {@code content} field (falling back to the legacy {@code text}
+     * field, then to the raw string for any pre-JSON rows).
+     */
+    static String extractText(String stored) {
+        if (stored == null || stored.isBlank()) return "";
+        String trimmed = stored.trim();
+        if (trimmed.charAt(0) != '{') return stored; // legacy plain-text row
+        try {
+            JsonNode node = MAPPER.readTree(trimmed);
+            if (node.hasNonNull("content")) return node.get("content").asText("");
+            if (node.hasNonNull("text")) return node.get("text").asText("");
+            return stored;
+        } catch (Exception e) {
+            return stored; // not valid JSON — surface as-is rather than hiding it
+        }
     }
 }

@@ -495,17 +495,12 @@ export const useChatStore = defineStore('chat', () => {
                      : r.role === 'ASSISTANT' ? 'assistant'
                      : r.role === 'SYSTEM' ? 'assistant' // surface system as assistant for now
                      : 'assistant'
-          // The persisted content is a JSON blob (Spring AI's serialized form);
-          // best-effort extract the visible text.
-          let text = r.content
-          const m = text.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/)
-          if (m) {
-            text = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
-          }
+          // The server (/api/conversations/{id}/messages) already unwraps the
+          // stored JSON blob to visible text, so use it as-is.
           const msg: ChatMessage = {
             id: nextId++,
             role: role as ChatMessage['role'],
-            content: text,
+            content: r.content,
             timestamp: r.timestamp,
           }
           messages.value.push(msg)
