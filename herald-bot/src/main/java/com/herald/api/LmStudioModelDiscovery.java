@@ -114,9 +114,11 @@ public class LmStudioModelDiscovery {
             boolean isLoaded = "loaded".equals(m.path("state").asText(""));
             boolean isChat = ("llm".equals(type) || "vlm".equals(type)) && toolUse;
             if (isChat && !chat.contains(id)) chat.add(id);
-            if (isLoaded) {
+            if (isLoaded && loaded == null) {
+                // First loaded wins. LM Studio can hold several models resident at
+                // once (parallel slots / JIT), so don't let a later one overwrite.
                 loaded = id;
-                if (!chat.contains(id)) chat.add(id); // surface the loaded one even if metadata is thin
+                if (!chat.contains(id)) chat.add(id);
             }
         }
         return new Discovery(orderLoadedFirst(chat, loaded), loaded);
@@ -184,10 +186,15 @@ public class LmStudioModelDiscovery {
             modelSwitcher.setProviderDefault("lmstudio", d.loaded());
         }
         modelSwitcher.setProviderModels("lmstudio", d.chatModels());
-        if (d.loaded() != null && "lmstudio".equals(modelSwitcher.getActiveProvider())
-                && !d.loaded().equals(modelSwitcher.getActiveModel())) {
-            log.info("LM Studio loaded model changed — switching agent to {}", d.loaded());
-            modelSwitcher.switchModel("lmstudio", d.loaded());
+        // Only correct the active model when it's no longer available (truly
+        // stale) — never override a deliberate pick that's still loadable, or we
+        // churn against the user. The dropdown lets them choose any discovered model.
+        if ("lmstudio".equals(modelSwitcher.getActiveProvider())
+                && !d.chatModels().contains(modelSwitcher.getActiveModel())) {
+            String target = d.loaded() != null ? d.loaded() : d.chatModels().get(0);
+            log.info("Active LM Studio model '{}' no longer available — switching to '{}'",
+                    modelSwitcher.getActiveModel(), target);
+            modelSwitcher.switchModel("lmstudio", target);
         }
         return d;
     }
