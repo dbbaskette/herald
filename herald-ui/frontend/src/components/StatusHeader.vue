@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useStatusStore } from '@/stores/status'
+import { useGwsStatus } from '@/composables/useGwsStatus'
 
 // Compact health strip for the chat console: bot reachability, active model,
 // Google connection, and memory note count — at a glance, so "is it offline?"
 // is never a guess. Bot/model/memory come from the status store (SSE-driven);
-// Google state is polled separately since it isn't in the status stream.
+// Google state comes from the shared useGwsStatus() singleton (polled + retried)
+// so this header and the setup checklist can't disagree.
 const status = useStatusStore()
+const { status: gws } = useGwsStatus()
 
 type Tone = 'ok' | 'warn' | 'off'
-
-const gws = ref<{ installed: boolean; authenticated: boolean; user?: string } | null>(null)
-let gwsTimer: ReturnType<typeof setInterval> | null = null
-
-async function fetchGws() {
-  try {
-    const res = await fetch('/api/gws/status')
-    if (res.ok) gws.value = await res.json()
-  } catch {
-    gws.value = null
-  }
-}
 
 const botTone = computed<Tone>(() => (status.status.bot.running ? 'ok' : 'off'))
 const modelName = computed(() => status.status.model.name || '—')
@@ -36,14 +27,6 @@ const googleLabel = computed(() => {
   if (!gws.value || !gws.value.installed) return 'Google off'
   if (gws.value.authenticated) return gws.value.user ? `Google · ${gws.value.user}` : 'Google'
   return 'Google — connect'
-})
-
-onMounted(() => {
-  fetchGws()
-  gwsTimer = setInterval(fetchGws, 30_000)
-})
-onUnmounted(() => {
-  if (gwsTimer) clearInterval(gwsTimer)
 })
 </script>
 

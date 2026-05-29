@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStatusStore } from '@/stores/status'
+import { useGwsStatus } from '@/composables/useGwsStatus'
 
 // A visual mirror of `./run.sh doctor` for the console: shows what's wired up
 // and what still needs attention, with a one-click action per gap. Renders only
@@ -10,13 +11,9 @@ import { useStatusStore } from '@/stores/status'
 const status = useStatusStore()
 const router = useRouter()
 
-const gws = ref<{ installed: boolean; authenticated: boolean } | null>(null)
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/gws/status')
-    if (res.ok) gws.value = await res.json()
-  } catch { /* leave null */ }
-})
+// Shared, polled+retried Google status (same source as the header) so the two
+// never disagree and a slow initial fetch self-heals instead of sticking.
+const { status: gws } = useGwsStatus()
 
 type Check = { label: string; ok: boolean; hint: string; action?: { label: string; to?: string; href?: string } }
 
