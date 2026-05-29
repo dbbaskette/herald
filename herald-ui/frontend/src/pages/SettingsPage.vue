@@ -15,11 +15,13 @@ const {
   modelStatus,
   loading: modelLoading,
   switching: modelSwitching,
+  rescanning: modelRescanning,
   message: modelMessage,
   availableProviders,
   modelsFor,
   fetchStatus,
   switchModel: switchModelTo,
+  rescanLmStudio,
 } = useModelStatus()
 const selectedProvider = ref('')
 const selectedModel = ref('')
@@ -42,6 +44,16 @@ function onProviderChange() {
 
 async function switchModel() {
   await switchModelTo(selectedProvider.value, selectedModel.value)
+}
+
+// Re-query LM Studio for its loaded models, then keep the user's current
+// provider/model selection (the datalist refreshes from the new catalog).
+async function rescanModels() {
+  await rescanLmStudio()
+  if (modelStatus.value && !selectedProvider.value) {
+    selectedProvider.value = modelStatus.value.provider
+    selectedModel.value = modelStatus.value.model
+  }
 }
 
 type GwsStatus = {
@@ -281,7 +293,17 @@ function hasChanges(): boolean {
               >
                 {{ modelSwitching ? 'Switching...' : 'Switch Model' }}
               </button>
-              <span v-if="modelMessage" class="text-sm" :class="modelMessage.startsWith('Switched') ? 'status-ok' : 'status-err'">
+              <button
+                v-if="availableProviders.includes('lmstudio')"
+                type="button"
+                :disabled="modelRescanning"
+                class="btn-secondary"
+                title="Re-query LM Studio for its loaded models (no restart needed)"
+                @click="rescanModels"
+              >
+                {{ modelRescanning ? 'Rescanning...' : 'Rescan LM Studio' }}
+              </button>
+              <span v-if="modelMessage" class="text-sm" :class="/^(Switched|Rescanned)/.test(modelMessage) ? 'status-ok' : 'status-err'">
                 {{ modelMessage }}
               </span>
             </div>

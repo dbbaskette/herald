@@ -38,6 +38,9 @@ public class ModelSwitcher {
     private volatile String activeProvider;
     private volatile String activeModel;
     private volatile ThinkingTier thinkingTier = ThinkingTier.OFF;
+    /** Guards reads/writes of {@link #providerModelCatalog}, which can be mutated
+     *  at runtime by a model rescan (e.g. LM Studio model discovery). */
+    private final Object catalogLock = new Object();
 
     /**
      * Extended-thinking budget tier applied to Anthropic models on each turn.
@@ -209,15 +212,45 @@ public class ModelSwitcher {
      */
     public Map<String, List<String>> getProviderModelCatalog() {
         Map<String, List<String>> out = new LinkedHashMap<>();
-        for (String provider : availableModels.keySet()) {
-            List<String> models = providerModelCatalog.get(provider);
-            if (models == null || models.isEmpty()) {
-                String fallback = providerDefaultModels.get(provider);
-                models = fallback == null ? List.of() : List.of(fallback);
+        synchronized (catalogLock) {
+            for (String provider : availableModels.keySet()) {
+                List<String> models = providerModelCatalog.get(provider);
+                if (models == null || models.isEmpty()) {
+                    String fallback = providerDefaultModels.get(provider);
+                    models = fallback == null ? List.of() : List.of(fallback);
+                }
+                out.put(provider, models);
             }
-            out.put(provider, models);
         }
         return out;
+    }
+
+    /**
+     * Replace the selectable model list for a provider at runtime — used by a
+     * rescan (e.g. discovering the models loaded in LM Studio) so the UI dropdown
+     * reflects what's actually available without a restart. The configured
+     * default is kept at the front so it stays the obvious pick. An empty list
+     * clears the provider's catalog (the UI then falls back to the default).
+     */
+    public void setProviderModels(String provider, List<String> models) {
+        if (provider == null) return;
+        synchronized (catalogLock) {
+            if (models == null || models.isEmpty()) {
+                providerModelCatalog.remove(provider);
+            } else {
+                List<String> ordered = new java.util.ArrayList<>();
+                String dflt = providerDefaultModels.get(provider);
+                if (dflt != null && models.contains(dflt)) {
+                    ordered.add(dflt);
+                }
+                for (String m : models) {
+                    if (!ordered.contains(m)) ordered.add(m);
+                }
+                providerModelCatalog.put(provider, List.copyOf(ordered));
+            }
+        }
+        log.info("Updated model catalog for '{}': {} model(s)", provider,
+                models == null ? 0 : models.size());
     }
 
     /**

@@ -16,9 +16,11 @@ import java.util.Map;
 class ModelController {
 
     private final ModelSwitcher modelSwitcher;
+    private final LmStudioModelDiscovery lmStudioDiscovery;
 
-    ModelController(ModelSwitcher modelSwitcher) {
+    ModelController(ModelSwitcher modelSwitcher, LmStudioModelDiscovery lmStudioDiscovery) {
         this.modelSwitcher = modelSwitcher;
+        this.lmStudioDiscovery = lmStudioDiscovery;
     }
 
     @GetMapping
@@ -40,6 +42,17 @@ class ModelController {
                     new ModelStatus(req.provider(), req.model(),
                             Map.of("error", e.getMessage()), Map.of()));
         }
+    }
+
+    /**
+     * Re-query LM Studio for its loaded models and refresh the catalog, so a model
+     * swapped in LM Studio shows up in the picker without restarting the bot.
+     * Returns the updated status (catalog now reflects what LM Studio reports).
+     */
+    @PostMapping("/rescan")
+    ModelStatus rescan() {
+        lmStudioDiscovery.rescan();
+        return status();
     }
 
     record ModelStatus(String provider, String model,

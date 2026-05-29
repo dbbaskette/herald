@@ -32,23 +32,30 @@ class ModelProxyController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<String> status() {
-        return proxy("GET", null);
+        return proxy(botModelUrl, "GET", null);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<String> switchModel(@RequestBody String body) {
-        return proxy("POST", body);
+        return proxy(botModelUrl, "POST", body);
     }
 
-    private ResponseEntity<String> proxy(String method, String body) {
+    @PostMapping(value = "/rescan", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<String> rescan() {
+        return proxy(botModelUrl + "/rescan", "POST", null);
+    }
+
+    private ResponseEntity<String> proxy(String url, String method, String body) {
         try {
             var builder = HttpRequest.newBuilder()
-                    .uri(URI.create(botModelUrl))
+                    .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .timeout(Duration.ofSeconds(10));
 
             HttpRequest request = "POST".equals(method)
-                    ? builder.POST(HttpRequest.BodyPublishers.ofString(body)).build()
+                    ? builder.POST(body == null
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(body)).build()
                     : builder.GET().build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

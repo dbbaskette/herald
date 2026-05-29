@@ -17,6 +17,7 @@ export function useModelStatus() {
   const modelStatus = ref<ModelStatus | null>(null)
   const loading = ref(false)
   const switching = ref(false)
+  const rescanning = ref(false)
   const message = ref('')
 
   const availableProviders = computed(() =>
@@ -71,14 +72,40 @@ export function useModelStatus() {
     }
   }
 
+  /**
+   * Re-query LM Studio for its loaded models and refresh the catalog. Lets the
+   * user swap a model in LM Studio and pick it here without restarting the bot.
+   */
+  async function rescanLmStudio(): Promise<void> {
+    rescanning.value = true
+    message.value = ''
+    try {
+      const res = await fetch('/api/model/rescan', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        modelStatus.value = data
+        const count = data?.catalog?.lmstudio?.length ?? 0
+        message.value = `Rescanned LM Studio — ${count} model(s) available`
+      } else {
+        message.value = data?.error || 'Rescan failed'
+      }
+    } catch {
+      message.value = 'Bot unreachable'
+    } finally {
+      rescanning.value = false
+    }
+  }
+
   return {
     modelStatus,
     loading,
     switching,
+    rescanning,
     message,
     availableProviders,
     modelsFor,
     fetchStatus,
     switchModel,
+    rescanLmStudio,
   }
 }
