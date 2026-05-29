@@ -31,30 +31,43 @@ The transcript is intentionally **not** included — work from the summary.
 
 ## Ad-hoc invocation (user asked directly)
 
-If you were **not** handed a meeting — e.g. the user said "bring yesterday's
-meeting notes into memory" or "summarize today's meetings" — you have to find
-them yourself before doing the steps below. Resolve the date (today / yesterday
-in the user's timezone → `YYYY-MM-DD`), then discover that day's meetings from
-MeetingNotes' own catalog with the `shell` tool:
+If you were **not** handed a meeting — e.g. "bring yesterday's meeting notes into
+memory", "summarize today's meetings", or **"save this week's meetings"** — you
+have to find them yourself before doing the steps below.
+
+**Step A — resolve the date range.** Most requests cover more than one day:
+- "today" / "yesterday" → that single date.
+- "this week" → Monday of the current week through today (inclusive).
+- "last N days" / "this month" → the obvious range.
+Compute the start (and end, default today) as `YYYY-MM-DD` in the user's timezone.
+
+**Step B — list every matching meeting** with the `shell` tool. Use a range so a
+multi-day request comes back in one query (single-day = same start and end):
 
 ```bash
 sqlite3 "$HOME/Documents/MeetingNotes/db.sqlite" \
-  "SELECT slug, title, started_at FROM meetings \
-   WHERE date(started_at)='YYYY-MM-DD' AND status='done' AND deleted_at IS NULL \
+  "SELECT slug, title, date(started_at) AS d, status FROM meetings \
+   WHERE date(started_at) BETWEEN 'START' AND 'END' AND deleted_at IS NULL \
    ORDER BY started_at;"
 ```
 
-For each returned slug, the summary and action items live on disk:
+**Step C — process EVERY `done` meeting the query returned, not just the first.**
+This is the most common failure: stopping after one. If the query returns four
+meetings, you save four. For each one, read its summary and action items off disk:
 
 ```bash
 cat "$HOME/Documents/MeetingNotes/meetings/<slug>/summary.md"
 cat "$HOME/Documents/MeetingNotes/meetings/<slug>/action-items.json"
 ```
 
-(Meetings with status other than `done` aren't finished processing — skip them
-and tell the user they're not ready yet.) Then run the steps below **once per
-meeting**. If there were no `done` meetings that day, just say so — don't invent
-one.
+then run the steps below for it. Meetings with status other than `done` aren't
+finished processing — skip them and say which ones aren't ready. Before saving a
+meeting, check whether a memory note with its `Source:` id already exists (it may
+have been filed earlier); if so, skip it rather than duplicating. If no `done`
+meetings fall in the range, just say so — don't invent one.
+
+Work through the full list meeting by meeting; the final digest must account for
+**all** of them (saved, skipped-as-duplicate, or not-ready).
 
 ## What to do
 
@@ -115,21 +128,20 @@ Open with a line that names where each meeting was actually saved — cite the n
 path returned by `memoryCreate`, so "did it save?" is never a guess:
 
 ```
-💾 Saved 1 meeting to memory:
-• <Title> → <note path>
+💾 Saved N meeting(s) to memory:
+• <Title> (<date>) → <note path>
+• <Title> (<date>) → <note path>
+Skipped: <Title> (already saved) · <Title> (still processing)
 
-📋 <Title> — <date>, <N> min
-<one-line gist>
-
-✅ Added N reminders:
-• <item> (due …)
-Tracking for others:
-• <item> — <owner>
+📋 Per meeting, one line each:
+• <Title> — <one-line gist> · ✅ <k> reminders added
 ```
 
-If there were no action items, drop the reminders block. Keep the whole digest
-under ~10 lines. If a save failed, say so plainly — don't report a meeting as
-saved when the tool call didn't succeed.
+List one `💾 Saved` line per meeting you actually filed, citing the path
+`memoryCreate` returned. For a single meeting you can expand the gist a little;
+for a week, keep each meeting to one line so the digest stays skimmable. If a
+save failed, say so plainly — never report a meeting as saved when the tool call
+didn't succeed.
 
 ## Guardrails
 
