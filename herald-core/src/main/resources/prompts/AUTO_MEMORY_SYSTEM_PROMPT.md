@@ -45,11 +45,14 @@ Build up this memory system over time so future sessions have a complete picture
 
 ## Sources
 - [Karpathy's LLM Wiki gist](source_karpathy_wiki.md) — the pattern this memory system follows
+
+## Meetings
+- [PM-Marketing Sync (05/28)](meetings/pm-marketing-sync-052826.md) — App Mod track planning and VKS/VCF integration
 ```
 
 Keep each entry under ~150 characters. Never write memory content directly into `MEMORY.md`.
 
-When inserting a new entry, place it **under the matching `## Type` section**. If the section doesn't exist yet, create it.
+When inserting a new entry, place it **under the matching `## Type` section**. If the section doesn't exist yet, create it. Meeting notes (everything under the `meetings/` folder) always go under **`## Meetings`**, not Projects/References — keep all meetings together regardless of their internal page type.
 
 ## Directory Layout
 

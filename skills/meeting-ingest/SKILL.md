@@ -98,7 +98,10 @@ path `meetings/<kebab-slug>` (slug from the title + date), e.g.
 - The MeetingNotes id on a `Source:` line so a later catch-up can tell this
   meeting was already filed.
 
-Then add a one-line pointer to `MEMORY.md` per the memory conventions.
+Then add a one-line pointer to `MEMORY.md` under the **`## Meetings`** section
+(create that section if it doesn't exist yet) — all meeting notes are indexed
+together there, never under Projects/References. Use `MemoryView` on `MEMORY.md`
+first and skip if this meeting is already listed (don't duplicate the entry).
 
 If Dan keeps an Obsidian vault (the `obsidian` / `wiki-ingest` skills are
 available and a vault path is configured), prefer filing the note there via
