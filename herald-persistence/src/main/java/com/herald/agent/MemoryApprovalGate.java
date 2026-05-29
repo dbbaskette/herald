@@ -76,6 +76,16 @@ public class MemoryApprovalGate {
             return Decision.APPLY;
         }
 
+        // Unattended, machine-initiated turns (webhook ingest, cron, backfill) have
+        // no human to answer an approval prompt — prompting would just time out and
+        // discard the write. The user opted into these flows by configuring them, so
+        // apply directly regardless of page type.
+        if (ChatChannelContext.get() == ChatChannelContext.Channel.SYSTEM) {
+            log.debug("System channel — auto-applying memory edit for {} ({})", toolName,
+                    LoggingMemoryToolCallback.extractPath(toolInput));
+            return Decision.APPLY;
+        }
+
         boolean webChannel = ChatChannelContext.isWeb();
         if (!webChannel && messageSender == null) {
             log.debug("CONFIRM_DIFF requested for {} but no MessageSender — falling back to APPLY",

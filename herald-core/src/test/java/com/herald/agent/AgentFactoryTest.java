@@ -138,7 +138,7 @@ class AgentFactoryTest {
         String result = AgentFactory.applyTaskManagementGuidance(profile, "You are a widget counter.");
 
         assertThat(result).contains("Task Management");
-        assertThat(result).contains("todoWrite");
+        assertThat(result).contains("TodoWrite");
         assertThat(result).endsWith("You are a widget counter.");
     }
 

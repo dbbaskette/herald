@@ -63,7 +63,7 @@ class DataSourceConfigTest {
             }
             assertThat(tables).containsExactlyInAnyOrder(
                     "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides",
-                    "SPRING_AI_CHAT_MEMORY", "settings");
+                    "SPRING_AI_CHAT_MEMORY", "settings", "meetings_ingested");
         }
     }
 

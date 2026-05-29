@@ -113,6 +113,10 @@ public class MeetingIngestService {
 
     private void runIngestTurn(MeetingDigest meeting) {
         String conversationId = "meeting-" + meeting.id();
+        // Mark this as an unattended system turn so memory writes auto-apply
+        // instead of waiting on an approval prompt no one can answer.
+        com.herald.agent.ChatChannelContext.set(
+                com.herald.agent.ChatChannelContext.Channel.SYSTEM, conversationId);
         try {
             String reply = agentService.chat(buildPrompt(meeting), conversationId);
             if (reply != null && !reply.isBlank()) {
@@ -123,7 +127,10 @@ public class MeetingIngestService {
             }
             log.info("Enriched meeting '{}' ({})", meeting.title(), meeting.id());
         } catch (Exception e) {
-            log.warn("Meeting enrichment failed for '{}' ({}): {}",
+            // Release the ledger claim so a failed enrichment can be retried
+            // (otherwise the meeting stays marked done and is skipped forever).
+            ledger.release(meeting.id());
+            log.warn("Meeting enrichment failed for '{}' ({}) — released for retry: {}",
                     meeting.title(), meeting.id(), e.getMessage(), e);
             if (messageSender != null) {
                 try {
@@ -135,6 +142,7 @@ public class MeetingIngestService {
             }
         } finally {
             chatMemory.clear(conversationId);
+            com.herald.agent.ChatChannelContext.clear();
         }
     }
 

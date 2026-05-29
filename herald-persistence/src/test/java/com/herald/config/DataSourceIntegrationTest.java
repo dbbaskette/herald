@@ -62,7 +62,7 @@ class DataSourceIntegrationTest {
             }
             assertThat(tables).containsExactlyInAnyOrder(
                     "messages", "memory", "cron_jobs", "commands", "model_usage",
-                    "model_overrides", "settings", "SPRING_AI_CHAT_MEMORY");
+                    "model_overrides", "settings", "SPRING_AI_CHAT_MEMORY", "meetings_ingested");
         }
     }
 }

@@ -32,6 +32,15 @@ public class MeetingIngestLedger {
         return rows > 0;
     }
 
+    /**
+     * Release a previously-claimed meeting so it can be retried — call this when
+     * enrichment fails after the claim, otherwise a failed ingest leaves the
+     * meeting marked done and every later attempt skips it.
+     */
+    public void release(String meetingId) {
+        jdbcTemplate.update("DELETE FROM meetings_ingested WHERE meeting_id = ?", meetingId);
+    }
+
     public boolean isIngested(String meetingId) {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM meetings_ingested WHERE meeting_id = ?", Integer.class, meetingId);

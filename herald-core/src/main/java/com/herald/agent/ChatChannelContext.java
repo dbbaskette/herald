@@ -15,7 +15,12 @@ package com.herald.agent;
  */
 public final class ChatChannelContext {
 
-    public enum Channel { TELEGRAM, WEB }
+    /**
+     * TELEGRAM / WEB are interactive (a human can approve prompts). SYSTEM marks
+     * unattended, machine-initiated turns — webhook ingestion, cron jobs, backfill —
+     * where there's no one to answer an approval prompt, so gates auto-apply.
+     */
+    public enum Channel { TELEGRAM, WEB, SYSTEM }
 
     private static final ThreadLocal<Channel> CHANNEL = new ThreadLocal<>();
     private static final ThreadLocal<String> CONVERSATION_ID = new ThreadLocal<>();
