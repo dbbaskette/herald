@@ -21,14 +21,19 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Discovers the models available in a local LM Studio server via its
- * OpenAI-compatible {@code GET /models} endpoint and feeds them into
- * {@link ModelSwitcher}'s catalog, so the UI model picker reflects whatever is
- * actually loaded in LM Studio.
+ * Discovers the models in a local LM Studio server and keeps Herald pointed at
+ * whatever model is actually loaded there.
  *
- * <p>Runs once at startup (so swapping a model in LM Studio + restarting the bot
- * picks it up) and on demand via {@code POST /api/model/rescan} (so swapping a
- * model needs no restart at all). No-ops when LM Studio isn't configured.</p>
+ * <p>Prefers LM Studio's native {@code GET /api/v0/models} (which reports each
+ * model's {@code state} and {@code capabilities}) over the OpenAI-compatible
+ * {@code /v1/models} (which lists every downloaded model — embeddings, audio,
+ * unloaded LLMs — with no load state). From the native endpoint we can: list
+ * only tool-capable chat models, find the one that's loaded, make it the
+ * default, and — if LM Studio is the active provider — switch the agent onto it
+ * so a model swapped in LM Studio is the one Herald actually uses.</p>
+ *
+ * <p>Runs at startup (swap + restart picks it up) and on demand via
+ * {@code POST /api/model/rescan}. No-ops when LM Studio isn't configured.</p>
  */
 @Component
 public class LmStudioModelDiscovery {
@@ -53,55 +58,126 @@ public class LmStudioModelDiscovery {
         return !baseUrl.isBlank();
     }
 
-    /**
-     * Query LM Studio for its model ids. Best-effort: returns an empty list on
-     * any failure (server down, unreachable, malformed response) — never throws,
-     * so a missing LM Studio never breaks startup or the rescan endpoint.
-     */
-    public List<String> discover() {
-        if (!isEnabled()) return List.of();
-        String url = baseUrl.endsWith("/") ? baseUrl + "models" : baseUrl + "/models";
-        try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofSeconds(3))
-                    .GET()
-                    .build();
-            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (res.statusCode() != 200) {
-                log.warn("LM Studio model discovery: {} returned HTTP {}", url, res.statusCode());
-                return List.of();
-            }
-            JsonNode data = MAPPER.readTree(res.body()).path("data");
-            List<String> ids = new ArrayList<>();
-            for (JsonNode m : data) {
-                String id = m.path("id").asText("");
-                if (!id.isBlank() && !ids.contains(id)) ids.add(id);
-            }
-            ids.sort(String.CASE_INSENSITIVE_ORDER);
-            return ids;
-        } catch (Exception e) {
-            log.warn("LM Studio model discovery failed ({}): {}", url, e.getMessage());
-            return List.of();
-        }
+    /** Discovered chat models plus which one LM Studio currently has loaded. */
+    public record Discovery(List<String> chatModels, String loaded) {
+        boolean isEmpty() { return chatModels.isEmpty(); }
     }
 
     /**
-     * Discover and push the result into the model catalog. Returns the discovered
-     * ids (empty if LM Studio is unreachable, in which case the catalog is left
-     * as-is rather than wiped).
+     * Query LM Studio for its chat models and the loaded one. Best-effort: returns
+     * an empty result on any failure, so a missing LM Studio never breaks startup
+     * or the rescan endpoint. Falls back to {@code /v1/models} when the native
+     * endpoint isn't available (older LM Studio).
      */
-    public List<String> rescan() {
-        List<String> ids = discover();
-        if (!ids.isEmpty()) {
-            modelSwitcher.setProviderModels("lmstudio", ids);
+    public Discovery discover() {
+        if (!isEnabled()) return new Discovery(List.of(), null);
+        Discovery native_ = discoverNative();
+        if (!native_.isEmpty()) return native_;
+        return discoverOpenAi();
+    }
+
+    /** Native endpoint: rich metadata (state + capabilities). */
+    private Discovery discoverNative() {
+        String url = hostRoot() + "/api/v0/models";
+        try {
+            JsonNode data = getJson(url).path("data");
+            List<String> chat = new ArrayList<>();
+            String loaded = null;
+            for (JsonNode m : data) {
+                String id = m.path("id").asText("");
+                if (id.isBlank()) continue;
+                String type = m.path("type").asText("");
+                boolean toolUse = false;
+                for (JsonNode c : m.path("capabilities")) {
+                    if ("tool_use".equals(c.asText())) { toolUse = true; break; }
+                }
+                boolean isLoaded = "loaded".equals(m.path("state").asText(""));
+                boolean isChat = ("llm".equals(type) || "vlm".equals(type)) && toolUse;
+                if (isChat && !chat.contains(id)) chat.add(id);
+                if (isLoaded) {
+                    loaded = id;
+                    if (!chat.contains(id)) chat.add(id); // surface the loaded one even if metadata is thin
+                }
+            }
+            return new Discovery(orderLoadedFirst(chat, loaded), loaded);
+        } catch (Exception e) {
+            log.debug("LM Studio native model query failed ({}): {}", url, e.getMessage());
+            return new Discovery(List.of(), null);
         }
-        return ids;
+    }
+
+    /** OpenAI-compatible fallback: ids only, no load state. */
+    private Discovery discoverOpenAi() {
+        String url = baseUrl.endsWith("/") ? baseUrl + "models" : baseUrl + "/models";
+        try {
+            JsonNode data = getJson(url).path("data");
+            List<String> chat = new ArrayList<>();
+            for (JsonNode m : data) {
+                String id = m.path("id").asText("");
+                // Can't tell chat from embedding/audio here; drop obvious non-chat ids.
+                if (!id.isBlank() && !id.startsWith("text-embedding") && !chat.contains(id)) {
+                    chat.add(id);
+                }
+            }
+            chat.sort(String.CASE_INSENSITIVE_ORDER);
+            return new Discovery(chat, null);
+        } catch (Exception e) {
+            log.warn("LM Studio model discovery failed ({}): {}", url, e.getMessage());
+            return new Discovery(List.of(), null);
+        }
+    }
+
+    private JsonNode getJson(String url) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(3)).GET().build();
+        HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() != 200) {
+            throw new IllegalStateException("HTTP " + res.statusCode());
+        }
+        return MAPPER.readTree(res.body());
+    }
+
+    private static List<String> orderLoadedFirst(List<String> models, String loaded) {
+        List<String> rest = new ArrayList<>(models);
+        rest.sort(String.CASE_INSENSITIVE_ORDER);
+        if (loaded == null) return rest;
+        List<String> out = new ArrayList<>();
+        out.add(loaded);
+        for (String m : rest) if (!m.equals(loaded)) out.add(m);
+        return out;
+    }
+
+    /** Strip a trailing {@code /v1} so we can reach the native {@code /api/v0} routes. */
+    private String hostRoot() {
+        String u = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        if (u.endsWith("/v1")) u = u.substring(0, u.length() - 3);
+        return u;
+    }
+
+    /**
+     * Discover and apply: refresh the catalog, make the loaded model the default,
+     * and — if LM Studio is the active provider — switch the agent onto the loaded
+     * model so Herald uses what's actually loaded. Returns the discovery result.
+     */
+    public Discovery rescan() {
+        Discovery d = discover();
+        if (d.isEmpty()) return d;
+        if (d.loaded() != null) {
+            modelSwitcher.setProviderDefault("lmstudio", d.loaded());
+        }
+        modelSwitcher.setProviderModels("lmstudio", d.chatModels());
+        if (d.loaded() != null && "lmstudio".equals(modelSwitcher.getActiveProvider())
+                && !d.loaded().equals(modelSwitcher.getActiveModel())) {
+            log.info("LM Studio loaded model changed — switching agent to {}", d.loaded());
+            modelSwitcher.switchModel("lmstudio", d.loaded());
+        }
+        return d;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         if (!isEnabled()) return;
-        List<String> ids = rescan();
-        log.info("LM Studio: discovered {} model(s) at startup", ids.size());
+        Discovery d = rescan();
+        log.info("LM Studio: {} chat model(s) discovered, loaded={}", d.chatModels().size(), d.loaded());
     }
 }

@@ -202,7 +202,21 @@ public class ModelSwitcher {
     }
 
     public Map<String, String> getAvailableProviderDefaults() {
-        return Map.copyOf(providerDefaultModels);
+        synchronized (catalogLock) {
+            return Map.copyOf(providerDefaultModels);
+        }
+    }
+
+    /**
+     * Update the default model for a provider at runtime — e.g. after discovering
+     * which model is actually loaded in LM Studio, so it becomes the obvious pick
+     * and surfaces first in the catalog. No-op for a null/blank model.
+     */
+    public void setProviderDefault(String provider, String model) {
+        if (provider == null || model == null || model.isBlank()) return;
+        synchronized (catalogLock) {
+            providerDefaultModels.put(provider, model);
+        }
     }
 
     /**

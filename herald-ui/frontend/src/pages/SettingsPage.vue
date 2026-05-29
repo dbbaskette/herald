@@ -46,11 +46,11 @@ async function switchModel() {
   await switchModelTo(selectedProvider.value, selectedModel.value)
 }
 
-// Re-query LM Studio for its loaded models, then keep the user's current
-// provider/model selection (the datalist refreshes from the new catalog).
+// Re-query LM Studio. The backend re-points the agent at the loaded model, so
+// sync the form to the (possibly updated) active model and the refreshed catalog.
 async function rescanModels() {
   await rescanLmStudio()
-  if (modelStatus.value && !selectedProvider.value) {
+  if (modelStatus.value) {
     selectedProvider.value = modelStatus.value.provider
     selectedModel.value = modelStatus.value.model
   }
