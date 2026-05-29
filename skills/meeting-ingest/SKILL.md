@@ -61,6 +61,12 @@ one.
 Do these in one turn, then reply with the digest. Keep it tight; this is an
 unattended pipeline, not a conversation.
 
+**Actually call the tools — do not just describe what you would do.** "Bringing a
+meeting into memory" means invoking `memoryCreate` and seeing it succeed. Listing
+or summarizing a meeting in your reply is NOT saving it. Do not tell the user a
+meeting was saved unless the `memoryCreate` (or `wiki-ingest`) call actually ran
+and returned success this turn.
+
 ### 1. Save a durable memory note
 
 Capture the meeting so it's recallable weeks later. Use `memoryCreate` to write
@@ -104,9 +110,14 @@ rather than booking it unattended.
 
 ### 3. Reply with a short digest
 
-This reply is delivered to Telegram and the web console, so make it skimmable:
+This reply is delivered to Telegram and the web console, so make it skimmable.
+Open with a line that names where each meeting was actually saved — cite the note
+path returned by `memoryCreate`, so "did it save?" is never a guess:
 
 ```
+💾 Saved 1 meeting to memory:
+• <Title> → <note path>
+
 📋 <Title> — <date>, <N> min
 <one-line gist>
 
@@ -117,7 +128,8 @@ Tracking for others:
 ```
 
 If there were no action items, drop the reminders block. Keep the whole digest
-under ~10 lines.
+under ~10 lines. If a save failed, say so plainly — don't report a meeting as
+saved when the tool call didn't succeed.
 
 ## Guardrails
 
