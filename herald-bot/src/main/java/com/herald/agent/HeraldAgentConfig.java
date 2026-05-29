@@ -562,6 +562,11 @@ public class HeraldAgentConfig {
         // Conditional on property (not persistence)
         advisors.add(promptDumpAdvisor);
 
+        // Late sanitizer: drop leading assistant/tool turns so the windowed history
+        // starts with a user message. Strict local-model chat templates (LM Studio /
+        // Ollama) 400 otherwise; harmless for Anthropic/Gemini. (#meeting-ingest 400)
+        advisors.add(new LeadingTurnSanitizingAdvisor());
+
         // Spring AI's built-in ToolCallAdvisor is added automatically by the chat
         // client when tools are configured via .defaultTools / .defaultToolCallbacks
         // (see DefaultChatClient). No explicit registration needed here.

@@ -281,12 +281,13 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), false, Optional.empty());
 
         // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
-        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor.
+        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, LeadingTurnSanitizingAdvisor.
         // (ToolSearchToolCallAdvisor was removed — incompatible with Spring AI 2.0
         // Jackson 3 API. Spring AI auto-installs ToolCallAdvisor when tools are
         // attached via .defaultTools / .defaultToolCallbacks, so we don't add it
         // explicitly to this chain.)
-        assertThat(advisors).hasSize(5);
+        assertThat(advisors).hasSize(6);
+        assertThat(advisors).anyMatch(a -> a instanceof LeadingTurnSanitizingAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
