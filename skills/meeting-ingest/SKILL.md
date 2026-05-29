@@ -86,13 +86,14 @@ Capture the meeting so it's recallable weeks later. Use `memoryCreate` to write
 a `project`-type note. **Always save it under the `meetings/` folder** — pass the
 path `meetings/<kebab-slug>` (slug from the title + date), e.g.
 `meetings/meeting-pm-marketing-sync-2026-05-28`. Every meeting note lives in
-`meetings/` so they stay together; do **not** write it to the vault root. Include
-in the body:
+`meetings/` so they stay together; do **not** write it to the vault root. Include in the body:
 
-- Title, date/time, attendees.
-- A 2–4 bullet distillation of the summary — decisions, outcomes, and any
-  numbers or names worth keeping. Do **not** paste the whole summary verbatim;
-  compress it.
+- A short header: title, date/time, attendees.
+- The **full summary, verbatim** — copy the entire summary you were given into
+  the note exactly as-is. MeetingNotes already distilled the transcript into this
+  summary; do **not** shorten, paraphrase, or re-summarize it (that would be a
+  summary of a summary and lose detail). The whole point of the note is to
+  preserve the complete summary.
 - The action items with their owners.
 - The MeetingNotes id on a `Source:` line so a later catch-up can tell this
   meeting was already filed.
@@ -153,8 +154,10 @@ didn't succeed.
   batch (catch-up) and a memory note with that `Source:` id already exists, skip
   it — don't double-file or double-remind.
 - **Don't invent action items.** Only act on items MeetingNotes extracted.
-- **Compress, don't copy.** The memory note is a distillation, not a transcript
-  dump. Long summaries get 4 bullets, not 40 lines.
+- **Preserve the full summary.** MeetingNotes already summarized the meeting —
+  store that summary complete and verbatim. Don't re-summarize or trim it; a
+  summary-of-a-summary loses the detail Dan wants to recall later. (Only the
+  digest *reply* is short — the saved note keeps everything.)
 - **Fail soft.** If memory or reminders are unavailable, still send the digest so
   Dan at least sees the meeting happened.
 
