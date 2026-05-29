@@ -71,39 +71,43 @@ public class LmStudioModelDiscovery {
      */
     public Discovery discover() {
         if (!isEnabled()) return new Discovery(List.of(), null);
-        Discovery native_ = discoverNative();
-        if (!native_.isEmpty()) return native_;
+        try {
+            Discovery native_ = discoverNative();
+            if (!native_.isEmpty()) return native_;
+        } catch (java.net.http.HttpTimeoutException te) {
+            // LM Studio is busy (often mid-generation on a large model). Bail
+            // rather than also waiting out a timeout on /v1 — keep the current
+            // catalog; the next rescan (or an idle moment) will pick it up.
+            log.warn("LM Studio model discovery timed out (server busy?) — keeping current catalog");
+            return new Discovery(List.of(), null);
+        } catch (Exception e) {
+            log.debug("LM Studio native query failed ({}) — trying /v1/models", e.getMessage());
+        }
         return discoverOpenAi();
     }
 
-    /** Native endpoint: rich metadata (state + capabilities). */
-    private Discovery discoverNative() {
-        String url = hostRoot() + "/api/v0/models";
-        try {
-            JsonNode data = getJson(url).path("data");
-            List<String> chat = new ArrayList<>();
-            String loaded = null;
-            for (JsonNode m : data) {
-                String id = m.path("id").asText("");
-                if (id.isBlank()) continue;
-                String type = m.path("type").asText("");
-                boolean toolUse = false;
-                for (JsonNode c : m.path("capabilities")) {
-                    if ("tool_use".equals(c.asText())) { toolUse = true; break; }
-                }
-                boolean isLoaded = "loaded".equals(m.path("state").asText(""));
-                boolean isChat = ("llm".equals(type) || "vlm".equals(type)) && toolUse;
-                if (isChat && !chat.contains(id)) chat.add(id);
-                if (isLoaded) {
-                    loaded = id;
-                    if (!chat.contains(id)) chat.add(id); // surface the loaded one even if metadata is thin
-                }
+    /** Native endpoint: rich metadata (state + capabilities). Throws on failure. */
+    private Discovery discoverNative() throws Exception {
+        JsonNode data = getJson(hostRoot() + "/api/v0/models").path("data");
+        List<String> chat = new ArrayList<>();
+        String loaded = null;
+        for (JsonNode m : data) {
+            String id = m.path("id").asText("");
+            if (id.isBlank()) continue;
+            String type = m.path("type").asText("");
+            boolean toolUse = false;
+            for (JsonNode c : m.path("capabilities")) {
+                if ("tool_use".equals(c.asText())) { toolUse = true; break; }
             }
-            return new Discovery(orderLoadedFirst(chat, loaded), loaded);
-        } catch (Exception e) {
-            log.debug("LM Studio native model query failed ({}): {}", url, e.getMessage());
-            return new Discovery(List.of(), null);
+            boolean isLoaded = "loaded".equals(m.path("state").asText(""));
+            boolean isChat = ("llm".equals(type) || "vlm".equals(type)) && toolUse;
+            if (isChat && !chat.contains(id)) chat.add(id);
+            if (isLoaded) {
+                loaded = id;
+                if (!chat.contains(id)) chat.add(id); // surface the loaded one even if metadata is thin
+            }
         }
+        return new Discovery(orderLoadedFirst(chat, loaded), loaded);
     }
 
     /** OpenAI-compatible fallback: ids only, no load state. */
@@ -128,8 +132,10 @@ public class LmStudioModelDiscovery {
     }
 
     private JsonNode getJson(String url) throws Exception {
+        // 8s tolerates a busy LM Studio (mid-generation on a large model can stall
+        // the model-list endpoint for a few seconds); normal latency is < 10ms.
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(3)).GET().build();
+                .timeout(Duration.ofSeconds(8)).GET().build();
         HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
         if (res.statusCode() != 200) {
             throw new IllegalStateException("HTTP " + res.statusCode());
