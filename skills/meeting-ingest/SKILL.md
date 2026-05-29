@@ -24,6 +24,33 @@ You are given (as the turn prompt):
 
 The transcript is intentionally **not** included — work from the summary.
 
+## Ad-hoc invocation (user asked directly)
+
+If you were **not** handed a meeting — e.g. the user said "bring yesterday's
+meeting notes into memory" or "summarize today's meetings" — you have to find
+them yourself before doing the steps below. Resolve the date (today / yesterday
+in the user's timezone → `YYYY-MM-DD`), then discover that day's meetings from
+MeetingNotes' own catalog with the `shell` tool:
+
+```bash
+sqlite3 "$HOME/Documents/MeetingNotes/db.sqlite" \
+  "SELECT slug, title, started_at FROM meetings \
+   WHERE date(started_at)='YYYY-MM-DD' AND status='done' AND deleted_at IS NULL \
+   ORDER BY started_at;"
+```
+
+For each returned slug, the summary and action items live on disk:
+
+```bash
+cat "$HOME/Documents/MeetingNotes/meetings/<slug>/summary.md"
+cat "$HOME/Documents/MeetingNotes/meetings/<slug>/action-items.json"
+```
+
+(Meetings with status other than `done` aren't finished processing — skip them
+and tell the user they're not ready yet.) Then run the steps below **once per
+meeting**. If there were no `done` meetings that day, just say so — don't invent
+one.
+
 ## What to do
 
 Do these in one turn, then reply with the digest. Keep it tight; this is an
