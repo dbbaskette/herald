@@ -1,11 +1,16 @@
 ---
 name: meeting-ingest
 description: >
-  Process a completed meeting from the MeetingNotes desktop app — save a durable
-  memory note, turn action items into Apple Reminders, and send a short digest.
-  Invoked automatically when a meeting.completed webhook arrives, and by the daily
-  meeting-catchup backstop. Also use it when the user asks to "process",
-  "summarize", or "catch up on" recent meetings.
+  Bring meetings recorded by the MeetingNotes app into Herald's memory. Use
+  WHENEVER the user mentions meeting notes, meeting summaries, meeting
+  transcripts, "my meetings", what was said/discussed/decided in a meeting, or
+  asks to bring / save / import / catch up on meetings into memory — e.g. "bring
+  yesterday's meeting notes into memory", "summarize today's meetings", "save my
+  meetings". This is the MeetingNotes desktop app (recorded meeting content), NOT
+  the calendar: the calendar holds scheduled events, this skill holds what
+  actually happened in a meeting. If a request is about meeting notes/summaries,
+  prefer this skill over google-calendar. Also fires automatically on the
+  meeting.completed webhook and the daily catch-up.
 ---
 
 # Meeting Ingest Skill
