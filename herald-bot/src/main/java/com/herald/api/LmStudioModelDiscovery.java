@@ -43,7 +43,13 @@ public class LmStudioModelDiscovery {
 
     private final String baseUrl;
     private final ModelSwitcher modelSwitcher;
+    // HTTP/1.1 is mandatory here: java.net.http defaults to HTTP/2 and attempts
+    // an h2c upgrade, but LM Studio's server speaks HTTP/1.1 only — the HTTP/2
+    // handshake hangs until the request timeout. (curl/OkHttp default to 1.1,
+    // which is why they're instant.) This, not IPv6, was the real cause of the
+    // discovery timeouts.
     private final HttpClient httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(2))
             .build();
 
