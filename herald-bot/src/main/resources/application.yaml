@@ -204,6 +204,10 @@ herald:
       - '(?:^|[;&|]\s*)(?:/(?:usr/)?s?bin/)?halt\b'
     shell-timeout-seconds: 30
     confirmation-timeout-seconds: 60
+    # Gate risky-but-not-catastrophic commands (sudo, system-dir writes, pipe-to-shell)
+    # on confirmation. Set false for full autonomous operation — installs/sudo run
+    # without prompting. The catastrophic blocklist always applies regardless.
+    require-confirmation: ${HERALD_SHELL_REQUIRE_CONFIRMATION:true}
 
 # Run the embedded web server on port 8080 for actuator endpoints only
 server:

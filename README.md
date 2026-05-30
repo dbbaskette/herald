@@ -594,6 +594,7 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 | `HERALD_MEMORY_CONSOLIDATION_TRIGGER` | First-turn-of-day memory consolidation reminder: `daily` / `off` | No | `daily` |
 | `HERALD_TELEGRAM_QUESTION_TIMEOUT_MINUTES` | How long an `AskUserQuestion` waits for a Telegram reply | No | `30` |
 | `HERALD_MODEL_FAILOVER_ENABLED` | Enable opt-in failover chain (configure chain in `application.yaml`) | No | `false` |
+| `HERALD_SHELL_REQUIRE_CONFIRMATION` | Prompt before risky commands (sudo / system writes / pipe-to-shell). `false` = fully autonomous (catastrophic blocklist still applies) | No | `true` |
 | `HERALD_SERVER_PORT` | Port for the bot's actuator / health endpoint | No | `8081` |
 | `HERALD_MEMORIES_DIR` | Long-term memory directory (can be an Obsidian vault folder) | No | `~/.herald/memories` |
 | `HERALD_OBSIDIAN_VAULT_PATH` | Obsidian vault path for vault-aware tools/skills | No | — |

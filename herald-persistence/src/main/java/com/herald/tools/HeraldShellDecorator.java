@@ -110,6 +110,11 @@ public class HeraldShellDecorator {
     }
 
     boolean requiresConfirmation(String command) {
+        // Autonomous mode: the user has granted full authority, so don't gate on
+        // confirmation. The catastrophic blocklist still applies independently.
+        if (!securityConfig.isRequireConfirmation()) {
+            return false;
+        }
         if (SUDO_PATTERN.matcher(command).find()) {
             return true;
         }

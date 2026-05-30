@@ -41,6 +41,15 @@ public class ShellSecurityConfig {
 
     private int confirmationTimeoutSeconds = 60;
 
+    /**
+     * Whether risky-but-not-catastrophic commands (sudo, writes to system dirs,
+     * pipe-to-shell) require interactive confirmation before running. The
+     * catastrophic blocklist above always applies regardless. Set to {@code false}
+     * to let Herald run fully autonomously — installs, sudo, etc. without prompting
+     * (the user has granted that authority). Default {@code true} keeps the prompt.
+     */
+    private boolean requireConfirmation = true;
+
     public List<String> getShellBlocklist() {
         return shellBlocklist;
     }
@@ -63,5 +72,13 @@ public class ShellSecurityConfig {
 
     public void setConfirmationTimeoutSeconds(int confirmationTimeoutSeconds) {
         this.confirmationTimeoutSeconds = confirmationTimeoutSeconds;
+    }
+
+    public boolean isRequireConfirmation() {
+        return requireConfirmation;
+    }
+
+    public void setRequireConfirmation(boolean requireConfirmation) {
+        this.requireConfirmation = requireConfirmation;
     }
 }
