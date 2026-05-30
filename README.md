@@ -64,6 +64,7 @@ Browse long-term memory grouped by type, edit skills with live reload, and manag
 - [Features](#features)
 - [The Memory System](#the-memory-system)
 - [Skills](#skills)
+- [MeetingNotes Integration](#meetingnotes-integration)
 - [Telegram Commands](#telegram-commands)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
@@ -220,10 +221,12 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 - ⏰ **Proactive scheduling** — morning briefings, reminders, cron-driven outreach
 - 📧 **Google Workspace** — Gmail, Calendar, Drive, Docs, Sheets, Tasks, and Contacts via the `gws` CLI. One-command OAuth (`./run.sh auth`) or a **Connect Google** button in the console; credentials live solely in `.env`. Google API errors are mapped to actionable hints the agent surfaces to you (expired token → reconnect, missing scope, disabled API)
 - 📋 **Apple Reminders** — read, create, complete, and delete reminders via the `reminders` CLI (macOS only); morning briefings surface today's + overdue items
+- 📝 **MeetingNotes ingestion** — when a recording finishes in the [MeetingNotes](https://github.com/dbbaskette/MeetingNotes) app, a webhook files the full summary + action items into memory and turns your action items into reminders. A daily catch-up and a console **Bring into memory** button backfill anything missed — one small agent turn per meeting, so it's gentle on local models (see [MeetingNotes Integration](#meetingnotes-integration))
 - 🐚 **Shell & file access** — with regex-blocked destructive commands, sensitive-value redaction, and confirmation gating
 
 **Models**
 - 🤖 **Multi-provider** — Anthropic, OpenAI, Gemini, Ollama (local), LM Studio (local). Switch at runtime with `/model` in Telegram or the console's per-provider model dropdown (each provider expands to a configurable catalog of models)
+- 🔎 **LM Studio auto-discovery** — Herald queries LM Studio's native API for the models you have loaded, populates the picker, and targets the loaded model — at startup and via a **Rescan LM Studio** button (no restart). Swap the model in LM Studio and Herald follows
 - 💰 **Tiered routing** — Haiku / Sonnet / Opus tiers for subagents so cheap work stays cheap
 - 🔁 **Model failover chain** — opt-in `FailoverChatModel` transparently retries the next chain entry on 429 / 5xx / timeout / unavailable, with a per-entry circuit breaker
 
@@ -284,6 +287,7 @@ skills/
 ├── google-calendar/   # Calendar management (via gws CLI)
 ├── google-drive/      # Drive file operations (via gws CLI)
 ├── reminders/         # Apple Reminders (via reminders CLI, macOS only)
+├── meeting-ingest/    # File a completed MeetingNotes meeting → memory + reminders
 ├── obsidian/          # Obsidian vault search (via obsidian CLI)
 ├── weather/           # Weather lookups (wttr.in)
 └── broadcom/          # VMware / Broadcom knowledge base
@@ -301,6 +305,27 @@ Instructions, shell recipes, examples, and guardrails.
 ```
 
 Herald's `ReloadableSkillsTool` wraps the upstream `SkillsTool` with a `WatchService`-based filesystem watcher (`SkillsWatcher`) that triggers a 250ms debounced reload on any file change. The Herald Console also provides a web-based skills editor with live reload status via SSE.
+
+## MeetingNotes Integration
+
+Herald turns [MeetingNotes](https://github.com/dbbaskette/MeetingNotes) (a local meeting recorder/transcriber/summarizer) into a memory feed: every recorded meeting becomes a durable note — full summary, attendees, action items — filed under a `## Meetings` index section, with your action items pushed to Apple Reminders.
+
+**Three ways meetings get in:**
+
+| Path | Trigger | When |
+|---|---|---|
+| **Webhook** (real-time) | MeetingNotes posts `meeting.completed` to `POST /api/meetings/ingest` | the moment a recording finishes processing |
+| **Daily catch-up** | `@Scheduled` job re-scans the day's meetings | 6 pm (set `HERALD_MEETINGNOTES_CATCHUP_CRON`, `-` to disable) — backstops anything the webhook missed |
+| **Backfill** | console **Settings → Meetings → Bring into memory** (or `POST /api/meetings/backfill?days=N`) | on demand, for a date range |
+
+**Design notes:**
+- **One meeting per turn.** Each meeting is enriched in its own small, focused agent turn — never one giant batch — so it stays light on context and won't OOM a local model. The backfill loops in Java and runs them **sequentially**.
+- **Reads MeetingNotes' durable output, not a live API.** The date-query backstop reads the app's read-only SQLite catalog + on-disk `summary.md` directly, so it works whether or not MeetingNotes is running. Herald never writes to the MeetingNotes database.
+- **Full summary, verbatim.** MeetingNotes already distilled the transcript, so the note stores that summary complete — no summarizing the summary.
+- **Dedup ledger.** A `meetings_ingested` table ensures a meeting that arrives via both the webhook and a catch-up is enriched exactly once; a failed enrichment releases its claim so it can retry.
+- **Unattended writes auto-apply.** Webhook/catch-up/backfill turns run as a `SYSTEM` channel, so memory writes skip the interactive approval prompt (there's no human to answer it).
+
+**Enable it** — in the MeetingNotes app → Settings → Webhook exporter: toggle on, set the URL to `http://127.0.0.1:8081/api/meetings/ingest`, template **Compact**, owner filter `all`. Paths default to `~/Documents/MeetingNotes`; override with `HERALD_MEETINGNOTES_DB_PATH` / `HERALD_MEETINGNOTES_DIR`.
 
 ## Telegram Commands
 
@@ -547,6 +572,8 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 | `HERALD_MODEL_OPENAI` | OpenAI subagent tier | No | `gpt-4o` |
 | `HERALD_MODEL_OLLAMA` | Ollama (local) subagent tier | No | `llama3.2` |
 | `HERALD_MODEL_GEMINI` | Gemini subagent tier | No | `gemini-2.5-flash` |
+| `LMSTUDIO_BASE_URL` | LM Studio OpenAI-compatible base URL — set to enable the provider + auto-discovery | No | — |
+| `HERALD_MODEL_LMSTUDIO` | LM Studio model id (overridden by whatever's loaded once discovery runs) | No | `qwen/qwen3.5-35b-a3b` |
 | `HERALD_MODEL_CATALOG_<PROVIDER>` | Comma-separated model list shown in the console switcher (`ANTHROPIC`, `OPENAI`, `GEMINI`, ...) | No | Curated per provider |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Google Workspace (`.env` is the source of truth) | No | — |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` | OAuth client secret | No | — |
@@ -559,6 +586,9 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 | `HERALD_AGENT_PERSONA` | Override agent persona | No | Built-in default |
 | `HERALD_AGENT_CONTEXT_FILE` | Path to standing brief | No | `~/.herald/CONTEXT.md` |
 | `HERALD_WEATHER_LOCATION` | Location for weather tool | No | — |
+| `HERALD_MEETINGNOTES_DB_PATH` | MeetingNotes read-only SQLite catalog (date-query backstop) | No | `~/Documents/MeetingNotes/db.sqlite` |
+| `HERALD_MEETINGNOTES_DIR` | MeetingNotes library root (holds `meetings/{slug}/summary.md`) | No | `~/Documents/MeetingNotes` |
+| `HERALD_MEETINGNOTES_CATCHUP_CRON` | Daily meeting catch-up schedule (Spring cron); `-` disables | No | `0 0 18 * * *` |
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_ANTHROPIC_CACHE_STRATEGY` | Anthropic prompt-cache strategy: `none` / `tools_only` / `system_only` / `system_and_tools` / `conversation_history` | No | `system_and_tools` |
 | `HERALD_MEMORY_CONSOLIDATION_TRIGGER` | First-turn-of-day memory consolidation reminder: `daily` / `off` | No | `daily` |
@@ -745,6 +775,14 @@ erDiagram
         text content
         text type
         datetime timestamp
+    }
+    meetings_ingested {
+        text meeting_id PK
+        text slug
+        text title
+        text started_at
+        text source
+        datetime ingested_at
     }
 ```
 
