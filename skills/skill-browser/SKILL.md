@@ -2,7 +2,8 @@
 name: skill-browser
 description: >
   Browse, search, and install skills from Anthropic's official skills catalog
-  at github.com/anthropics/skills. Use whenever the user asks "do I have a
+  at github.com/anthropics/skills and from ClawHub (clawhub.ai), a
+  community-driven skill marketplace. Use whenever the user asks "do I have a
   skill for X", "is there a skill for Y", "browse available skills", "install
   the <name> skill", or mentions a capability Herald might not support yet
   (Excel / Word / PowerPoint / PDF generation / MCP server building / frontend
@@ -13,7 +14,7 @@ description: >
 
 # Skill Browser
 
-Turns Herald into an opt-in consumer of Anthropic's growing public skill library. The catalog ships new skills over time; this lets the user pull them in on demand rather than bundling everything up front and bloating the boot-time context.
+Turns Herald into an opt-in consumer of two skill catalogs: Anthropic's official skill library (`anthropics/skills` on GitHub) and ClawHub (`clawhub.ai`), a community-driven marketplace. Both catalogs ship new skills over time; this lets the user pull them in on demand rather than bundling everything up front and bloating the boot-time context.
 
 **This is NOT a tool you call directly.** Use `shell` + `gh api` (or `curl`) to query GitHub, then the filesystem tools to write files under `~/.herald/skills/<name>/`. The `SkillsWatcher` picks up new files with a 250 ms debounce — the skill becomes usable in the next agent turn without a restart.
 
@@ -26,7 +27,7 @@ Turns Herald into an opt-in consumer of Anthropic's growing public skill library
   The unauthenticated API rate limit (60 requests/hour) is plenty for this skill — we only burn a few calls per install. If the user runs into rate limits, `gh auth login` raises it to 5k/hour.
 - Herald's skills directory: `~/.herald/skills/` by default (see `HERALD_SKILLS_DIRECTORY`). Confirm it exists and is writable before any install.
 
-## Step 1 — list what's available
+## Step 1a — list what's available (anthropics/skills)
 
 ```bash
 gh api repos/anthropics/skills/contents/skills \
@@ -54,7 +55,55 @@ REMOTE=$(gh api repos/anthropics/skills/contents/skills \
 comm -23 <(echo "$REMOTE") <(echo "$LOCAL")
 ```
 
-## Step 2 — preview a specific skill
+## Step 1b — browse ClawHub
+
+ClawHub (`clawhub.ai`) is a community-driven skill marketplace. List available skills:
+
+```bash
+curl -sL 'https://clawhub.ai/api/v1/skills?sort=downloads&limit=30' \
+    | jq -r '.items[] | "\(.slug)\t\(.summary // .description | .[0:80])"'
+```
+
+Pagination — if `nextCursor` is present, fetch the next page:
+
+```bash
+NEXT=$(curl -sL 'https://clawhub.ai/api/v1/skills?sort=downloads&limit=30' | jq -r '.nextCursor // empty')
+if [ -n "$NEXT" ]; then
+    curl -sL "https://clawhub.ai/api/v1/skills?sort=downloads&limit=30&cursor=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$NEXT'))")"
+fi
+```
+
+### Search / filter by keyword
+
+```bash
+# Client-side filter — ClawHub has no server-side search param
+curl -sL 'https://clawhub.ai/api/v1/skills?sort=downloads&limit=100' \
+    | jq -r --arg q "github" '.items[] | select(.slug + " " + (.summary // "") | test($q; "i")) | "\(.slug)\t\(.summary // .description | .[0:80])"'
+```
+
+### "What's on ClawHub that I don't already have?"
+
+```bash
+LOCAL=$(ls -1 ~/.herald/skills/ 2>/dev/null | sort)
+REMOTE=$(curl -sL 'https://clawhub.ai/api/v1/skills?sort=downloads&limit=100' \
+    | jq -r '.items[].slug' | sort)
+comm -23 <(echo "$REMOTE") <(echo "$LOCAL")
+```
+
+## Catalog — sources at a glance
+
+| | anthropics/skills | ClawHub |
+|---|---|---|
+| **URL** | `github.com/anthropics/skills` | `clawhub.ai/skills` |
+| **Curated by** | Anthropic (official) | Community contributors |
+| **Auth required** | No (`gh` unauthenticated OK) | No (public API, no keys) |
+| **List command** | `gh api repos/anthropics/skills/contents/skills --jq '...'` | `curl -sL 'https://clawhub.ai/api/v1/skills?sort=downloads'` |
+| **Delivery** | Individual files via GitHub contents API | ZIP archive via `/api/v1/download?slug=` |
+| **Provenance marker** | `source: anthropics-skills` | `source: clawhub:<url>` |
+| **Size cap** | 500 KB | 250 KB |
+| **Trust level** | High (Anthropic-maintained) | Medium (community — preview required, stronger trust checkpoint) |
+
+## Step 2a — preview a specific skill (anthropics/skills)
 
 Fetch the upstream SKILL.md to show the user **before** installing. They should see what they're pulling in:
 
@@ -70,6 +119,38 @@ Surface:
 Then ask via `askUserQuestion`:
 
 > The `<name>` skill from anthropics/skills does [one-line summary]. Install into `~/.herald/skills/<name>/`?
+
+## Step 2b — preview a ClawHub skill
+
+ClawHub skills are **community-contributed** — they have not been reviewed or vetted by Anthropic. Preview is mandatory before install.
+
+Download the skill ZIP to a temp directory and show the SKILL.md content:
+
+```bash
+SKILL_NAME="<slug>"
+TMPDIR=$(mktemp -d)
+curl -sL "https://wry-manatee-359.convex.site/api/v1/download?slug=$SKILL_NAME" -o "$TMPDIR/$SKILL_NAME.zip"
+unzip -o "$TMPDIR/$SKILL_NAME.zip" -d "$TMPDIR/$SKILL_NAME" >/dev/null
+cat "$TMPDIR/$SKILL_NAME/SKILL.md"
+```
+
+Surface:
+- The `description` frontmatter field (what triggers it).
+- The first 200 words of the body (what it actually does).
+- Any unusual dependencies mentioned in the body (e.g. Python packages, CLIs).
+- The file listing (note any `scripts/` or `hooks/` — these run code on behalf of the user).
+
+**Trust checkpoint — stronger than for anthropics/skills.** ClawHub skills are written by community members, not vetted by Anthropic. They may contain arbitrary instructions that execute via the agent's tools. Ask via `askUserQuestion`:
+
+> ⚠️ **Community skill — not Anthropic-vetted.** The `<name>` skill from ClawHub does [one-line summary]. It was published by a community contributor and has NOT been reviewed by Anthropic. Files include: [list files, flag any scripts/hooks]. Do you want to install it into `~/.herald/skills/<name>/`? (yes / no / show full SKILL.md)
+
+Do **not** proceed without explicit user confirmation. If the user asks to see the full SKILL.md, display it and ask again.
+
+Clean up the temp directory after preview:
+
+```bash
+rm -rf "$TMPDIR"
+```
 
 ## Step 3a — install from anthropics/skills
 
