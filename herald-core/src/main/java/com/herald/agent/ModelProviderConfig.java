@@ -5,6 +5,9 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.OpenAIClientAsync;
 import com.openai.credential.BearerTokenCredential;
 import com.openai.credential.Credential;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.observation.ObservationRegistry;
+import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -58,11 +61,13 @@ public class ModelProviderConfig {
         Credential credential = BearerTokenCredential.create(apiKey);
         OpenAIClient syncClient = OpenAiSetup.setupSyncClient(
                 baseUrl, null, credential, null, null, null, false, false,
-                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null)
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
+                ObservationRegistry.NOOP, Metrics.globalRegistry, List.of())
                 .withOptions(b -> b.httpClient(sharedSig));
         OpenAIClientAsync asyncClient = OpenAiSetup.setupAsyncClient(
                 baseUrl, null, credential, null, null, null, false, false,
-                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null)
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
+                ObservationRegistry.NOOP, Metrics.globalRegistry, List.of())
                 .withOptions(b -> b.httpClient(sharedSig));
         return OpenAiChatModel.builder()
                 .openAiClient(syncClient)
@@ -97,7 +102,8 @@ public class ModelProviderConfig {
         OpenAIClient syncClient = buildSyncClient(apiKey, baseUrl);
         OpenAIClientAsync asyncClient = OpenAiSetup.setupAsyncClient(
                 baseUrl, null, credential, null, null, null, false, false,
-                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null);
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
+                ObservationRegistry.NOOP, Metrics.globalRegistry, List.of());
         return OpenAiChatModel.builder()
                 .openAiClient(syncClient)
                 .openAiClientAsync(asyncClient)
@@ -108,6 +114,7 @@ public class ModelProviderConfig {
         Credential credential = BearerTokenCredential.create(apiKey);
         return OpenAiSetup.setupSyncClient(
                 baseUrl, null, credential, null, null, null, false, false,
-                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null);
+                null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
+                ObservationRegistry.NOOP, Metrics.globalRegistry, List.of());
     }
 }
