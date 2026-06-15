@@ -164,8 +164,13 @@ public class FailoverChatModel implements ChatModel {
     }
 
     @Override
-    public ChatOptions getDefaultOptions() {
-        return chain.get(0).delegate().getDefaultOptions();
+    public ChatOptions getOptions() {
+        // Spring AI 2.0 GA made getOptions() the primary method (the default
+        // returns an empty ChatOptions) and deprecated getDefaultOptions() into
+        // a delegate of getOptions(). Override getOptions() so the failover model
+        // surfaces the primary entry's real (tool-calling) options instead of an
+        // empty default — overriding getDefaultOptions() alone no longer suffices.
+        return chain.get(0).delegate().getOptions();
     }
 
     /** Exposes the chain to tools / {@code /model status}. Immutable copy. */

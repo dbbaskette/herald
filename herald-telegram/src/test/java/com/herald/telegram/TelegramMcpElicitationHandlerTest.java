@@ -18,7 +18,7 @@ class TelegramMcpElicitationHandlerTest {
 
         TelegramMcpElicitationHandler handler = new TelegramMcpElicitationHandler(qh);
 
-        ElicitRequest request = new ElicitRequest("What size coffee?", null);
+        ElicitRequest request = ElicitRequest.builder().message("What size coffee?").requestedSchema(java.util.Map.of("type", "object")).build();
         ElicitResult result = handler.handleElicitation(request);
 
         assertThat(result.action()).isEqualTo(ElicitResult.Action.ACCEPT);
@@ -32,7 +32,7 @@ class TelegramMcpElicitationHandlerTest {
 
         TelegramMcpElicitationHandler handler = new TelegramMcpElicitationHandler(qh);
 
-        ElicitRequest request = new ElicitRequest("Pick a size", null);
+        ElicitRequest request = ElicitRequest.builder().message("Pick a size").requestedSchema(java.util.Map.of("type", "object")).build();
         ElicitResult result = handler.handleElicitation(request);
 
         assertThat(result.action()).isEqualTo(ElicitResult.Action.DECLINE);
@@ -46,7 +46,7 @@ class TelegramMcpElicitationHandlerTest {
 
         TelegramMcpElicitationHandler handler = new TelegramMcpElicitationHandler(qh);
 
-        ElicitRequest request = new ElicitRequest("Choose option", null);
+        ElicitRequest request = ElicitRequest.builder().message("Choose option").requestedSchema(java.util.Map.of("type", "object")).build();
         ElicitResult result = handler.handleElicitation(request);
 
         assertThat(result.action()).isEqualTo(ElicitResult.Action.DECLINE);
@@ -59,7 +59,7 @@ class TelegramMcpElicitationHandlerTest {
 
         TelegramMcpElicitationHandler handler = new TelegramMcpElicitationHandler(qh);
 
-        ElicitRequest request = new ElicitRequest("What is your preferred language?", null);
+        ElicitRequest request = ElicitRequest.builder().message("What is your preferred language?").requestedSchema(java.util.Map.of("type", "object")).build();
         handler.handleElicitation(request);
 
         verify(qh).askQuestion(argThat(msg ->

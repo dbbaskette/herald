@@ -107,8 +107,10 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
         String augmentedSystem = existingSystem + sep + sep
                 + memorySystemPrompt + sep + sep + consolidationReminder;
 
-        ToolCallingChatOptions newOptions = (ToolCallingChatOptions) toolOptions.copy();
-        List<ToolCallback> merged = new ArrayList<>(newOptions.getToolCallbacks());
+        // Spring AI 2.0 GA: getToolCallbacks() may return null when no tools are
+        // set (it returned an empty list pre-GA), so guard before copying.
+        List<ToolCallback> existing = toolOptions.getToolCallbacks();
+        List<ToolCallback> merged = new ArrayList<>(existing != null ? existing : List.of());
         Set<String> existingNames = new LinkedHashSet<>();
         for (ToolCallback cb : merged) {
             existingNames.add(cb.getToolDefinition().name());
@@ -118,7 +120,9 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
                 merged.add(cb);
             }
         }
-        newOptions.setToolCallbacks(new ArrayList<>(merged));
+        // Spring AI 2.0 GA: ChatOptions are immutable — rebuild via mutate()
+        // instead of the removed copy() + setToolCallbacks().
+        ToolCallingChatOptions newOptions = toolOptions.mutate().toolCallbacks(merged).build();
 
         Prompt newPrompt = request.prompt().mutate()
                 .chatOptions(newOptions)

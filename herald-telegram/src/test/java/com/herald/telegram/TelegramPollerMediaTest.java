@@ -51,8 +51,8 @@ class TelegramPollerMediaTest {
     @Test
     void extractTextReturnsNullWhenFileExceedsCap() throws Exception {
         Path file = tempDir.resolve("big.txt");
-        // 11 MB — above the 10 MB cap.
-        Files.write(file, new byte[11 * 1024 * 1024]);
+        // 21 MB — above the 20 MB cap (HeraldLimits.MAX_UPLOAD_BYTES).
+        Files.write(file, new byte[21 * 1024 * 1024]);
 
         assertThat(TelegramPoller.tryExtractDocumentText(file, "text/plain"))
                 .isNull();

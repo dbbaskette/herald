@@ -27,8 +27,10 @@ class EphemeralRunnerTest {
 
     private ChatModel createMockModel(String responseText) {
         ChatModel mockModel = mock(ChatModel.class);
-        // ToolCallAdvisor requires ToolCallingChatOptions from the model
-        when(mockModel.getDefaultOptions())
+        // ToolCallAdvisor requires ToolCallingChatOptions from the model.
+        // Spring AI 2.0 GA: the ChatClient request path reads getOptions()
+        // (getDefaultOptions() is deprecated-for-removal).
+        when(mockModel.getOptions())
                 .thenReturn(DefaultToolCallingChatOptions.builder().build());
         if (responseText != null) {
             var response = new ChatResponse(List.of(

@@ -34,6 +34,15 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
+        <!-- OpenAI SDK OkHttp client — needed at compile for the Gemini
+             thought_signature HttpClient wrapper. Spring AI 2.0 GA no longer
+             exposes it transitively at compile scope. Pinned to the openai-java
+             version spring-ai-openai:2.0.0 resolves. -->
+        <dependency>
+            <groupId>com.openai</groupId>
+            <artifactId>openai-java-client-okhttp</artifactId>
+            <version>4.39.1</version>
+        </dependency>
 
         <!-- Community agent utilities -->
         <dependency>
