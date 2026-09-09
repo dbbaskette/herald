@@ -10,8 +10,8 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Java](https://img.shields.io/badge/Java-21-orange.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen.svg)
-![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M5-blueviolet.svg)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-blueviolet.svg)
 ![Status](https://img.shields.io/badge/status-active-success)
 
 ---
@@ -421,7 +421,7 @@ This guide walks you through setting up the full Telegram + memory + cron experi
 | **macOS** | Any recent | — |
 | **Java JDK** | 21+ | `java -version` |
 | **Maven** | 3.9+ (wrapper included) | `./mvnw -version` |
-| **Node.js** | 20+ | `node -v` |
+| **Node.js** (console build only) | 22.23.1 (see `.nvmrc`) | `node -v` |
 | **npm** | 10+ | `npm -v` |
 
 You will also need:
@@ -525,11 +525,11 @@ Logs land in `~/Library/Logs/herald.log`.
 ### Step 6 — Start the console (optional)
 
 ```bash
-cd herald-ui/frontend && npm install && npm run build && cd ../..
+cd herald-ui/frontend && npm ci && npm run build && cd ../..
 ./mvnw -pl herald-ui spring-boot:run
 ```
 
-Then open [http://localhost:8080](http://localhost:8080).
+Then open [http://localhost:8080](http://localhost:8080). The console requires Safari 16.4+, Chrome 111+, or Firefox 128+ for Tailwind CSS 4. Node is required to build the console assets, but not to run the packaged Java application.
 
 ### Step 7 — Google Workspace (optional)
 
@@ -714,14 +714,16 @@ herald/
 | Component | Technology |
 |-----------|------------|
 | Language | Java 21 (virtual threads) |
-| Framework | Spring Boot 4.0.x |
-| AI Framework | Spring AI 2.0.0-SNAPSHOT |
-| Agent Utils | spring-ai-agent-utils |
-| Telegram | pengrad/java-telegram-bot-api |
+| Framework | Spring Boot 4.1.1 |
+| AI Framework | Spring AI 2.0.1 |
+| Agent Utils | spring-ai-agent-utils / A2A 0.12.0 |
+| Telegram | pengrad/java-telegram-bot-api 10.1.0 |
 | Database | SQLite (WAL mode) |
-| Console Frontend | Vue 3 + Vite + Tailwind CSS |
+| Console Frontend | Vue 3.5 + Vite 8 + Tailwind CSS 4 |
 | Console Backend | Spring MVC + SSE |
 | Process Management | macOS launchd |
+
+Dependency versions, compatibility overrides and update checks are documented in [Dependency maintenance](docs/maintenance/dependencies.md).
 
 ### Database Schema
 

@@ -221,7 +221,7 @@ echo ""
 # Check what's still needed
 MISSING=()
 command -v java &>/dev/null || MISSING+=("Java 21+")
-command -v node &>/dev/null || MISSING+=("Node.js 20+")
+command -v node &>/dev/null || MISSING+=("Node.js 22.23.1 (see .nvmrc)")
 [ -x "$OBSIDIAN_CLI" ] || MISSING+=("Obsidian")
 
 if [ ${#MISSING[@]} -gt 0 ]; then

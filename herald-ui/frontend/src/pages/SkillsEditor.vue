@@ -380,6 +380,9 @@ function formatTime(ts: string | null): string {
             </span>
             <button
               class="action-btn action-delete"
+              title="Delete skill"
+              aria-label="Delete skill"
+              :disabled="store.selectedReadOnly"
               @click="confirmingDelete = true"
             >
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1m2 0v8a2 2 0 01-2 2H6a2 2 0 01-2-2V4h8z"/></svg>

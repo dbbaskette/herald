@@ -10,8 +10,8 @@ const samplePage = {
       id: 'msg-1',
       role: 'assistant',
       content: 'Good morning briefing',
-      timestamp: '2026-03-10T10:00:00Z',
-      toolCalls: [
+      created_at: '2026-03-10T10:00:00Z',
+      tool_calls: [
         { name: 'read_file', inputs: { path: '/tmp/a.txt' }, outputs: 'file contents here' },
       ],
       subagentCalls: [
@@ -22,8 +22,8 @@ const samplePage = {
       id: 'msg-2',
       role: 'user',
       content: 'Thanks for the update',
-      timestamp: '2026-03-10T09:00:00Z',
-      toolCalls: [],
+      created_at: '2026-03-10T09:00:00Z',
+      tool_calls: [],
       subagentCalls: [],
     },
   ],
@@ -58,7 +58,7 @@ describe('ConversationHistory.vue', () => {
 
   it('renders the page title', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Conversation History')
+    expect(wrapper.text()).toContain('History')
   })
 
   it('shows loading state while fetching', async () => {
@@ -66,7 +66,7 @@ describe('ConversationHistory.vue', () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise(r => { resolveFetch = r })))
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Loading messages')
+      expect(wrapper.text()).toContain('Loading…')
     })
     resolveFetch!({ ok: true, json: () => Promise.resolve({ content: [], totalPages: 0, totalElements: 0, number: 0 }) })
   })
@@ -88,14 +88,14 @@ describe('ConversationHistory.vue', () => {
     }))
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('No conversation history yet')
+      expect(wrapper.text()).toContain('no conversation history yet')
     })
   })
 
   it('shows tool call count and expands on click', async () => {
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Tool Calls (1)')
+      expect(wrapper.text()).toContain('tool calls · 1')
     })
 
     // Tool name should be visible as button text
@@ -105,16 +105,16 @@ describe('ConversationHistory.vue', () => {
     const toolBtn = wrapper.find('.tool-toggle')
     await toolBtn.trigger('click')
 
-    expect(wrapper.text()).toContain('Inputs')
+    expect(wrapper.text()).toContain('inputs')
     expect(wrapper.text()).toContain('/tmp/a.txt')
-    expect(wrapper.text()).toContain('Outputs')
+    expect(wrapper.text()).toContain('outputs')
     expect(wrapper.text()).toContain('file contents here')
   })
 
   it('shows subagent calls and expands on click', async () => {
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Subagent Calls (1)')
+      expect(wrapper.text()).toContain('subagents · 1')
     })
 
     expect(wrapper.text()).toContain('research-agent')
@@ -123,23 +123,23 @@ describe('ConversationHistory.vue', () => {
     const subBtn = wrapper.findAll('.tool-toggle')[1]
     await subBtn.trigger('click')
 
-    expect(wrapper.text()).toContain('Result')
+    expect(wrapper.text()).toContain('result')
     expect(wrapper.text()).toContain('research complete')
   })
 
   it('shows pagination controls', async () => {
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Page 1 of 2')
+      expect(wrapper.text()).toContain('page 1 of 2')
     })
-    expect(wrapper.text()).toContain('75 messages')
-    expect(wrapper.text()).toContain('Previous')
-    expect(wrapper.text()).toContain('Next')
+    expect(wrapper.text()).toContain('75 total')
+    expect(wrapper.text()).toContain('prev')
+    expect(wrapper.text()).toContain('next')
   })
 
   it('has search input', () => {
     const wrapper = mountPage()
-    const input = wrapper.find('input[placeholder="Search messages…"]')
+    const input = wrapper.find('input[placeholder="search messages…"]')
     expect(input.exists()).toBe(true)
   })
 
@@ -155,20 +155,20 @@ describe('ConversationHistory.vue', () => {
       expect(wrapper.text()).toContain('Good morning briefing')
     })
 
-    expect(wrapper.text()).toContain('Clear History')
+    expect(wrapper.text()).toContain('Clear history')
 
     // Click Clear History
-    const clearBtn = wrapper.findAll('button').find(b => b.text() === 'Clear History')!
+    const clearBtn = wrapper.findAll('button').find(b => b.text() === 'Clear history')!
     await clearBtn.trigger('click')
 
     // Should show confirmation modal
     expect(wrapper.text()).toContain('Clear all conversation history?')
-    expect(wrapper.text()).toContain('Clear All')
+    expect(wrapper.text()).toContain('Clear all')
   })
 
   it('shows search and clear filters buttons', () => {
     const wrapper = mountPage()
     expect(wrapper.text()).toContain('Search')
-    expect(wrapper.text()).toContain('Clear Filters')
+    expect(wrapper.text()).toContain('Clear')
   })
 })

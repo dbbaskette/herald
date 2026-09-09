@@ -5,22 +5,24 @@ import SkillsEditor from './SkillsEditor.vue'
 import { useSkillsStore } from '@/stores/skills'
 
 // Stub EventSource globally
-vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => ({
+vi.stubGlobal('EventSource', vi.fn(function () { return {
   onopen: null,
   onmessage: null,
   onerror: null,
   close: vi.fn(),
   addEventListener: vi.fn(),
-})))
+} }))
 
 // Mock CodeMirror — the editor needs a DOM that jsdom can't fully support
 vi.mock('@codemirror/view', () => ({
-  EditorView: vi.fn().mockImplementation(() => ({
+  EditorView: Object.assign(vi.fn(function () { return {
     state: { doc: { toString: () => '', length: 0 } },
     dispatch: vi.fn(),
     destroy: vi.fn(),
-  })),
+  } }), { theme: vi.fn(() => []), updateListener: { of: vi.fn(() => []) } }),
   keymap: { of: () => [] },
+  lineNumbers: () => [],
+  highlightActiveLine: () => [],
 }))
 vi.mock('@codemirror/state', () => ({
   EditorState: {
@@ -47,8 +49,8 @@ vi.mock('codemirror', () => ({
 }))
 
 const sampleSkills = [
-  { name: 'my-skill', description: 'A local skill', source: 'local', readOnly: false },
-  { name: 'bundled-skill', description: 'A bundled skill', source: 'bundled', readOnly: true },
+  { name: 'my-skill', description: 'A local skill', source: 'local', readOnly: false, hasBundled: false },
+  { name: 'bundled-skill', description: 'A bundled skill', source: 'bundled', readOnly: true, hasBundled: true },
 ]
 
 function mountPage() {
@@ -70,14 +72,15 @@ describe('SkillsEditor.vue', () => {
 
   it('renders the page title when no skill is selected', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Skills Editor')
-    expect(wrapper.text()).toContain('Select a skill from the list')
+    expect(wrapper.text()).toContain('Skills')
+    expect(wrapper.text()).toContain('Select a skill or create a new one')
   })
 
-  it('shows loading state initially', () => {
+  it('shows loading state initially', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise(() => {})))
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Loading')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tree-loading').exists()).toBe(true)
   })
 
   it('renders skill list after data loads', async () => {
@@ -93,9 +96,8 @@ describe('SkillsEditor.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('bundled-skill')
     })
-    const items = wrapper.findAll('li')
-    const bundledItem = items.find(li => li.text().includes('bundled-skill'))
-    expect(bundledItem?.find('svg').exists()).toBe(true)
+    const bundledItem = wrapper.findAll('button').find(button => button.text().includes('bundled-skill'))
+    expect(bundledItem?.attributes('title')).toContain('A bundled skill')
   })
 
   it('shows toolbar buttons when a skill is selected', async () => {
@@ -113,8 +115,8 @@ describe('SkillsEditor.vue', () => {
 
     expect(wrapper.text()).toContain('Save')
     expect(wrapper.text()).toContain('Discard')
-    expect(wrapper.text()).toContain('New Skill')
-    expect(wrapper.text()).toContain('Delete')
+    expect(wrapper.find('button[title="New skill"]').exists()).toBe(true)
+    expect(wrapper.find('.action-delete').exists()).toBe(true)
   })
 
   it('disables save and discard when not dirty', async () => {
@@ -134,17 +136,19 @@ describe('SkillsEditor.vue', () => {
 
   it('shows read-only badge for bundled skills', async () => {
     const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('bundled-skill'))
     const store = useSkillsStore()
     store.selectedName = sampleSkills[1].name
     store.editorContent = 'bundled content'
     store.savedContent = 'bundled content'
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain('bundled skill and cannot be edited')
+    expect(wrapper.find('.tree-badge').text()).toBe('bundled')
   })
 
   it('disables save, discard, and delete for bundled skills', async () => {
     const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('bundled-skill'))
     const store = useSkillsStore()
     store.selectedName = sampleSkills[1].name
     store.editorContent = 'bundled content'
@@ -153,9 +157,9 @@ describe('SkillsEditor.vue', () => {
 
     const buttons = wrapper.findAll('button')
     const saveBtn = buttons.find(b => b.text() === 'Save')
-    const deleteBtn = buttons.find(b => b.text() === 'Delete')
+    const deleteBtn = wrapper.find('.action-delete')
     expect(saveBtn?.attributes('disabled')).toBeDefined()
-    expect(deleteBtn?.attributes('disabled')).toBeDefined()
+    expect(deleteBtn.attributes('disabled')).toBeDefined()
   })
 
   it('opens New Skill modal when button is clicked', async () => {
@@ -166,11 +170,11 @@ describe('SkillsEditor.vue', () => {
     store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
-    const newBtn = wrapper.findAll('button').find(b => b.text() === 'New Skill')
-    await newBtn?.trigger('click')
+    const newBtn = wrapper.find('button[title="New skill"]')
+    await newBtn.trigger('click')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain('Skill name')
+    expect(wrapper.text()).toContain('Skill Name')
     expect(wrapper.find('input[type="text"]').exists()).toBe(true)
   })
 
@@ -182,12 +186,12 @@ describe('SkillsEditor.vue', () => {
     store.savedContent = 'content'
     await wrapper.vm.$nextTick()
 
-    const deleteBtn = wrapper.findAll('button').find(b => b.text() === 'Delete')
-    await deleteBtn?.trigger('click')
+    const deleteBtn = wrapper.find('.action-delete')
+    await deleteBtn.trigger('click')
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Delete Skill')
-    expect(wrapper.text()).toContain('Are you sure')
+    expect(wrapper.text()).toContain('Remove my-skill.md permanently?')
   })
 
   it('shows SSE status chip', async () => {
@@ -199,6 +203,6 @@ describe('SkillsEditor.vue', () => {
     await wrapper.vm.$nextTick()
 
     // The chip should show Loaded or a status
-    expect(wrapper.text()).toMatch(/Loaded|Reloading|Error|Disconnected/)
+    expect(wrapper.text()).toMatch(/live|error|offline/)
   })
 })

@@ -8,9 +8,8 @@
  *   - IBM Plex Serif  (display titles, brand mark)
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../../tailwind.config.js";
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -141,7 +140,8 @@
 
   /* ─── Typography classes ─────────────────────────────────────── */
 
-  .display-title {
+  .display-title,
+  .page-title {
     font-family: 'IBM Plex Serif', Georgia, serif;
     font-size: 2rem;
     line-height: 2.5rem;
@@ -165,7 +165,11 @@
     color: var(--ink);
   }
 
-  .label {
+  .label,
+  .section-label,
+  .data-table th,
+  .table-header,
+  .section-rule__label {
     font-size: 0.75rem;
     line-height: 1rem;
     font-weight: 600;
@@ -179,9 +183,6 @@
     line-height: 1.125rem;
     color: var(--graphite-2);
   }
-
-  .page-title { @apply display-title; }
-  .section-label { @apply label; }
 
   /* ─── Page header ───────────────────────────────────────────── */
 
@@ -422,7 +423,17 @@
   .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-danger {
-    @apply btn-secondary;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid var(--paper-3);
+    border-radius: 6px;
+    box-shadow: var(--shadow-card);
+    transition: all 120ms;
     color: var(--err);
     border-color: var(--err-border);
     background: var(--err-soft);
@@ -503,7 +514,6 @@
     font-size: 0.9375rem;
   }
   .data-table th {
-    @apply label;
     text-align: left;
     padding: 10px 12px 10px 0;
     border-bottom: 1px solid var(--paper-3);
@@ -515,7 +525,6 @@
   }
   .data-table tbody tr:last-child td { border-bottom: none; }
   .data-table tbody tr:hover { background: var(--paper-2); }
-  .table-header { @apply label; }
   .data-row td  { padding: 10px 12px 10px 0; }
 
   .result-badge {
@@ -564,7 +573,7 @@
     margin: 20px 0 12px;
     color: var(--graphite-2);
   }
-  .section-rule__label { @apply label; flex-shrink: 0; }
+  .section-rule__label { flex-shrink: 0; }
   .section-rule__line { flex: 1; height: 1px; background: var(--paper-3); }
   .section-rule__trailing {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
