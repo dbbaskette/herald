@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      backend-libraries:
+        patterns:
+          - "*"
+      backend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: npm
+    directory: /herald-ui/frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      console-libraries:
+        patterns:
+          - "*"
+      console-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
