@@ -40,7 +40,7 @@ class DataSourceConfigTest {
     }
 
     @Test
-    void dataSourceCreatesAllFiveTables() throws SQLException {
+    void dataSourceCreatesAllRequiredTables() throws SQLException {
         HeraldConfig config = new HeraldConfig(
                 new HeraldConfig.Memory(tempDir.resolve("herald.db").toString()), null, null, null, null, null, null, null, null, null);
 
@@ -62,7 +62,7 @@ class DataSourceConfigTest {
                 tables.add(rs.getString(1));
             }
             assertThat(tables).containsExactlyInAnyOrder(
-                    "messages", "memory", "cron_jobs", "commands", "model_usage", "model_overrides",
+                    "messages", "memory", "cron_jobs", "cron_execution", "commands", "model_usage", "model_overrides",
                     "SPRING_AI_CHAT_MEMORY", "settings", "meetings_ingested");
         }
     }

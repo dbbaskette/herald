@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
 import com.herald.agent.AgentService;
@@ -38,6 +39,7 @@ public class CronService {
     private final ZoneId timezone;
     private final TaskScheduler scheduler;
     private final Map<Long, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
+    private final Map<Integer, Object> executionLocks = new ConcurrentHashMap<>();
     private final Optional<com.herald.agent.BudgetPolicy> budgetPolicy;
 
     public CronService(CronRepository cronRepository, ObjectProvider<AgentService> agentServiceProvider,
@@ -56,38 +58,48 @@ public class CronService {
 
     @PostConstruct
     void loadJobs() {
+        cronRepository.publishTimezone(timezone.toString());
         List<CronJob> enabledJobs = cronRepository.findEnabled();
         for (CronJob job : enabledJobs) {
-            scheduleJob(job);
+            try { scheduleJob(job); }
+            catch (IllegalArgumentException e) {
+                cronRepository.executionState(job.id(), "failed", "Invalid stored cron expression; edit this job to repair its schedule.");
+                log.warn("Cannot schedule cron job '{}'", job.name(), e);
+            }
         }
         log.info("Loaded {} enabled cron job(s)", enabledJobs.size());
     }
 
     public CronJob createJob(String name, String schedule, String prompt) {
-        CronJob job = new CronJob(null, name, schedule, prompt, null, true, false);
+        validateSchedule(schedule);
+        CronJob existing = cronRepository.findByName(name);
+        CronJob job = new CronJob(null, name, schedule, prompt, null, existing == null || existing.enabled(), existing != null && existing.builtIn());
         cronRepository.save(job);
         CronJob saved = cronRepository.findByName(name);
-        scheduleJob(saved);
+        rescheduleJob(saved);
         log.info("Created and scheduled cron job '{}'", name);
         return saved;
     }
 
     public CronJob updateJob(String name, String schedule, String prompt) {
         CronJob existing = cronRepository.findByName(name);
-        if (existing != null) {
-            cancelJob(existing.id());
-        }
-        CronJob job = new CronJob(null, name, schedule, prompt, null, true, false);
+        String expression = schedule == null && existing != null ? existing.schedule() : schedule;
+        String text = prompt == null && existing != null ? existing.prompt() : prompt;
+        validateSchedule(expression);
+        CronJob job = new CronJob(existing == null ? null : existing.id(), name, expression, text,
+                existing == null ? null : existing.lastRun(), existing == null || existing.enabled(),
+                existing != null && existing.builtIn());
         cronRepository.save(job);
         CronJob updated = cronRepository.findByName(name);
-        scheduleJob(updated);
+        rescheduleJob(updated);
         log.info("Updated and rescheduled cron job '{}'", name);
         return updated;
     }
 
     public void enableJob(String name) {
-        cronRepository.setEnabled(name, true);
         CronJob job = cronRepository.findByName(name);
+        if (job != null) validateSchedule(job.schedule());
+        cronRepository.setEnabled(name, true);
         if (job != null) {
             scheduleJob(job);
             log.info("Enabled cron job '{}'", name);
@@ -122,6 +134,7 @@ public class CronService {
      * Used when a job's cron expression is edited.
      */
     public void rescheduleJob(CronJob job) {
+        validateSchedule(job.schedule());
         cancelJob(job.id());
         if (job.enabled()) {
             scheduleJob(job);
@@ -130,15 +143,10 @@ public class CronService {
     }
 
     public CronJob rescheduleJob(String name, String schedule) {
-        CronJob existing = cronRepository.findByName(name);
-        if (existing != null) {
-            cancelJob(existing.id());
-        }
+        validateSchedule(schedule);
         cronRepository.updateSchedule(name, schedule);
         CronJob updated = cronRepository.findByName(name);
-        if (updated != null && updated.enabled()) {
-            scheduleJob(updated);
-        }
+        if (updated != null) rescheduleJob(updated);
         log.info("Rescheduled cron job '{}' with schedule '{}'", name, schedule);
         return updated;
     }
@@ -161,17 +169,39 @@ public class CronService {
         return cronRepository.findAll();
     }
 
-    private void scheduleJob(CronJob job) {
-        cancelJob(job.id());
-        Runnable task = () -> executeJob(job);
-        CronTrigger trigger = new CronTrigger(job.schedule(), timezone);
-        ScheduledFuture<?> future = scheduler.schedule(task, trigger);
-        scheduledFutures.put(job.id().longValue(), future);
+    static String validateSchedule(String expression) {
+        if (expression == null || expression.length() > 256) throw new IllegalArgumentException("Provide a cron expression with five or six fields");
+        String normalized = expression.trim();
+        if (normalized.split("\\s+").length == 5) normalized = "0 " + normalized;
+        CronExpression.parse(normalized);
+        return normalized;
     }
 
-    void executeJob(CronJob job) {
+    private void scheduleJob(CronJob job) {
+        CronTrigger trigger = new CronTrigger(validateSchedule(job.schedule()), timezone);
+        cancelJob(job.id());
+        Runnable task = () -> {
+            synchronized (executionLocks.computeIfAbsent(job.id(), id -> new Object())) {
+                // Recheck after acquiring the lock: a preceding run may have delayed this callback.
+                CronJob current = cronRepository.findById(job.id());
+                if (current != null && current.enabled() && current.schedule().equals(job.schedule())) executeLocked(current);
+            }
+        };
+        ScheduledFuture<?> future = scheduler.schedule(task, trigger);
+        if (future != null) scheduledFutures.put(job.id().longValue(), future);
+    }
+
+    String executeJob(CronJob job) {
+        synchronized (executionLocks.computeIfAbsent(job.id(), id -> new Object())) {
+            return executeLocked(job);
+        }
+    }
+
+    private String executeLocked(CronJob job) {
+        String outcome = "completed";
         String conversationId = "cron-" + job.name();
         try {
+            cronRepository.executionState(job.id(), "running", null);
             log.info("Executing cron job '{}'", job.name());
             // Budget gate (#319): skip the job silently when blocked.
             if (budgetPolicy.isPresent()) {
@@ -179,7 +209,8 @@ public class CronService {
                 if (decision.isBlocked()) {
                     log.info("Cron job '{}' skipped — budget policy: {}",
                             job.name(), decision.message());
-                    return;
+                    cronRepository.executionState(job.id(), "skipped", decision.message());
+                    return "skipped";
                 }
             }
             String prompt;
@@ -192,6 +223,12 @@ public class CronService {
             } else {
                 prompt = job.prompt();
             }
+            // Built-in jobs keep their capability-aware context and honor saved prompt edits.
+            if (BriefingJob.MORNING_BRIEFING_NAME.equals(job.name())
+                    || BriefingJob.PARALLEL_MORNING_BRIEFING_NAME.equals(job.name())
+                    || BriefingJob.WEEKLY_REVIEW_NAME.equals(job.name())) {
+                prompt += "\n\n## Saved job instructions\n" + job.prompt();
+            }
             String response = agentServiceProvider.getObject().chat(prompt, conversationId);
             if (messageSender != null) {
                 messageSender.sendMessage(response);
@@ -199,8 +236,11 @@ public class CronService {
                 log.info("Cron job '{}' result (no messaging configured): {}", job.name(), response);
             }
             cronRepository.updateLastRun(job.name(), LocalDateTime.now());
+            cronRepository.executionState(job.id(), "completed", null);
             log.info("Cron job '{}' completed successfully", job.name());
         } catch (Exception e) {
+            outcome = "failed";
+            cronRepository.executionState(job.id(), "failed", "Execution failed; check the bot logs for details.");
             log.error("Cron job '{}' failed", job.name(), e);
             if (messageSender != null) {
                 try {
@@ -210,7 +250,9 @@ public class CronService {
                 }
             }
         } finally {
-            chatMemory.clear(conversationId);
+            try { chatMemory.clear(conversationId); }
+            catch (Exception cleanupError) { log.warn("Could not clear cron conversation", cleanupError); }
         }
+        return outcome;
     }
 }

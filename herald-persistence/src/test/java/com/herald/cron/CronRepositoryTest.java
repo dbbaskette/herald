@@ -196,4 +196,13 @@ class CronRepositoryTest {
         assertThat(jobs).anyMatch(j -> j.name().equals("morning-briefing") && j.builtIn());
         assertThat(jobs).anyMatch(j -> j.name().equals("weekly-review") && j.builtIn());
     }
+
+    @Test
+    void invalidUpdateLeavesOriginalScheduleAndStateIntact() {
+        repository.save(new CronJob(null,"kept","15 */10 9-17 * * MON,WED","prompt",null,false,false));
+        assertThatThrownBy(() -> repository.updateSchedule("kept", "999-999 / - * *")).isInstanceOf(IllegalArgumentException.class);
+        CronJob saved = repository.findByName("kept");
+        assertThat(saved.schedule()).isEqualTo("15 */10 9-17 * * MON,WED");
+        assertThat(saved.enabled()).isFalse();
+    }
 }

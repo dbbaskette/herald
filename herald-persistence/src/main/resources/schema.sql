@@ -121,3 +121,10 @@ CREATE TABLE IF NOT EXISTS meetings_ingested (
     source       TEXT,
     ingested_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS cron_execution (
+    job_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL,
+    message TEXT,
+    updated_at TEXT NOT NULL
+);

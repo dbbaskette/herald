@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useSkillValidation } from '@/lib/useSkillValidation'
+import { setDiagnostics, lintGutter } from '@codemirror/lint'
+import { createSseConnection } from '@/lib/sse'
 import { useSkillsStore } from '@/stores/skills'
 import DiffEditor from '@/components/DiffEditor.vue'
 import NowStripe from '@/components/NowStripe.vue'
@@ -13,6 +17,29 @@ import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
 const store = useSkillsStore()
+const { selectedName, editorContent } = storeToRefs(store)
+const { result: validation, pending: validating, referenceError } = useSkillValidation(selectedName, editorContent)
+function displayDiagnostics() {
+  if (!editorView) return
+  const doc = editorView.state.doc
+  editorView.dispatch(setDiagnostics(editorView.state, validation.value.diagnostics.map(d => {
+    const line = doc.line(Math.min(d.line, doc.lines))
+    const from = Math.min(line.to, line.from + d.column - 1)
+    return { from, to: Math.min(line.to, from + 1), severity: d.severity, message: d.message }
+  })))
+}
+watch(validation, displayDiagnostics)
+function jumpToDiagnostic(line: number) {
+  if (!editorView) { diffMode.value = false; void nextTick(() => jumpToDiagnostic(line)); return }
+  const position = editorView.state.doc.line(Math.min(line, editorView.state.doc.lines)).from
+  editorView.dispatch({ selection: { anchor: position }, scrollIntoView: true })
+  editorView.focus()
+}
+async function selectSkill(name: string) {
+  if (store.isDirty && !window.confirm('Discard unsaved skill changes?')) return
+  await store.selectSkill(name)
+}
+
 
 const editorContainer = ref<HTMLElement | null>(null)
 let editorView: EditorView | null = null
@@ -25,7 +52,20 @@ const saveFlash = ref(false)
 
 const sseStatus = ref<'connected' | 'disconnected' | 'error'>('disconnected')
 const lastLoaded = ref<string | null>(null)
-let eventSource: EventSource | null = null
+const skillStream = createSseConnection('/api/status/stream', {
+  onState: state => { sseStatus.value = state === 'live' ? 'connected' : state === 'stopped' ? 'disconnected' : 'error' },
+  onMessage: readReload,
+  events: { 'skill-reload': readReload, status: readReload },
+})
+function readReload(event: MessageEvent) {
+  try {
+    const data = JSON.parse(event.data)
+    const timestamp = data?.skills?.lastReload ?? (event.type === 'skill-reload' ? data?.timestamp : null)
+    if (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))) lastLoaded.value = timestamp
+    if ((typeof data?.timestamp === 'string' && Number.isFinite(Date.parse(data.timestamp)))
+        || (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)))) skillStream.acknowledge()
+  } catch { /* Keep last known reload on malformed events. */ }
+}
 
 // Diff view state (#363). Available when the selected skill has a bundled origin.
 const diffMode = ref(false)
@@ -77,6 +117,7 @@ function createEditor() {
     doc: store.editorContent,
     extensions: [
       lineNumbers(),
+      lintGutter(),
       highlightActiveLine(),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -128,11 +169,12 @@ function createEditor() {
           padding: '0 16px',
         },
       }),
-      EditorState.readOnly.of(false),
+      EditorState.readOnly.of(store.selectedReadOnly),
     ],
   })
 
   editorView = new EditorView({ state, parent: editorContainer.value })
+  displayDiagnostics()
 }
 
 function syncEditorContent(content: string) {
@@ -145,15 +187,15 @@ function syncEditorContent(content: string) {
   }
 }
 
-watch(() => store.savedContent, (val) => {
-  syncEditorContent(val)
+watch(() => store.savedContent, () => {
+  syncEditorContent(store.editorContent)
 })
 
 watch(() => store.selectedName, (name) => {
   if (name) {
-    if (editorView) {
-      syncEditorContent(store.editorContent)
-    } else if (!diffMode.value) {
+    if (!diffMode.value) {
+      editorView?.destroy()
+      editorView = null
       createEditor()
     }
   } else {
@@ -176,44 +218,18 @@ watch(diffMode, async (on) => {
   }
 }, { flush: 'post' })
 
-onMounted(async () => {
-  await store.fetchSkills()
-  connectSSE()
+onMounted(() => {
+  skillStream.start()
+  void store.fetchSkills()
 })
 
 onUnmounted(() => {
   editorView?.destroy()
-  disconnectSSE()
+  skillStream.stop()
 })
 
-function connectSSE() {
-  disconnectSSE()
-  eventSource = new EventSource('/api/status/stream')
-  eventSource.onopen = () => { sseStatus.value = 'connected' }
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-      sseStatus.value = 'connected'
-      if (data.timestamp) lastLoaded.value = data.timestamp
-      if (data.skills?.lastReload) lastLoaded.value = data.skills.lastReload
-    } catch { /* ignore */ }
-  }
-  eventSource.onerror = () => {
-    sseStatus.value = 'error'
-    eventSource?.close()
-    setTimeout(() => connectSSE(), 5000)
-  }
-}
-
-function disconnectSSE() {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-    sseStatus.value = 'disconnected'
-  }
-}
-
 async function handleSave() {
+  if (!validation.value.valid || store.selectedReadOnly) return
   const ok = await store.saveSkill()
   if (ok) {
     syncEditorContent(store.editorContent)
@@ -282,6 +298,7 @@ function formatTime(ts: string | null): string {
           :kind="sseStatus === 'connected' ? 'live-pulse' : sseStatus === 'error' ? 'err' : 'idle'"
           size="sm"
         />
+        <button v-if="sseStatus !== 'connected'" class="action-btn" @click="skillStream.retry()">Retry connection</button>
         <span>{{ sseStatus === 'connected' ? 'live' : sseStatus === 'error' ? 'error' : 'offline' }}</span>
         <span v-if="lastLoaded && sseStatus === 'connected'" class="header-time">{{ formatTime(lastLoaded) }}</span>
       </template>
@@ -316,7 +333,7 @@ function formatTime(ts: string | null): string {
             class="tree-item"
             :class="{ active: store.selectedName === skill.name }"
             :title="skill.description || skill.name"
-            @click="store.selectSkill(skill.name)"
+            @click="selectSkill(skill.name)"
           >
             <svg class="file-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M3 1h7l3 3v9a2 2 0 01-2 2H5a2 2 0 01-2-2V3a2 2 0 012-2z" opacity="0.15"/><path d="M3 1h7l3 3v9a2 2 0 01-2 2H5a2 2 0 01-2-2V3a2 2 0 012-2z" fill="none" stroke="currentColor" stroke-width="1"/></svg>
             <span class="tree-name">{{ skill.name }}</span>
@@ -342,7 +359,7 @@ function formatTime(ts: string | null): string {
           <div class="toolbar-actions">
             <button
               class="action-btn action-save"
-              :disabled="!store.isDirty || store.saving"
+              :disabled="!store.isDirty || store.saving || store.selectedReadOnly || !validation.valid"
               @click="handleSave()"
             >
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 5.5V13a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1h6.5L13 5.5z"/><path d="M5 14v-4h6v4"/><path d="M10 2v3"/></svg>
@@ -389,6 +406,27 @@ function formatTime(ts: string | null): string {
             </button>
           </div>
         </div>
+
+        <section v-if="store.selectedName" class="validation-panel" aria-label="Skill validation">
+          <div class="validation-preview">
+            <strong>Model selection preview</strong>
+            <code>{{ validation.name || 'Missing name' }}</code>
+            <p>{{ validation.description || 'Add a description to explain when this skill should be used.' }}</p>
+          </div>
+          <div class="validation-feedback" aria-live="polite">
+            <span v-if="validating">Checking references…</span>
+            <span v-else-if="validation.valid && !validation.diagnostics.length">Frontmatter valid</span>
+            <span v-if="referenceError">{{ referenceError }}</span>
+            <span v-else-if="validation.capabilityStatus === 'unavailable'">Bot unavailable — tool checks not run.</span>
+            <span v-if="validation.vaultStatus === 'disabled'">Vault checks off — no vault configured.</span>
+            <span v-else-if="validation.vaultStatus === 'unavailable'">Vault unavailable — wikilinks not checked.</span>
+            <button v-for="(diagnostic, index) in validation.diagnostics" :key="index"
+              :class="['validation-diagnostic', diagnostic.severity]" @click="jumpToDiagnostic(diagnostic.line)">
+              Line {{ diagnostic.line }}: {{ diagnostic.message }}
+            </button>
+            <span v-if="!validation.valid">Fix frontmatter errors before saving. Reference warnings do not block saving.</span>
+          </div>
+        </section>
 
         <!-- Diff view (bundled vs override) -->
         <DiffEditor
@@ -483,6 +521,14 @@ function formatTime(ts: string | null): string {
 </template>
 
 <style scoped>
+.validation-panel { display: flex; gap: 16px; padding: 12px 16px; color: #d4cdc4; border-bottom: 1px solid #353944; max-height: 210px; overflow: auto; font-size: 12px; }
+.validation-preview, .validation-feedback { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
+.validation-preview strong { color: #e2b563; }
+.validation-preview p { margin: 0; white-space: pre-wrap; }
+.validation-diagnostic { text-align: left; background: none; border: none; cursor: pointer; }
+.validation-diagnostic.error { color: #fca5a5; }
+.validation-diagnostic.warning { color: #e2b563; }
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ═══════════════════════════════════

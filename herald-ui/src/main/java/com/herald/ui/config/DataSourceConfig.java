@@ -103,6 +103,14 @@ class DataSourceConfig {
                     value      TEXT NOT NULL,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )""");
+            stmt.execute("""
+CREATE TABLE IF NOT EXISTS cron_execution (
+    job_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL,
+    message TEXT,
+    updated_at TEXT NOT NULL
+);
+                """);
             log.info("Database schema verified");
         } catch (SQLException e) {
             log.warn("Failed to ensure schema: {}", e.getMessage());

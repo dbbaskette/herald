@@ -45,13 +45,21 @@ export const useSkillsStore = defineStore('skills', () => {
     }
   }
 
+  let selectionGeneration = 0
   async function selectSkill(name: string) {
+    const generation = ++selectionGeneration
+    const previousDraft = editorContent.value
     loading.value = true
     error.value = null
     try {
       const res = await fetch(`/api/skills/${encodeURIComponent(name)}`)
       if (!res.ok) throw new Error(res.statusText)
       const content = await res.text()
+      if (generation !== selectionGeneration) return
+      if (editorContent.value !== previousDraft) {
+        error.value = 'Your draft changed while loading. Select the skill again after saving or discarding it.'
+        return
+      }
       selectedName.value = name
       editorContent.value = content
       savedContent.value = content
@@ -61,28 +69,39 @@ export const useSkillsStore = defineStore('skills', () => {
       if (summary?.hasBundled) {
         try {
           const bundledRes = await fetch(`/api/skills/${encodeURIComponent(name)}/bundled`)
-          if (bundledRes.ok) bundledContent.value = await bundledRes.text()
+          if (bundledRes.ok) {
+            const baseline = await bundledRes.text()
+            if (generation === selectionGeneration) bundledContent.value = baseline
+          }
         } catch { /* leave empty */ }
       }
     } catch (e: any) {
-      error.value = e.message
+      if (generation === selectionGeneration) error.value = e.message
     } finally {
-      loading.value = false
+      if (generation === selectionGeneration) loading.value = false
     }
   }
 
   async function saveSkill(): Promise<boolean> {
-    if (!selectedName.value || !isDirty.value) return false
+    if (!selectedName.value || !isDirty.value || selectedReadOnly.value || saving.value) return false
+    const name = selectedName.value, draft = editorContent.value
     saving.value = true
     error.value = null
     try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(selectedName.value)}`, {
+      const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain' },
-        body: editorContent.value,
+        body: draft,
       })
-      if (!res.ok) throw new Error(res.statusText)
-      savedContent.value = editorContent.value
+      if (!res.ok) {
+        if (res.status === 422) {
+          const validation = await res.json()
+          const errors = validation.diagnostics?.filter((d: any) => d.severity === 'error')
+          throw new Error(errors?.map((d: any) => `Line ${d.line}: ${d.message}`).join(' ') || 'Fix invalid skill frontmatter before saving.')
+        }
+        throw new Error(res.statusText || 'Skill save failed. Your draft is preserved.')
+      }
+      if (selectedName.value === name) savedContent.value = draft
       return true
     } catch (e: any) {
       error.value = e.message

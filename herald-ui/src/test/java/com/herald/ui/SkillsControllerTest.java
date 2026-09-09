@@ -71,6 +71,33 @@ class SkillsControllerTest {
     }
 
     @Test
+    void createdBooleanAndNumericNamesRemainYamlStrings() throws Exception {
+        for (String name : new String[]{"true", "on", "123"}) {
+            mockMvc.perform(post("/api/skills").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"" + name + "\"}"))
+                    .andExpect(status().isCreated());
+            String content = Files.readString(skillsDir.resolve(name + "/SKILL.md"));
+            org.assertj.core.api.Assertions.assertThat(SkillsController.parseFrontmatter(content).get("name")).isEqualTo(name);
+        }
+    }
+
+    @Test
+    void validationBlocksBrokenYamlAtSaveWithoutChangingDisk() throws Exception {
+        createSkill("repair", "---\nname: repair\ndescription: valid\n---\nBody");
+        mockMvc.perform(post("/api/skills/validate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"repair\",\"content\":\"---\\nname: one\\nname: two\\ndescription: hi\\n---\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(3));
+        mockMvc.perform(put("/api/skills/repair").contentType(MediaType.TEXT_PLAIN)
+                .content("---\nname: repair\ndescription: [\n---"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.diagnostics[0].severity").value("error"));
+        org.assertj.core.api.Assertions.assertThat(Files.readString(skillsDir.resolve("repair/SKILL.md")))
+                .contains("description: valid");
+        mockMvc.perform(get("/api/skills")).andExpect(status().isOk());
+    }
+
+    @Test
     void listReturnsEmptyArrayWhenNoSkills() throws Exception {
         mockMvc.perform(get("/api/skills"))
                 .andExpect(status().isOk())
@@ -168,7 +195,7 @@ class SkillsControllerTest {
         Path skillFile = skillsDir.resolve("new-skill").resolve("SKILL.md");
         assert Files.exists(skillFile);
         String content = Files.readString(skillFile);
-        assert content.contains("name: new-skill");
+        org.assertj.core.api.Assertions.assertThat(SkillsController.parseFrontmatter(content).get("name")).isEqualTo("new-skill");
         assert content.contains("description:");
     }
 

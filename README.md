@@ -529,6 +529,8 @@ cd herald-ui/frontend && npm ci && npm run build && cd ../..
 ./mvnw -pl herald-ui spring-boot:run
 ```
 
+See [Console scheduling, skills and memory](docs/console-editing.md) for validation, recoverable memory edits and run-state behavior.
+
 Then open [http://localhost:8080](http://localhost:8080). The console requires Safari 16.4+, Chrome 111+, or Firefox 128+ for Tailwind CSS 4. Node is required to build the console assets, but not to run the packaged Java application.
 
 ### Step 7 — Google Workspace (optional)

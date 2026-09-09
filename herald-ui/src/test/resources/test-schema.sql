@@ -31,3 +31,10 @@ CREATE TABLE IF NOT EXISTS commands (
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME
 );
+
+CREATE TABLE IF NOT EXISTS cron_execution (
+    job_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL,
+    message TEXT,
+    updated_at TEXT NOT NULL
+);

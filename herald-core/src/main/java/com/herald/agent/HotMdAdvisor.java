@@ -59,7 +59,9 @@ public class HotMdAdvisor implements CallAdvisor, StreamAdvisor {
             return request;
         }
         String delimited = "\n\n<hot-context>\n" + content + "\n</hot-context>";
-        return request.mutate()
+        var context = new java.util.HashMap<String, Object>(request.context());
+        context.put("herald.memory.hot-path", hotFilePath.toAbsolutePath().normalize().toString());
+        return request.mutate().context(context)
                 .prompt(request.prompt().augmentSystemMessage(
                         existing -> new SystemMessage(existing.getText() + delimited)))
                 .build();
