@@ -66,7 +66,7 @@ function mountPage() {
 describe('SkillsEditor.vue', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
+      ok: true, headers: new Headers({ ETag: '"version"' }),
       json: () => Promise.resolve(sampleSkills),
       text: () => Promise.resolve('# My Skill\nContent here'),
     }))
@@ -222,4 +222,30 @@ describe('SkillsEditor.vue', () => {
     // The chip should show Loaded or a status
     expect(wrapper.text()).toMatch(/live|error|offline/)
   })
+})
+
+it('offers Stay or Discard for a dirty skill reload and new-file action', async () => {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/skills'
+    ? new Response(JSON.stringify(sampleSkills)) : new Response('external', { headers: { ETag: '"two"' } })))
+  const wrapper = mountPage(), store = useSkillsStore()
+  store.selectedName = 'my-skill'; store.savedContent = 'saved'; store.editorContent = 'draft'
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('button').find(b => b.text() === 'Reload file')!.trigger('click')
+  await wrapper.vm.$nextTick()
+  expect(wrapper.find('dialog').exists()).toBe(true)
+  await wrapper.findAll('dialog button')[2]!.trigger('click')
+  expect(store.editorContent).toBe('draft')
+  await wrapper.findAll('button').find(b => b.text() === 'Reload file')!.trigger('click')
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('dialog button')[1]!.trigger('click')
+  await vi.waitFor(() => expect(store.editorContent).toBe('external'))
+  store.editorContent = 'another draft'
+  await wrapper.find('button[title="New skill"]').trigger('click')
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('dialog button')[1]!.trigger('click')
+  await wrapper.vm.$nextTick()
+  expect(store.editorContent).toBe('external')
+  expect(wrapper.find('input[type="text"]').exists()).toBe(true)
 })

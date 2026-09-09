@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -119,7 +120,7 @@ class PromptsController {
         if (CONTEXT_NAME.equals(name)) {
             String content = readSafe(contextFile);
             String defaultContent = "";
-            return ResponseEntity.ok(new PromptDetail(
+            return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(new PromptDetail(
                     name, CONTEXT_DISPLAY, CONTEXT_DESCRIPTION,
                     content, defaultContent, "user",
                     Files.exists(contextFile),
@@ -134,7 +135,7 @@ class PromptsController {
         Path override = overrideDir.resolve(p.name());
         boolean overridden = Files.isRegularFile(override);
         String content = overridden ? readSafe(override) : defaultContent;
-        return ResponseEntity.ok(new PromptDetail(
+        return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(new PromptDetail(
                 p.name(), p.displayName(), p.description(),
                 content, defaultContent,
                 overridden ? "user-override" : "bundled",
@@ -143,17 +144,22 @@ class PromptsController {
     }
 
     @PutMapping(value = "/{name}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<Map<String, Object>> save(
+    synchronized ResponseEntity<Map<String, Object>> save(
             @PathVariable String name,
-            @RequestBody PromptUpdate body) {
+            @RequestBody PromptUpdate body,
+            @RequestHeader(value = "If-Match", required = false) String expected) {
+        var current = read(name);
+        if (current.getBody() == null) return ResponseEntity.notFound().build();
+        var conflict = DocumentVersions.check(expected, current.getBody().content());
+        if (conflict != null) return conflict;
         String content = body.content() != null ? body.content() : "";
 
         if (CONTEXT_NAME.equals(name)) {
             try {
                 ensureParent(contextFile);
-                Files.writeString(contextFile, content, StandardCharsets.UTF_8);
+                writeAtomic(contextFile, content);
                 log.info("Updated personal context at {}", contextFile);
-                return ResponseEntity.ok(Map.of(
+                return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(Map.of(
                         "saved", true,
                         "path", contextFile.toString(),
                         "restartRequired", false));
@@ -171,9 +177,9 @@ class PromptsController {
         Path target = overrideDir.resolve(p.name());
         try {
             ensureParent(target);
-            Files.writeString(target, content, StandardCharsets.UTF_8);
+            writeAtomic(target, content);
             log.info("Saved prompt override to {}", target);
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(Map.of(
                     "saved", true,
                     "path", target.toString(),
                     "restartRequired", true));
@@ -186,13 +192,16 @@ class PromptsController {
 
     /** Delete a user override, reverting to the bundled default on next restart. */
     @DeleteMapping("/{name}")
-    ResponseEntity<Map<String, Object>> revert(@PathVariable String name) {
+    synchronized ResponseEntity<Map<String, Object>> revert(@PathVariable String name,
+            @RequestHeader(value = "If-Match", required = false) String expected) {
         if (CONTEXT_NAME.equals(name)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "CONTEXT.md is user-owned; clear its content via PUT instead."));
         }
         BundledPrompt p = findBundled(name);
         if (p == null) return ResponseEntity.notFound().build();
+        var conflict = DocumentVersions.check(expected, read(name).getBody().content());
+        if (conflict != null) return conflict;
         Path target = overrideDir.resolve(p.name());
         try {
             boolean deleted = Files.deleteIfExists(target);
@@ -221,7 +230,7 @@ class PromptsController {
             return Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.warn("Failed to read {}: {}", path, e.getMessage());
-            return "";
+            throw new java.io.UncheckedIOException(e);
         }
     }
 
@@ -232,6 +241,15 @@ class PromptsController {
             log.warn("Failed to read classpath:{} — {}", location, e.getMessage());
             return "";
         }
+    }
+
+    private static void writeAtomic(Path target, String content) throws IOException {
+        Path temporary = Files.createTempFile(target.toAbsolutePath().getParent(), ".prompt-", ".tmp");
+        try {
+            Files.writeString(temporary, content, StandardCharsets.UTF_8);
+            Files.move(temporary, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally { Files.deleteIfExists(temporary); }
     }
 
     private static void ensureParent(Path file) throws IOException {

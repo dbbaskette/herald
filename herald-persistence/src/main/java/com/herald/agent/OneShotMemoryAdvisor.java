@@ -108,9 +108,7 @@ class OneShotMemoryAdvisor implements CallAdvisor, StreamAdvisor {
 
     private ChatClientRequest loadHistory(ChatClientRequest request, String conversationId) {
         List<Message> history = chatMemory.get(conversationId);
-        if (history.size() > maxMessages) {
-            history = history.subList(history.size() - maxMessages, history.size());
-        }
+        history = TurnSafeChatMemory.window(history, maxMessages);
         List<Message> currentMessages = request.prompt().getInstructions();
 
         List<Message> combined = new ArrayList<>(history.size() + currentMessages.size());

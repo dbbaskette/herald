@@ -5,6 +5,7 @@ import { useModelStatus } from '@/composables/useModelStatus'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import MeetingsProgress from '@/components/MeetingsProgress.vue'
 
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
@@ -62,6 +63,7 @@ async function rescanModels() {
 const backfillDays = ref(7)
 const backfilling = ref(false)
 const backfillMsg = ref('')
+const backfillMeetingIds = ref<string[]>()
 async function backfillMeetings() {
   backfilling.value = true
   backfillMsg.value = ''
@@ -69,9 +71,10 @@ async function backfillMeetings() {
     const res = await fetch(`/api/meetings/backfill?days=${backfillDays.value}`, { method: 'POST' })
     const data = await res.json()
     if (res.ok) {
+      backfillMeetingIds.value = data.meetingIds
       backfillMsg.value = data.queued > 0
-        ? `Bringing in ${data.queued} meeting(s) from ${data.from}…${data.to} — watch chat for progress.`
-        : `Found ${data.found} completed meeting(s) in ${data.from}…${data.to}; all already in memory.`
+        ? `Bringing in ${data.queued} meeting(s) from ${data.from}…${data.to} — progress appears below.`
+        : `Found ${data.found} completed meeting(s) in ${data.from}…${data.to}; no new work queued. Check progress below for running or failed imports.`
     } else {
       backfillMsg.value = data.error || 'Backfill failed'
     }
@@ -355,6 +358,7 @@ function hasChanges(): boolean {
             {{ backfillMsg }}
           </span>
         </div>
+        <MeetingsProgress :meeting-ids="backfillMeetingIds" />
       </SectionCard>
 
       <!-- Google Workspace Auth -->

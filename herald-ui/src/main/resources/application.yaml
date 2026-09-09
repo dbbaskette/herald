@@ -22,6 +22,9 @@ spring:
 
 herald:
   ui:
+    auth:
+      bearer-token: ${HERALD_UI_AUTH_BEARER_TOKEN:}
+      secure-cookie: ${HERALD_UI_AUTH_SECURE_COOKIE:true}
     db-path: ${HERALD_DB_PATH:~/.herald/herald.db}
     skills-path: ${HERALD_SKILLS_PATH:~/.herald/skills}
     bundled-skills-path: ${HERALD_BUNDLED_SKILLS_PATH:}
@@ -29,4 +32,4 @@ herald:
 
 server:
   port: 8080
-  address: 0.0.0.0
+  address: ${HERALD_UI_BIND_ADDRESS:127.0.0.1}

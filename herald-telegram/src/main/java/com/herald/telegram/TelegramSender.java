@@ -79,6 +79,16 @@ public class TelegramSender implements MessageSender {
         }
     }
 
+    @Override
+    public void sendMessageOrThrow(String text) {
+        if (text == null || text.isBlank()) throw new IllegalArgumentException("Cannot deliver an empty recap");
+        for (String chunk : formatter.split(text)) {
+            if (!sendWithRetry(chunk)) {
+                throw new IllegalStateException("Telegram did not acknowledge the complete message; retry delivery");
+            }
+        }
+    }
+
     /**
      * Stream the assistant response into a single Telegram message, editing it as chunks
      * arrive. Blocks until the stream completes. Overflows past the Telegram message
@@ -360,14 +370,14 @@ public class TelegramSender implements MessageSender {
         Thread.sleep(delay);
     }
 
-    private void sendWithRetry(String text) {
+    private boolean sendWithRetry(String text) {
         for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
                 // Try sending as MarkdownV2 first to preserve intentional formatting
                 SendResponse response = bot.execute(
                         new SendMessage(chatId, text).parseMode(ParseMode.MarkdownV2));
                 if (response.isOk()) {
-                    return;
+                    return true;
                 }
                 if (response.errorCode() == 429) {
                     handleRateLimit(response, attempt);
@@ -389,20 +399,20 @@ public class TelegramSender implements MessageSender {
                     }
                 }
                 if (allOk) {
-                    return;
+                    return true;
                 }
                 // Fall back to plain text as last resort
                 log.warn("Escaped MarkdownV2 also failed, sending as plain text");
                 SendResponse fallback = bot.execute(new SendMessage(chatId, text));
                 if (fallback.isOk()) {
-                    return;
+                    return true;
                 }
                 log.error("Plain text send also failed: {}", fallback.description());
-                return;
+                return false;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.warn("Send interrupted");
-                return;
+                return false;
             } catch (Exception e) {
                 long delay = RETRY_BASE_DELAY_MS * (1L << attempt);
                 log.warn("Send attempt {} failed: {}, retrying in {} ms",
@@ -411,11 +421,12 @@ public class TelegramSender implements MessageSender {
                     Thread.sleep(delay);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    return;
+                    return false;
                 }
             }
         }
         log.error("Failed to send message after {} retries", MAX_RETRIES);
+        return false;
     }
 
     private void handleRateLimit(SendResponse response, int attempt) throws InterruptedException {

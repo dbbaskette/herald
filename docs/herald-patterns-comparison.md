@@ -311,7 +311,7 @@
 
 **Blog:** A turn = one `UserMessage` plus every assistant/tool event up to the next `UserMessage`. All compaction strategies snap the cut point to the nearest turn boundary, guaranteeing the model never sees an orphaned tool result or a split exchange.
 
-**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** `ContextCompactionAdvisor` evicts by token budget (80% of context window) with no turn awareness — it can cut between an assistant tool-call and its tool-result. **Interim mitigation:** add a turn-aware guard to `ContextCompactionAdvisor` that walks backwards from the prospective cut point to the previous `UserMessage` before eviction. Achievable with current `ChatMemory` APIs and would substantially reduce orphaned-tool-result risk until the Session API lands.
+**Herald:** Interim turn-safe boundaries implemented with current `ChatMemory` APIs (#270). `ContextCompactionAdvisor` snaps backwards to a real user turn, preserves system messages and the latest complete turn, and the memory count window follows the same rule. Targets are soft if no safe cut meets them. The future Session API migration will replace this custom guard. See [context compaction](context-compaction.md).
 
 ---
 
@@ -327,7 +327,7 @@
 
 **Blog:** Four pluggable strategies. The first three keep a verbatim suffix (by message count, turn count, or token budget) and snap to turn boundaries. `RecursiveSummarizationCompactionStrategy` summarizes evicted events via an LLM and stores the summary as a synthetic user+assistant turn, with a configurable `overlapSize` feeding events from the active window into each summary prompt.
 
-**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** `ContextCompactionAdvisor` hard-codes a single summarize-and-drop behavior: it asks `summaryModel` to summarize the evicted slice, logs the summary, and drops it from history. There is no sliding-window or turn-window variant, no overlap handling, and the summary is **not** retained as a synthetic turn — it's only logged. **Interim mitigation:** (a) persist summaries as synthetic `AssistantMessage`s with a metadata flag so they survive the next compaction pass (closest today-possible analog to `METADATA_SYNTHETIC`), and (b) add a `SlidingWindowStrategy` that simply trims the oldest N messages without summarization, selectable by config. Both are low-risk refactors that survive the 2.1 migration cleanly.
+**Herald:** Interim recursive summary and sliding-window modes implemented (#272), selectable with `herald.memory.compaction-strategy`. Recursive summaries persist as a tagged synthetic user/assistant turn, survive SQLite and prompt windows, and feed the next compaction. Empty or failed summaries retain history. Sliding-window mode makes no summary-model call. The four official strategies and configurable overlap remain part of the future Session API migration. See [configuration and limits](context-compaction.md).
 
 ---
 
@@ -351,7 +351,7 @@
 
 **Blog:** The full verbatim event log is retained even after compaction prunes events from the active prompt. `SessionEventTools` exposes a `conversation_search` tool, auto-discovered by Spring AI, that the model calls with a keyword + optional page index to retrieve prior exchanges (MemGPT Recall Storage pattern). Synthetic summary events are indexed too.
 
-**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald's compaction *drops* evicted messages from history entirely — only the generated summary is kept (and only in the log, not as a searchable artifact). The LLM cannot recall a specific prior exchange. **Interim mitigation:** (a) change `ContextCompactionAdvisor` to archive evicted messages into a new `conversation_archive` table instead of dropping them, and (b) register a `conversationSearch` tool backed by SQLite FTS5 over that table. This is a genuinely useful interim capability since it gives Herald MemGPT-style recall today without waiting for 2.1.
+**Herald:** ➖ **Not Fully Implemented (requires Spring AI 2.1).** Herald's compaction *drops* evicted messages from history entirely — the generated summary is kept as synthetic conversation context and in continuity files. The LLM cannot recall a specific prior exchange. **Interim mitigation:** (a) change `ContextCompactionAdvisor` to archive evicted messages into a new `conversation_archive` table instead of dropping them, and (b) register a `conversationSearch` tool backed by SQLite FTS5 over that table. This is a genuinely useful interim capability since it gives Herald MemGPT-style recall today without waiting for 2.1.
 
 ---
 
