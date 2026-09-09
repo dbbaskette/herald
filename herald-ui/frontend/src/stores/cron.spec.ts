@@ -60,7 +60,7 @@ describe('useCronStore', () => {
     const ok = await store.toggleJob('1', false)
     expect(ok).toBe(true)
     expect(store.jobs[0].enabled).toBe(false)
-    expect(fetch).toHaveBeenCalledWith('/api/cron-jobs/1', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/cron/1', expect.objectContaining({
       method: 'PATCH',
     }))
   })
@@ -89,7 +89,7 @@ describe('useCronStore', () => {
     const ok = await store.saveJob({ name: 'Custom Job', expression: '*/5 * * * *', promptText: 'test' })
     expect(ok).toBe(true)
     expect(store.jobs).toHaveLength(3)
-    expect(fetch).toHaveBeenCalledWith('/api/cron-jobs', expect.objectContaining({ method: 'POST' }))
+    expect(fetch).toHaveBeenCalledWith('/api/cron', expect.objectContaining({ method: 'POST' }))
   })
 
   it('saveJob updates existing job with PUT', async () => {
@@ -104,7 +104,7 @@ describe('useCronStore', () => {
     const ok = await store.saveJob({ id: '1', name: 'Updated Briefing', expression: '0 9 * * *', promptText: 'test' })
     expect(ok).toBe(true)
     expect(store.jobs[0].name).toBe('Updated Briefing')
-    expect(fetch).toHaveBeenCalledWith('/api/cron-jobs/1', expect.objectContaining({ method: 'PUT' }))
+    expect(fetch).toHaveBeenCalledWith('/api/cron/1', expect.objectContaining({ method: 'PUT' }))
   })
 
   it('deleteJob removes job from list', async () => {
@@ -142,5 +142,33 @@ describe('useCronStore', () => {
     const store = useCronStore()
     const ok = await store.runJob('1')
     expect(ok).toBe(false)
+  })
+
+  it('preserves last good jobs and actionable errors on refresh failure', async () => {
+    const store = useCronStore(); store.jobs = [{ ...sampleJobs[0] }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({ message: 'Bot unavailable' }) }))
+    await store.fetchJobs()
+    expect(store.jobs).toHaveLength(1)
+    expect(store.error).toBe('Bot unavailable')
+  })
+  it('run acceptance is queued until a later refresh reports completion', async () => {
+    const store = useCronStore(); store.jobs = [{ ...sampleJobs[0] }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'pending' }) }))
+    expect(await store.runJob('1')).toBe(true)
+    expect(store.jobs[0].status).toBe('queued')
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => [{ ...sampleJobs[0], status: 'running' }] } as Response)
+    await store.fetchJobs(); expect(store.jobs[0].status).toBe('running')
+    vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => [{ ...sampleJobs[0], status: 'failed' }] } as Response)
+    await store.fetchJobs(); expect(store.jobs[0].status).toBe('failed')
+  })
+  it('ignores an older list response after a toggle', async () => {
+    let resolve!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn().mockImplementationOnce(() => new Promise(r => { resolve = r })))
+    const store = useCronStore(); store.jobs = [{ ...sampleJobs[0], enabled: false }]
+    const pending = store.fetchJobs()
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ ...sampleJobs[0], enabled: true }) } as Response)
+    await store.toggleJob('1', true)
+    resolve({ ok: true, json: async () => [{ ...sampleJobs[0], enabled: false }] } as Response); await pending
+    expect(store.jobs[0].enabled).toBe(true)
   })
 })

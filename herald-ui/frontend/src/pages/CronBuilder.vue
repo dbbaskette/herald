@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCronStore, type CronJob } from '@/stores/cron'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -13,24 +13,18 @@ const expandedJobId = ref<string | null>(null)
 const deletingJobId = ref<string | null>(null)
 const runningJobId = ref<string | null>(null)
 
-// Visual cron builder state
-const cronMinute = ref('0')
-const cronHour = ref('*')
-const cronDayOfMonth = ref('*')
-const cronMonth = ref('*')
-const cronDayOfWeek = ref('*')
-
-const cronExpression = computed(
-  () => `${cronMinute.value} ${cronHour.value} ${cronDayOfMonth.value} ${cronMonth.value} ${cronDayOfWeek.value}`,
-)
-
-const humanReadableSchedule = computed(() =>
-  editingJob.value ? describeCron(cronExpression.value) : '',
-)
+const saving = ref(false)
+const cronExpression = computed({
+  get: () => editingJob.value?.expression ?? '',
+  set: value => { if (editingJob.value) editingJob.value.expression = value },
+})
+const humanReadableSchedule = computed(() => describeCron(cronExpression.value))
+let refreshTimer: ReturnType<typeof setInterval> | undefined
 
 function describeCron(expr: string): string {
-  const parts = expr.split(' ')
-  if (parts.length !== 5) return expr
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length === 6 && parts[0] === '0') parts.shift()
+  if (parts.length !== 5 || parts.some(p => p !== '*' && !/^\d+$/.test(p))) return expr
   const [min, hour, dom, mon, dow] = parts
   if (min === '*' && hour === '*' && dom === '*' && mon === '*' && dow === '*') return 'every minute'
   if (hour === '*' && dom === '*' && mon === '*' && dow === '*') return `every hour at :${min.padStart(2, '0')}`
@@ -54,50 +48,40 @@ function formatTime(ts: string | null): string {
 }
 
 function statusGlyph(s: string): 'live' | 'running' | 'err' | 'idle' {
-  if (s === 'success') return 'live'
+  if (s === 'success' || s === 'completed') return 'live'
   if (s === 'running') return 'running'
   if (s === 'error' || s === 'failed') return 'err'
   return 'idle'
 }
 
 function openNewJob() {
-  cronMinute.value = '0'; cronHour.value = '9'
-  cronDayOfMonth.value = '*'; cronMonth.value = '*'; cronDayOfWeek.value = '*'
   editingJob.value = { name: '', expression: '0 9 * * *', enabled: true, promptText: '' }
 }
 function openEditJob(job: CronJob) {
-  const parts = job.expression.split(' ')
-  if (parts.length === 5) {
-    [cronMinute.value, cronHour.value, cronDayOfMonth.value, cronMonth.value, cronDayOfWeek.value] = parts
-  }
   editingJob.value = { ...job }
 }
 function cancelEdit() { editingJob.value = null }
 async function saveEdit() {
-  if (!editingJob.value || !editingJob.value.name?.trim()) return
-  editingJob.value.expression = cronExpression.value
-  const ok = await store.saveJob(editingJob.value as { name: string; expression: string; promptText: string })
-  if (ok) editingJob.value = null
+  if (saving.value || !editingJob.value || !editingJob.value.name?.trim()) return
+  const draft = editingJob.value
+  const submitted = JSON.stringify(draft)
+  saving.value = true
+  const ok = await store.saveJob(draft as { name: string; expression: string; promptText: string })
+  saving.value = false
+  if (ok && editingJob.value === draft && JSON.stringify(draft) === submitted) editingJob.value = null
 }
 function toggleExpanded(id: string) { expandedJobId.value = expandedJobId.value === id ? null : id }
 async function toggleEnabled(job: CronJob) { await store.toggleJob(job.id, !job.enabled) }
 function confirmDelete(id: string) { deletingJobId.value = id }
-async function executeDelete(id: string) { await store.deleteJob(id); deletingJobId.value = null }
+async function executeDelete(id: string) { if (await store.deleteJob(id)) deletingJobId.value = null }
 function cancelDelete() { deletingJobId.value = null }
 async function runNow(id: string) { runningJobId.value = id; await store.runJob(id); runningJobId.value = null }
 
-const minutes = Array.from({ length: 60 }, (_, i) => String(i))
-const hours = Array.from({ length: 24 }, (_, i) => String(i))
-const daysOfMonth = Array.from({ length: 31 }, (_, i) => String(i + 1))
-const months = [
-  ['1','Jan'],['2','Feb'],['3','Mar'],['4','Apr'],['5','May'],['6','Jun'],
-  ['7','Jul'],['8','Aug'],['9','Sep'],['10','Oct'],['11','Nov'],['12','Dec'],
-] as const
-const daysOfWeek = [
-  ['0','Sun'],['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],
-] as const
-
-onMounted(() => { store.fetchJobs() })
+onMounted(() => {
+  store.fetchJobs()
+  refreshTimer = setInterval(() => { if (!editingJob.value) store.fetchJobs(true) }, 5000)
+})
+onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
 </script>
 
 <template>
@@ -114,6 +98,8 @@ onMounted(() => { store.fetchJobs() })
       <StatusGlyph kind="idle" /> Loading cron jobs…
     </div>
 
+    <p v-if="store.error" role="alert">{{ store.error }} <button class="btn-secondary" @click="store.fetchJobs()">Retry</button></p>
+
     <!-- ── Editor panel ─────────────────────────────────────────── -->
     <template v-if="editingJob">
       <SectionRule :label="editingJob.id ? 'EDIT JOB' : 'NEW JOB'" glyph="warn" tone="warn" />
@@ -123,6 +109,7 @@ onMounted(() => { store.fetchJobs() })
           <label class="field__label">Name</label>
           <input
             v-model="editingJob.name"
+            :disabled="editingJob.builtIn"
             type="text"
             class="input"
             placeholder="e.g. Morning briefing"
@@ -132,43 +119,14 @@ onMounted(() => { store.fetchJobs() })
 
         <div class="field">
           <label class="field__label">Schedule</label>
-          <div class="cron-grid">
-            <div>
-              <label class="micro-label">min</label>
-              <select v-model="cronMinute" class="input input-cron">
-                <option value="*">*</option>
-                <option v-for="m in minutes" :key="m" :value="m">{{ m }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="micro-label">hour</label>
-              <select v-model="cronHour" class="input input-cron">
-                <option value="*">*</option>
-                <option v-for="h in hours" :key="h" :value="h">{{ h }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="micro-label">day-of-month</label>
-              <select v-model="cronDayOfMonth" class="input input-cron">
-                <option value="*">*</option>
-                <option v-for="d in daysOfMonth" :key="d" :value="d">{{ d }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="micro-label">month</label>
-              <select v-model="cronMonth" class="input input-cron">
-                <option value="*">*</option>
-                <option v-for="mo in months" :key="mo[0]" :value="mo[0]">{{ mo[1] }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="micro-label">day-of-week</label>
-              <select v-model="cronDayOfWeek" class="input input-cron">
-                <option value="*">*</option>
-                <option v-for="dw in daysOfWeek" :key="dw[0]" :value="dw[0]">{{ dw[1] }}</option>
-              </select>
-            </div>
+          <div class="actions">
+            <button class="btn-secondary" @click="cronExpression = '0 9 * * *'">Daily at 09:00</button>
+            <button class="btn-secondary" @click="cronExpression = '0 9 * * MON'">Monday at 09:00</button>
+            <button class="btn-secondary" @click="cronExpression = '0 */1 * * *'">Hourly</button>
           </div>
+          <label class="micro-label" for="cron-expression">Advanced expression (five fields, or six including seconds)</label>
+          <input id="cron-expression" v-model="cronExpression" class="input" spellcheck="false" />
+          <p class="caption">Timezone: {{ editingJob.timezone || store.jobs[0]?.timezone || 'configured bot timezone' }}. Steps, ranges and lists are preserved exactly.</p>
           <div class="cron-readout">
             <code class="cron-expr">{{ cronExpression }}</code>
             <span class="caption">→ {{ humanReadableSchedule }}</span>
@@ -186,7 +144,7 @@ onMounted(() => { store.fetchJobs() })
         </div>
 
         <div class="actions">
-          <button class="btn-primary" :disabled="!editingJob.name?.trim()" @click="saveEdit()">Save</button>
+          <button class="btn-primary" :disabled="saving || !editingJob.name?.trim() || !editingJob.promptText?.trim() || !cronExpression.trim()" @click="saveEdit()">Save</button>
           <button class="btn-secondary" @click="cancelEdit()">Cancel</button>
         </div>
       </div>
@@ -232,6 +190,8 @@ onMounted(() => { store.fetchJobs() })
                 <span class="status-inline">
                   <StatusGlyph :kind="statusGlyph(job.status)" size="sm" />
                   {{ job.status || '—' }}
+                  <span v-if="job.scheduleStatus === 'queued'"> · schedule update queued</span>
+                  <span v-if="job.scheduleStatus === 'failed'"> · schedule update failed</span>
                 </span>
               </td>
               <td class="text-muted">{{ formatTime(job.lastRun) }}</td>
@@ -240,10 +200,10 @@ onMounted(() => { store.fetchJobs() })
                 <div class="row-actions">
                   <button
                     class="link-action"
-                    :disabled="runningJobId === job.id"
+                    :disabled="runningJobId === job.id || job.status === 'queued' || job.status === 'running'"
                     @click="runNow(job.id)"
                   >
-                    {{ runningJobId === job.id ? '…running' : 'run' }}
+                    {{ runningJobId === job.id ? '…queueing' : 'run' }}
                   </button>
                   <button class="link-muted" @click="openEditJob(job)">edit</button>
                   <template v-if="!job.builtIn">
@@ -270,7 +230,7 @@ onMounted(() => { store.fetchJobs() })
               </td>
             </tr>
           </template>
-          <tr v-if="store.jobs.length === 0">
+          <tr v-if="store.jobs.length === 0 && !store.error">
             <td colspan="8" class="empty-cell">No cron jobs configured.</td>
           </tr>
         </tbody>

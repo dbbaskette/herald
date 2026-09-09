@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { mount, enableAutoUnmount } from '@vue/test-utils'
+enableAutoUnmount(afterEach)
 import { createPinia } from 'pinia'
 import SkillsEditor from './SkillsEditor.vue'
 import { useSkillsStore } from '@/stores/skills'
@@ -16,7 +17,7 @@ vi.stubGlobal('EventSource', vi.fn(function () { return {
 // Mock CodeMirror — the editor needs a DOM that jsdom can't fully support
 vi.mock('@codemirror/view', () => ({
   EditorView: Object.assign(vi.fn(function () { return {
-    state: { doc: { toString: () => '', length: 0 } },
+    state: { doc: { toString: () => '', length: 0, lines: 1, line: () => ({ from: 0, to: 0 }) } },
     dispatch: vi.fn(),
     destroy: vi.fn(),
   } }), { theme: vi.fn(() => []), updateListener: { of: vi.fn(() => []) } }),
@@ -24,6 +25,7 @@ vi.mock('@codemirror/view', () => ({
   lineNumbers: () => [],
   highlightActiveLine: () => [],
 }))
+vi.mock('@codemirror/lint', () => ({ lintGutter: () => [], setDiagnostics: () => ({}) }))
 vi.mock('@codemirror/state', () => ({
   EditorState: {
     create: vi.fn(() => ({})),
@@ -68,6 +70,21 @@ describe('SkillsEditor.vue', () => {
       json: () => Promise.resolve(sampleSkills),
       text: () => Promise.resolve('# My Skill\nContent here'),
     }))
+  })
+
+  it('shows preview and blocks invalid YAML while allowing warning-only drafts', async () => {
+    const wrapper = mountPage()
+    const store = useSkillsStore()
+    store.selectedName = 'my-skill'
+    store.savedContent = 'old'
+    store.editorContent = '---\nname: my-skill\ndescription: >\n  Helpful\n  skill.\n---\nBody'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.validation-preview').text()).toContain('Helpful skill.')
+    expect(wrapper.find('.action-save').attributes('disabled')).toBeUndefined()
+    store.editorContent = '---\nname: one\nname: two\ndescription: valid\n---'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.action-save').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.validation-feedback').text()).toContain('Line 3')
   })
 
   it('renders the page title when no skill is selected', () => {

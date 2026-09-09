@@ -45,6 +45,8 @@ function parseToolCalls(raw: unknown): ToolCall[] {
 }
 
 export const useMessagesStore = defineStore('messages', () => {
+  const conversationId = ref('')
+  let requestGeneration = 0
   const messages = ref<Message[]>([])
   const loading = ref(false)
   const currentPage = ref(0)
@@ -59,6 +61,7 @@ export const useMessagesStore = defineStore('messages', () => {
   const hasPrevPage = computed(() => currentPage.value > 0)
 
   async function fetchMessages(page = 0) {
+    const generation = ++requestGeneration
     loading.value = true
     try {
       const params = new URLSearchParams()
@@ -68,9 +71,11 @@ export const useMessagesStore = defineStore('messages', () => {
       if (startDate.value) params.set('startDate', startDate.value)
       if (endDate.value) params.set('endDate', endDate.value)
 
-      const res = await fetch(`/api/messages?${params}`)
+      const res = await fetch(conversationId.value ? `/api/conversations/${encodeURIComponent(conversationId.value)}/messages` : `/api/messages?${params}`)
       if (!res.ok) throw new Error(res.statusText)
-      const data = await res.json()
+      const payload = await res.json()
+      if (generation !== requestGeneration) return
+      const data = conversationId.value ? {content: payload.map((r: Record<string, unknown>, i: number) => ({...r, id: i, role: String(r.role).toLowerCase(), created_at: r.timestamp})), number: 0, totalPages: 1, totalElements: payload.length} : payload
       messages.value = (data.content ?? []).map((row: Record<string, unknown>) => ({
         id: String(row.id ?? row.ID ?? ''),
         role: (row.role ?? row.ROLE ?? 'system') as Message['role'],
@@ -85,17 +90,18 @@ export const useMessagesStore = defineStore('messages', () => {
       totalPages.value = data.totalPages ?? 0
       totalElements.value = data.totalElements ?? 0
     } catch {
+      if (generation !== requestGeneration) return
       messages.value = []
       totalPages.value = 0
       totalElements.value = 0
     } finally {
-      loading.value = false
+      if (generation === requestGeneration) loading.value = false
     }
   }
 
   async function clearHistory(): Promise<boolean> {
     try {
-      const res = await fetch('/api/messages', { method: 'DELETE' })
+      const res = await fetch(conversationId.value ? `/api/conversations/${encodeURIComponent(conversationId.value)}` : '/api/messages', { method: 'DELETE' })
       if (!res.ok) throw new Error(res.statusText)
       messages.value = []
       currentPage.value = 0
@@ -131,7 +137,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   return {
-    messages, loading, currentPage, totalPages, totalElements, pageSize,
+    conversationId, messages, loading, currentPage, totalPages, totalElements, pageSize,
     search, startDate, endDate,
     hasNextPage, hasPrevPage,
     fetchMessages, clearHistory, nextPage, prevPage, applyFilters, clearFilters,

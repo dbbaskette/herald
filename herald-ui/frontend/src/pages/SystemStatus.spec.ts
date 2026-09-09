@@ -10,7 +10,7 @@ vi.stubGlobal('EventSource', vi.fn(function () { return {
   onopen: null,
   onmessage: null,
   onerror: null,
-  close: vi.fn(),
+  close: vi.fn(), addEventListener: vi.fn(),
 } }))
 
 const fullStatus: SystemStatusType = {
@@ -112,7 +112,7 @@ describe('SystemStatus.vue', () => {
     })
     expect(wrapper.text()).toContain('connected')
     expect(wrapper.text()).toContain('slack')
-    expect(wrapper.text()).toContain('disconnected')
+    expect(wrapper.text()).not.toContain('Bot offline')
     expect(wrapper.text()).toContain('12 tools')
   })
 
@@ -171,14 +171,14 @@ describe('SystemStatus.vue', () => {
     })
   })
 
-  it('shows disconnected indicator by default', () => {
+  it('does not claim bot offline before status loads', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('disconnected')
+    expect(wrapper.text()).not.toContain('Bot offline')
   })
 
   it('calls connectSSE on mount and disconnects on unmount', async () => {
     const eventSource = vi.fn(function () { return {
-      onopen: null, onmessage: null, onerror: null, close: vi.fn(),
+      onopen: null, onmessage: null, onerror: null, close: vi.fn(), addEventListener: vi.fn(),
     } })
     vi.stubGlobal('EventSource', eventSource)
     const wrapper = mountPage()
@@ -190,4 +190,38 @@ describe('SystemStatus.vue', () => {
     // disconnectSSE was called
     expect(store.connected).toBe(false)
   })
+})
+
+it('shows cron empty state and retained data with stale last-updated notice', async () => {
+  mockFetch(Promise.resolve({ ...fullStatus, cron: [] }))
+  const wrapper = mountPage()
+  await vi.waitFor(() => expect(wrapper.text()).toContain('No cron jobs configured'))
+  const store = useStatusStore()
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  await store.fetchStatus()
+  expect(wrapper.text()).toContain('claude-sonnet-4-20250514')
+  expect(wrapper.text()).toContain('Showing stale status'); expect(wrapper.text()).toContain('Last updated'); expect(wrapper.text()).toContain('Retry')
+  wrapper.unmount()
+})
+it('does not present fetch failure as stopped bot or empty configured capabilities', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  const wrapper = mountPage()
+  await vi.waitFor(() => expect(wrapper.text()).toContain('capability state are unknown'))
+  expect(wrapper.text()).not.toContain('Bot offline'); expect(wrapper.text()).not.toContain('No MCP servers configured')
+  wrapper.unmount()
+})
+
+it('distinguishes unknown telemetry, disabled capability and actual failure', async () => {
+  mockFetch(Promise.resolve({ ...fullStatus, capabilities: {
+    mcp: { state: 'unknown', message: 'Connection telemetry unavailable.' },
+    memory: { state: 'failed', message: 'Database could not be read.' },
+    skills: { state: 'disabled', message: 'Skills disabled in configuration.' },
+  } }))
+  const wrapper = mountPage()
+  await vi.waitFor(() => expect(wrapper.text()).toContain('Unknown. Connection telemetry unavailable.'))
+  expect(wrapper.text()).toContain('Unavailable. Database could not be read.')
+  expect(wrapper.text()).toContain('Disabled. Skills disabled in configuration.')
+  expect(wrapper.text()).not.toContain('No MCP servers configured')
+  expect(wrapper.text()).not.toContain('150')
+  wrapper.unmount()
 })

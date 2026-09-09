@@ -93,3 +93,36 @@ describe('fileMemory store', () => {
     expect(store.selected).toBeNull()
   })
 })
+
+describe('memory editing safety', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  it('ignores an older selection response', async () => {
+    let resolveA!: (value: unknown) => void
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => url.includes('a.md') ? new Promise(r => {resolveA = r}) : Promise.resolve({ok:true,json:async()=>({path:'b.md',content:'B',version:'b'})})))
+    const store = useFileMemoryStore()
+    const a = store.openPage('a.md'); await store.openPage('b.md')
+    resolveA({ok:true,json:async()=>({path:'a.md',content:'A'})}); await a
+    expect(store.selected?.path).toBe('b.md')
+  })
+  it('preserves a conflicting draft and prevents navigation', async () => {
+    const store = useFileMemoryStore()
+    store.selected = {path:'a.md',content:'old',size:3,version:'v1'}; store.draft='edited'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:false,status:409,json:async()=>({message:'Changed on disk'})}))
+    expect(await store.save()).toBe(false)
+    expect(store.draft).toBe('edited'); expect(store.error).toBe('Changed on disk')
+    await store.openPage('b.md'); store.clearSelected()
+    expect(store.selected?.path).toBe('a.md')
+  })
+  it('saves a versioned draft and restores a trashed file', async () => {
+    const store = useFileMemoryStore()
+    store.selected={path:'a.md',content:'old',size:3,version:'v1'};store.draft='new'
+    const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({path:'a.md',content:'new',size:3,version:'v2'})}).mockResolvedValueOnce({ok:true,json:async()=>({})})
+      .mockResolvedValueOnce({ok:true,json:async()=>({token:'token',trashPath:'.memory-trash/token/memory.md',originalPath:'a.md'})}).mockResolvedValueOnce({ok:true,json:async()=>({})})
+      .mockResolvedValueOnce({ok:true,json:async()=>({})}).mockResolvedValueOnce({ok:true,json:async()=>({})})
+    vi.stubGlobal('fetch',fetcher)
+    expect(await store.save()).toBe(true);expect(store.dirty).toBe(false)
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({version:'v1',content:'new'})
+    expect(await store.deleteSelected()).toBe(true);expect(store.trash?.trashPath).toContain('.memory-trash/')
+    expect(await store.restore()).toBe(true);expect(store.trash).toBeNull()
+  })
+})

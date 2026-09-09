@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { useStatusStore } from '@/stores/status'
+import { activityKey, useStatusStore } from '@/stores/status'
 import { useApprovalsStore } from '@/stores/approvals'
 import ApprovalInbox from '@/components/ApprovalInbox.vue'
 import NowStripe from '@/components/NowStripe.vue'
@@ -12,9 +12,9 @@ import StatusGlyph from '@/components/StatusGlyph.vue'
 const store = useStatusStore()
 const approvals = useApprovalsStore()
 
-onMounted(async () => {
-  await store.fetchStatus()
+onMounted(() => {
   store.connectSSE()
+  void store.fetchStatus()
   approvals.startPolling(5000)
 })
 
@@ -26,6 +26,13 @@ onUnmounted(() => {
 function formatTime(ts: string | null): string {
   if (!ts) return '—'
   try { return new Date(ts).toLocaleString() } catch { return ts }
+}
+
+function capabilityNotice(name: 'mcp' | 'memory' | 'skills' | 'cron'): string | null {
+  const capability = store.status.capabilities?.[name]
+  if (!capability || capability.state === 'available') return null
+  const label = capability.state === 'disabled' ? 'Disabled' : capability.state === 'failed' ? 'Unavailable' : 'Unknown'
+  return `${label}. ${capability.message}`
 }
 
 const botGlyph = computed<'live' | 'err'>(() =>
@@ -55,16 +62,27 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
       <template #right>
         <span class="page-right">
           <StatusGlyph :kind="liveGlyph" size="sm" />
-          <span>{{ store.connected ? 'live' : 'disconnected' }}</span>
+          <span>{{ store.connectionLabel }}</span>
         </span>
       </template>
     </PageHeader>
 
-    <div v-if="store.loading" class="loading">
+    <div v-if="store.loading && !store.hasData" class="loading">
       <StatusGlyph kind="idle" /> Loading status…
     </div>
 
+    <div v-else-if="!store.hasData" role="status" class="empty">
+      Status unavailable. Bot and capability state are unknown.
+      <button type="button" @click="store.retry()">Retry</button>
+    </div>
+
     <template v-else>
+      <p role="status">
+        <span v-if="store.stale">Showing stale status. </span>
+        Last updated {{ formatTime(store.lastUpdated) }}.
+        <span v-if="store.error">{{ store.error }}</span>
+        <button v-if="store.stale" type="button" @click="store.retry()">Retry</button>
+      </p>
       <!-- Approval inbox up top when non-empty -->
       <ApprovalInbox class="approval-block" />
 
@@ -94,7 +112,8 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
       <!-- Skills + Memory -->
       <div class="card-grid">
         <SectionCard label="Skills" :tone="skillsTone" :glyph="skillsGlyph">
-          <div class="section-body">
+          <div v-if="capabilityNotice('skills')" class="empty">{{ capabilityNotice('skills') }}</div>
+          <div v-else class="section-body">
             <MetricRow label="Total loaded" :value="store.status.skills.totalLoaded" tone="data" />
             <MetricRow label="Last reload"  :value="formatTime(store.status.skills.lastReload)" />
             <div v-if="store.status.skills.parseErrors.length" class="parse-errors">
@@ -110,7 +129,8 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
         </SectionCard>
 
         <SectionCard label="Memory" tone="data" glyph="data">
-          <div class="section-body">
+          <div v-if="capabilityNotice('memory')" class="empty">{{ capabilityNotice('memory') }}</div>
+          <div v-else class="section-body">
             <MetricRow label="Entries" :value="store.status.memory.entryCount" tone="data" />
             <MetricRow label="DB size" :value="store.status.memory.databaseFileSize" />
           </div>
@@ -122,9 +142,10 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
         label="MCP Connections"
         tone="magic"
         glyph="magic"
-        :trailing="store.status.mcp.length === 0 ? '0 servers' : `${store.status.mcp.length} server${store.status.mcp.length === 1 ? '' : 's'}`"
+        :trailing="capabilityNotice('mcp') ? '' : store.status.mcp.length === 0 ? '0 servers' : `${store.status.mcp.length} server${store.status.mcp.length === 1 ? '' : 's'}`"
       >
-        <div v-if="store.status.mcp.length === 0" class="empty">
+        <div v-if="capabilityNotice('mcp')" class="empty">{{ capabilityNotice('mcp') }}</div>
+        <div v-else-if="store.status.mcp.length === 0" class="empty">
           No MCP servers configured.
         </div>
         <div v-else class="mcp-list">
@@ -145,12 +166,13 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
 
       <!-- Cron -->
       <SectionCard
-        v-if="store.status.cron.length"
         label="Cron"
         tone="ok"
-        :trailing="`${store.status.cron.length} job${store.status.cron.length === 1 ? '' : 's'}`"
+        :trailing="capabilityNotice('cron') ? '' : `${store.status.cron.length} job${store.status.cron.length === 1 ? '' : 's'}`"
       >
-        <table class="data-table">
+        <div v-if="capabilityNotice('cron')" class="empty">{{ capabilityNotice('cron') }}</div>
+        <div v-else-if="!store.status.cron.length" class="empty">No cron jobs configured.</div>
+        <table v-else class="data-table">
           <thead>
             <tr>
               <th>Job</th>
@@ -165,7 +187,8 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
               <td class="text-muted">{{ formatTime(job.nextRun) }}</td>
               <td class="text-muted">{{ formatTime(job.lastRun) }}</td>
               <td>
-                <span v-if="job.lastResult === 'success'" class="result-badge ok">ok</span>
+                <span v-if="job.lastResult === 'success' || job.lastResult === 'completed'" class="result-badge ok">ok</span>
+                <span v-else-if="job.lastResult === 'running' || job.lastResult === 'skipped'" class="result-badge">{{ job.lastResult }}</span>
                 <span v-else-if="job.lastResult" class="result-badge err">{{ job.lastResult }}</span>
                 <span v-else class="text-muted">—</span>
               </td>
@@ -180,7 +203,7 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
           No recent activity.
         </div>
         <div v-else class="activity-list">
-          <div v-for="(entry, i) in store.status.recentActivity" :key="i" class="activity-item">
+          <div v-for="entry in store.status.recentActivity" :key="activityKey(entry)" class="activity-item">
             <div class="activity-item__head">
               <span class="caption">{{ formatTime(entry.timestamp) }}</span>
               <div v-if="entry.toolCalls.length" class="tool-tags">
