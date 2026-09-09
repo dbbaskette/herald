@@ -31,7 +31,7 @@ Development: `@tailwindcss/vite` 4.3.3, `@types/markdown-it` 14.2.0, `@vitejs/pl
 - `PATH=... npm audit --json > /tmp/herald-upgraded-npm-audit.json` — success; 0 production or development vulnerabilities.
 - `PATH=... npm audit --omit=dev --json > /tmp/herald-upgraded-npm-audit-runtime.json` — success; 0 runtime vulnerabilities.
 - `git diff --check` — success.
-- Parent fixture-browser verification against the upgraded build covered status, skill editor, prompt diff, all routing, and chat chunk/done SSE with rendered bold/code/link/list; browser error logs were empty. Status typography and layout matched baseline. Tailwind 4 now consistently exposes existing semantic card variants (green/blue/cyan), which matches the source design comments and configured theme.
+- Parent fixture-browser verification against the upgraded build covered status, skill editor, prompt diff, navigation among these pages, and chat chunk/done SSE with rendered bold/code/link/list; browser error logs were empty. Status typography and layout matched baseline. Tailwind 4 now consistently exposes existing semantic card variants (green/blue/cyan), which matches the source design comments and configured theme.
 
 ## Files changed
 
@@ -42,3 +42,12 @@ Development: `@tailwindcss/vite` 4.3.3, `@types/markdown-it` 14.2.0, `@vitejs/pl
 - Reviewed the full diff and confirmed no Java, README, install script, GitHub, or maintenance-doc files are included in this task's commit.
 - Build emits two non-failing pre-existing optimization warnings: approvals is both statically and dynamically imported, and the main JS chunk is about 848 kB (about 302 kB gzip). These do not affect compatibility or runtime behavior but remain opportunities for later code splitting.
 - TypeScript 7.0.2 is intentionally deferred until Vue's language tooling supports its compiler architecture. All other requested stable targets are installed exactly.
+
+## Review fix round 1
+
+- Replaced the ARIA `role="button"` conversation row containing a native delete button with a neutral row containing sibling native select and delete buttons. Both controls retain independent focus, keyboard activation, hover/focus visibility, and actions without nested interactive semantics.
+- Added `src/components/ConversationList.spec.ts`, which asserts there are no nested buttons, both controls are native buttons, selecting calls only the conversation switch, and deleting opens confirmation and calls only conversation deletion.
+- `PATH=... npx vitest run src/components/ConversationList.spec.ts` — 1/1 test passed.
+- `PATH=... npm test > /tmp/herald-upgraded-frontend-tests.log 2>&1` — 15/15 files and 129/129 tests passed; output pristine.
+- `PATH=... npm run build > /tmp/herald-upgraded-frontend-build-default.log 2>&1` — success; vue-tsc and Vite transformed 156 modules and refreshed the default packaged assets.
+- `PATH=... npm run build -- --outDir /tmp/herald-upgraded-frontend-build > /tmp/herald-upgraded-frontend-build.log 2>&1` — success; refreshed isolated fixture build. Both builds retain the two previously documented optimization warnings.

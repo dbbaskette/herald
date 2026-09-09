@@ -113,20 +113,20 @@ defineExpose({ refresh })
           <div
             v-for="c in group"
             :key="c.id"
-            role="button"
-            tabindex="0"
             class="cl-item"
             :class="{ active: chat.conversationId === c.id }"
-            :title="`${c.id} · ${c.turnCount} turns`"
-            @click="pick(c.id)"
-            @keydown.enter.self="pick(c.id)"
-            @keydown.space.self.prevent="pick(c.id)"
           >
-            <span class="cl-item-title">{{ c.title }}</span>
-            <span class="cl-item-meta">
-              <span class="cl-item-time">{{ formatRelative(c.lastTurnAt) }}</span>
-              <span class="cl-item-count">{{ c.turnCount }}</span>
-            </span>
+            <button
+              class="cl-item-select"
+              :title="`${c.id} · ${c.turnCount} turns`"
+              @click="pick(c.id)"
+            >
+              <span class="cl-item-title">{{ c.title }}</span>
+              <span class="cl-item-meta">
+                <span class="cl-item-time">{{ formatRelative(c.lastTurnAt) }}</span>
+                <span class="cl-item-count">{{ c.turnCount }}</span>
+              </span>
+            </button>
             <button
               class="cl-item-delete"
               title="Delete conversation"
@@ -221,26 +221,30 @@ defineExpose({ refresh })
 }
 
 .cl-item {
+  position: relative;
+}
+
+.cl-item-select {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 8px;
   width: 100%;
-  padding: 7px 9px;
+  padding: 7px 28px 7px 9px;
   border: none;
   background: transparent;
   text-align: left;
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
-  position: relative;
   transition: background 0.12s;
 }
 
-.cl-item:hover {
+.cl-item:hover .cl-item-select,
+.cl-item-select:focus-visible {
   background: var(--color-border-light);
 }
 
-.cl-item.active {
+.cl-item.active .cl-item-select {
   background: rgba(200, 165, 90, 0.12);
 }
 
@@ -292,7 +296,8 @@ defineExpose({ refresh })
   cursor: pointer;
 }
 
-.cl-item:hover .cl-item-delete {
+.cl-item:hover .cl-item-delete,
+.cl-item:focus-within .cl-item-delete {
   display: inline-flex;
 }
 
