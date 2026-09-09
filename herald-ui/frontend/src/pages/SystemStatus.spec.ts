@@ -6,12 +6,12 @@ import { useStatusStore } from '@/stores/status'
 import type { SystemStatus as SystemStatusType } from '@/stores/status'
 
 // Stub EventSource globally
-vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => ({
+vi.stubGlobal('EventSource', vi.fn(function () { return {
   onopen: null,
   onmessage: null,
   onerror: null,
   close: vi.fn(),
-})))
+} }))
 
 const fullStatus: SystemStatusType = {
   healthy: true,
@@ -56,7 +56,7 @@ describe('SystemStatus.vue', () => {
 
   it('renders the page title', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('System Status')
+    expect(wrapper.text()).toContain('Status')
   })
 
   it('shows loading state initially', async () => {
@@ -136,7 +136,7 @@ describe('SystemStatus.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('daily-briefing')
     })
-    expect(wrapper.text()).toContain('success')
+    expect(wrapper.text()).toContain('ok')
   })
 
   it('displays recent activity feed', async () => {
@@ -173,14 +173,18 @@ describe('SystemStatus.vue', () => {
 
   it('shows disconnected indicator by default', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Disconnected')
+    expect(wrapper.text()).toContain('disconnected')
   })
 
   it('calls connectSSE on mount and disconnects on unmount', async () => {
+    const eventSource = vi.fn(function () { return {
+      onopen: null, onmessage: null, onerror: null, close: vi.fn(),
+    } })
+    vi.stubGlobal('EventSource', eventSource)
     const wrapper = mountPage()
     const store = useStatusStore()
     // connectSSE was called during mount
-    expect(EventSource).toHaveBeenCalledWith('/api/status/stream')
+    await vi.waitFor(() => expect(eventSource).toHaveBeenCalledWith('/api/status/stream'))
 
     wrapper.unmount()
     // disconnectSSE was called

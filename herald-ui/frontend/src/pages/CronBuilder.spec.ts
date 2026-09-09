@@ -35,13 +35,14 @@ describe('CronBuilder.vue', () => {
 
   it('renders the page title', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Cron Builder')
+    expect(wrapper.text()).toContain('Cron')
   })
 
-  it('shows loading state initially', () => {
+  it('shows loading state initially', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise(() => {})))
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('Loading cron jobs')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Loading cron jobs…')
   })
 
   it('displays cron jobs after data loads', async () => {
@@ -56,22 +57,22 @@ describe('CronBuilder.vue', () => {
   it('shows human-readable schedule', async () => {
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('Daily at 09:00')
+      expect(wrapper.text()).toContain('daily at 09:00')
     })
   })
 
   it('has New Job button', () => {
     const wrapper = mountPage()
-    expect(wrapper.text()).toContain('New Job')
+    expect(wrapper.text()).toContain('+ New job')
   })
 
   it('opens edit panel when New Job is clicked', async () => {
     const wrapper = mountPage()
     const newJobBtn = wrapper.find('button')
     await newJobBtn.trigger('click')
-    expect(wrapper.text()).toContain('Job Name')
+    expect(wrapper.text()).toContain('Name')
     expect(wrapper.text()).toContain('Schedule')
-    expect(wrapper.text()).toContain('Prompt Text')
+    expect(wrapper.text()).toContain('Prompt')
   })
 
   it('opens edit panel when edit button is clicked', async () => {
@@ -79,9 +80,9 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
-    const editBtn = wrapper.find('button[title="Edit job"]')
+    const editBtn = wrapper.findAll('button').find(button => button.text() === 'edit')!
     await editBtn.trigger('click')
-    expect(wrapper.text()).toContain('Edit Job')
+    expect(wrapper.text()).toContain('EDIT JOB')
   })
 
   it('shows enable/disable toggles', async () => {
@@ -89,7 +90,7 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
-    const toggleBtns = wrapper.findAll('button[title="Disable job"], button[title="Enable job"]')
+    const toggleBtns = wrapper.findAll('button[title="Disable"], button[title="Enable"]')
     expect(toggleBtns.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -98,7 +99,7 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
-    expect(wrapper.text()).toContain('Run Now')
+    expect(wrapper.text()).toContain('run')
   })
 
   it('does not show delete button for built-in jobs', async () => {
@@ -107,7 +108,7 @@ describe('CronBuilder.vue', () => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
     // Find delete buttons - only non-built-in jobs should have them
-    const deleteBtns = wrapper.findAll('button[title="Delete job"]')
+    const deleteBtns = wrapper.findAll('button').filter(button => button.text() === 'del')
     expect(deleteBtns).toHaveLength(1) // Only Weekly Review (not built-in)
   })
 
@@ -116,7 +117,7 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
-    const expandBtn = wrapper.find('button[title="Show last run log"]')
+    const expandBtn = wrapper.findAll('button').find(button => button.text() === 'log')!
     expect(expandBtn.exists()).toBe(true)
   })
 
@@ -125,9 +126,9 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Morning Briefing')
     })
-    const expandBtn = wrapper.find('button[title="Show last run log"]')
+    const expandBtn = wrapper.findAll('button').find(button => button.text() === 'log')!
     await expandBtn.trigger('click')
-    expect(wrapper.text()).toContain('Last Run Output')
+    expect(wrapper.text()).toContain('LAST RUN OUTPUT')
     expect(wrapper.text()).toContain('Briefing completed successfully')
   })
 
@@ -147,7 +148,7 @@ describe('CronBuilder.vue', () => {
     }))
     const wrapper = mountPage()
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('No cron jobs configured yet')
+      expect(wrapper.text()).toContain('No cron jobs configured.')
     })
   })
 
@@ -156,8 +157,8 @@ describe('CronBuilder.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('Weekly Review')
     })
-    const deleteBtn = wrapper.find('button[title="Delete job"]')
+    const deleteBtn = wrapper.findAll('button').find(button => button.text() === 'del')!
     await deleteBtn.trigger('click')
-    expect(wrapper.text()).toContain('Confirm')
+    expect(wrapper.text()).toContain('delete')
   })
 })

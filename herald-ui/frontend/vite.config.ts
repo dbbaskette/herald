@@ -1,23 +1,24 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { readFileSync } from 'fs'
 
-const version = readFileSync(resolve(__dirname, '../../VERSION'), 'utf-8').trim()
+const version = readFileSync(resolve(import.meta.dirname, '../../VERSION'), 'utf-8').trim()
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': resolve(import.meta.dirname, 'src'),
     },
   },
   build: {
-    outDir: resolve(__dirname, '../src/main/resources/static'),
+    outDir: resolve(import.meta.dirname, '../src/main/resources/static'),
     emptyOutDir: true,
   },
   test: {

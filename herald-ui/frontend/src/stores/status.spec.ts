@@ -88,12 +88,12 @@ describe('useStatusStore', () => {
 
   it('connects and disconnects SSE', () => {
     const closeFn = vi.fn()
-    const mockEventSource = vi.fn().mockImplementation(() => ({
+    const mockEventSource = vi.fn(function () { return {
       onopen: null,
       onmessage: null,
       onerror: null,
       close: closeFn,
-    }))
+    } })
     vi.stubGlobal('EventSource', mockEventSource)
 
     const store = useStatusStore()
@@ -108,7 +108,7 @@ describe('useStatusStore', () => {
 
   it('updates status on SSE message', () => {
     let esInstance: any = null
-    vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => {
+    vi.stubGlobal('EventSource', vi.fn(function () {
       esInstance = {
         onopen: null as any,
         onmessage: null as any,
@@ -135,7 +135,7 @@ describe('useStatusStore', () => {
 
   it('handles malformed SSE message gracefully', () => {
     let esInstance: any = null
-    vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => {
+    vi.stubGlobal('EventSource', vi.fn(function () {
       esInstance = {
         onopen: null as any,
         onmessage: null as any,

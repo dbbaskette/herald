@@ -25,7 +25,7 @@ async function mountPage() {
 }
 
 async function switchToKvTab(wrapper: ReturnType<typeof mount>) {
-  const kvTab = wrapper.findAll('.tab-btn').find((b) => b.text() === 'Key-Value Store')
+  const kvTab = wrapper.findAll('.tab-btn').find((b) => b.text() === 'Key·Value')
   await kvTab!.trigger('click')
 }
 
@@ -44,13 +44,13 @@ describe('MemoryViewer.vue', () => {
 
   it('renders the page title', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.text()).toContain('Memory Viewer')
+    expect(wrapper.text()).toContain('Memory')
   })
 
   it('shows tab labels', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.text()).toContain('Wiki Memory')
-    expect(wrapper.text()).toContain('Key-Value Store')
+    expect(wrapper.text()).toContain('Wiki')
+    expect(wrapper.text()).toContain('Key·Value')
     expect(wrapper.text()).toContain('Obsidian')
   })
 
@@ -63,7 +63,7 @@ describe('MemoryViewer.vue', () => {
     }))
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
-    expect(wrapper.text()).toContain('Loading memory entries')
+    expect(wrapper.text()).toContain('Loading…')
   })
 
   it('displays memory entries after data loads on kv tab', async () => {
@@ -85,21 +85,21 @@ describe('MemoryViewer.vue', () => {
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('No memory entries yet')
+      expect(wrapper.text()).toContain('no memory entries yet')
     })
   })
 
   it('has filter input on kv tab', async () => {
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
-    const input = wrapper.find('input[placeholder="Filter by key name…"]')
+    const input = wrapper.find('input[placeholder="filter by key…"]')
     expect(input.exists()).toBe(true)
   })
 
   it('has export and import buttons on kv tab', async () => {
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
-    expect(wrapper.text()).toContain('Export JSON')
-    expect(wrapper.text()).toContain('Import JSON')
+    expect(wrapper.text()).toContain('Export')
+    expect(wrapper.text()).toContain('Import')
   })
 })

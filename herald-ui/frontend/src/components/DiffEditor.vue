@@ -66,7 +66,7 @@ function rebuild() {
     },
     parent: host.value,
     collapseUnchanged: { margin: 3, minSize: 6 },
-    revertControls: 'b-to-a',
+    ...(props.readOnly ? {} : { revertControls: 'a-to-b' as const }),
     gutter: true,
   })
 }

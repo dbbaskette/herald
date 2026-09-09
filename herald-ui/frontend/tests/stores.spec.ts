@@ -86,7 +86,7 @@ describe('stores', () => {
         onerror: null as (() => void) | null,
         close: vi.fn(),
       }
-      vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => mockEventSource))
+      vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 
       const store = useStatusStore()
       store.connectSSE()
@@ -105,7 +105,7 @@ describe('stores', () => {
         onerror: null as (() => void) | null,
         close: vi.fn(),
       }
-      vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => mockEventSource))
+      vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 
       const store = useStatusStore()
       store.connectSSE()
@@ -127,7 +127,7 @@ describe('stores', () => {
         onerror: null as (() => void) | null,
         close: vi.fn(),
       }
-      vi.stubGlobal('EventSource', vi.fn().mockImplementation(() => mockEventSource))
+      vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 
       const store = useStatusStore()
       store.connectSSE()
@@ -148,14 +148,17 @@ describe('stores', () => {
     })
 
     it('fetchSkills populates skillNames on success', async () => {
-      const mockNames = ['greeting', 'weather']
+      const mockSkills = [
+        { name: 'greeting', description: 'Greets users', source: 'local', readOnly: false, hasBundled: false },
+        { name: 'weather', description: 'Reports weather', source: 'bundled', readOnly: true, hasBundled: true },
+      ]
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(mockNames),
+        json: () => Promise.resolve(mockSkills),
       }))
       const store = useSkillsStore()
       await store.fetchSkills()
-      expect(store.skillNames).toEqual(mockNames)
+      expect(store.skillNames).toEqual(['greeting', 'weather'])
     })
 
     it('fetchSkills resets to empty on error', async () => {

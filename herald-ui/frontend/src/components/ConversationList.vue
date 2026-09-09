@@ -110,13 +110,17 @@ defineExpose({ refresh })
       <template v-for="(group, label) in groups" :key="label">
         <div v-if="group.length > 0" class="cl-group">
           <div class="cl-group-label">{{ label }}</div>
-          <button
+          <div
             v-for="c in group"
             :key="c.id"
+            role="button"
+            tabindex="0"
             class="cl-item"
             :class="{ active: chat.conversationId === c.id }"
             :title="`${c.id} · ${c.turnCount} turns`"
             @click="pick(c.id)"
+            @keydown.enter.self="pick(c.id)"
+            @keydown.space.self.prevent="pick(c.id)"
           >
             <span class="cl-item-title">{{ c.title }}</span>
             <span class="cl-item-meta">
@@ -132,7 +136,7 @@ defineExpose({ refresh })
                 <path d="M3 4h6M5 4V3a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v1m1 0v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4h4z"/>
               </svg>
             </button>
-          </button>
+          </div>
         </div>
       </template>
     </div>
