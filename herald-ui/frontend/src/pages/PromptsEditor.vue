@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import DraftDialog from '@/components/DraftDialog.vue'
+import DraftConflict from '@/components/DraftConflict.vue'
+import { useDraftGuard } from '@/composables/useDraftGuard'
 import DiffEditor from '@/components/DiffEditor.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import NowStripe from '@/components/NowStripe.vue'
@@ -29,7 +32,18 @@ interface PromptDetail {
 const prompts = ref<PromptSummary[]>([])
 const selected = ref<PromptDetail | null>(null)
 const editorContent = ref('')
-const dirty = ref(false)
+const dirty = computed(() => selected.value !== null && editorContent.value !== selected.value.content)
+const version = ref('')
+const conflict = ref<{ content: string; version: string } | null>(null)
+const guard = useDraftGuard(() => dirty.value, save, () => { editorContent.value = selected.value?.content ?? '' })
+function resolveConflict(useLatest: boolean) {
+  if (!conflict.value || !selected.value) return
+  selected.value.content = conflict.value.content
+  version.value = conflict.value.version
+  if (useLatest) editorContent.value = conflict.value.content
+  conflict.value = null
+  errorMessage.value = ''
+}
 const saving = ref(false)
 const saveMessage = ref('')
 const errorMessage = ref('')
@@ -100,62 +114,72 @@ async function loadList() {
 }
 
 async function selectPrompt(name: string) {
-  if (dirty.value) {
-    askConfirm('Unsaved Changes', 'Discard unsaved changes?', () => doSelectPrompt(name))
-    return
-  }
+  if (!(await guard.allow())) return
   await doSelectPrompt(name)
 }
 
+let selectionGeneration = 0
 async function doSelectPrompt(name: string) {
+  const generation = ++selectionGeneration
+  const previousDraft = editorContent.value
   errorMessage.value = ''
   saveMessage.value = ''
   try {
     const res = await fetch(`/api/prompts/${encodeURIComponent(name)}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    selected.value = await res.json()
+    const detail = await res.json()
+    if (generation !== selectionGeneration) return
+    if (previousDraft !== editorContent.value) { errorMessage.value = 'Your draft changed while loading. Try again after saving or discarding.'; return }
+    selected.value = detail
+    version.value = res.headers.get('ETag') ?? ''
+    conflict.value = null
     editorContent.value = selected.value!.content
-    dirty.value = false
   } catch (e: any) {
-    errorMessage.value = `Failed to load ${name}: ${e.message}`
+    if (generation === selectionGeneration) errorMessage.value = `Failed to load ${name}: ${e.message}`
   }
 }
 
 function onContentChange() {
-  dirty.value = selected.value !== null && editorContent.value !== selected.value.content
+  // Dirty state is computed, including programmatic and diff-editor changes.
 }
 
-async function save() {
-  if (!selected.value) return
+async function save(): Promise<boolean> {
+  if (!selected.value || saving.value) return false
+  const name = selected.value.name, draft = editorContent.value
   saving.value = true
   errorMessage.value = ''
   saveMessage.value = ''
   try {
-    const res = await fetch(`/api/prompts/${encodeURIComponent(selected.value.name)}`, {
+    const res = await fetch(`/api/prompts/${encodeURIComponent(name)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: editorContent.value }),
+      headers: { 'Content-Type': 'application/json', 'If-Match': version.value },
+      body: JSON.stringify({ content: draft }),
     })
     const result = await res.json()
+    if ((res.status === 412 || res.status === 428) && selected.value?.name === name) conflict.value = result
     if (!res.ok || result.saved === false) {
       throw new Error(result.error ?? `HTTP ${res.status}`)
     }
     saveMessage.value = result.restartRequired
       ? `Saved override at ${result.path} — restart herald-bot to apply.`
       : `Saved at ${result.path}.`
-    selected.value!.content = editorContent.value
-    selected.value!.overridden = selected.value!.name !== 'CONTEXT.md' || true
-    dirty.value = false
+    if (selected.value?.name !== name) return true
+    selected.value.content = draft
+    version.value = res.headers.get('ETag') ?? ''
+    conflict.value = null
+    selected.value.overridden = true
     await loadList()
+    return true
   } catch (e: any) {
     errorMessage.value = `Save failed: ${e.message}`
+    return false
   } finally {
     saving.value = false
   }
 }
 
 async function revertOverride() {
-  if (!selected.value || !selected.value.overridden) return
+  if (!selected.value || !selected.value.overridden || !(await guard.allow())) return
   if (selected.value.name === 'CONTEXT.md') {
     askConfirm('Clear Context', 'Clear CONTEXT.md content?', async () => {
       editorContent.value = ''
@@ -170,8 +194,10 @@ async function revertOverride() {
       try {
         const res = await fetch(`/api/prompts/${encodeURIComponent(selected.value!.name)}`, {
           method: 'DELETE',
+          headers: { 'If-Match': version.value },
         })
         const result = await res.json()
+        if (res.status === 412 || res.status === 428) conflict.value = result
         if (!res.ok) throw new Error(result.error ?? `HTTP ${res.status}`)
         saveMessage.value = result.reverted
           ? `Reverted — restart herald-bot to apply the bundled default.`
@@ -186,8 +212,8 @@ async function revertOverride() {
   )
 }
 
-function loadDefault() {
-  if (!selected.value) return
+async function loadDefault() {
+  if (!selected.value || !(await guard.allow())) return
   askConfirm(
     'Load Default',
     'Replace editor content with the bundled default? (Not saved until you press Save.)',
@@ -230,6 +256,9 @@ onMounted(() => {
 
 <template>
   <div class="prompts-page">
+    <DraftDialog :open="guard.open.value" :busy="guard.busy.value" @choose="guard.choose" />
+    <DraftConflict v-if="conflict" :latest="conflict.content" :draft="editorContent"
+      @edit="editorContent = $event" @latest="resolveConflict(true)" @reconcile="resolveConflict(false)" />
     <ConfirmModal
       :open="confirmOpen"
       :title="confirmTitle"
@@ -280,6 +309,7 @@ onMounted(() => {
             </p>
           </div>
           <div class="editor-actions">
+            <button class="btn btn-subtle" @click="selectPrompt(selected.name)">Reload file</button>
             <button
               v-if="selected.name === 'CONTEXT.md'"
               class="btn btn-subtle"

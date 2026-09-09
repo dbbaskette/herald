@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,16 +41,31 @@ class MeetingsProxyController {
             @RequestParam(name = "to", required = false) String to,
             @RequestParam(name = "days", required = false) Integer days) {
         StringBuilder q = new StringBuilder();
-        if (from != null && !from.isBlank()) q.append(q.isEmpty() ? '?' : '&').append("from=").append(from);
-        if (to != null && !to.isBlank()) q.append(q.isEmpty() ? '?' : '&').append("to=").append(to);
+        if (from != null && !from.isBlank()) q.append(q.isEmpty() ? '?' : '&').append("from=").append(encode(from));
+        if (to != null && !to.isBlank()) q.append(q.isEmpty() ? '?' : '&').append("to=").append(encode(to));
         if (days != null) q.append(q.isEmpty() ? '?' : '&').append("days=").append(days);
+        return forward("/backfill" + q, true);
+    }
+
+    @GetMapping(value="/progress", produces=MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<String> progress() { return forward("/progress", false); }
+
+    @PostMapping(value="/retry", produces=MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<String> retry(@RequestParam("id") String id) {
+        return forward("/retry?id=" + encode(id), true);
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private ResponseEntity<String> forward(String path, boolean post) {
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(botMeetingsUrl + "/backfill" + q))
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(botMeetingsUrl + path))
                     .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(10))
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
+                    .timeout(Duration.ofSeconds(10));
+            HttpRequest request = (post ? builder.POST(HttpRequest.BodyPublishers.noBody()) : builder.GET()).build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return ResponseEntity.status(response.statusCode())
                     .contentType(MediaType.APPLICATION_JSON)
@@ -57,7 +73,7 @@ class MeetingsProxyController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body("{\"error\":\"Bot unreachable: " + e.getMessage().replace("\"", "'") + "\"}");
+                    .body("{\"error\":\"Meeting service unavailable\"}");
         }
     }
 }

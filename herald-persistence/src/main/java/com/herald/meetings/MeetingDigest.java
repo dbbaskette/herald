@@ -19,5 +19,11 @@ public record MeetingDigest(
         String summaryMarkdown,
         List<ActionItem> actionItems) {
 
+    /** Minimum complete payload that can be durably verified after enrichment. */
+    public boolean readyForIngest() {
+        return id != null && !id.isBlank() && "done".equalsIgnoreCase(status)
+                && summaryMarkdown != null && !summaryMarkdown.isBlank();
+    }
+
     public record ActionItem(String text, String owner, String dueDate) {}
 }

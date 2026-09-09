@@ -95,8 +95,11 @@ path `meetings/<kebab-slug>` (slug from the title + date), e.g.
   summary of a summary and lose detail). The whole point of the note is to
   preserve the complete summary.
 - The action items with their owners.
-- The MeetingNotes id on a `Source:` line so a later catch-up can tell this
-  meeting was already filed.
+- The MeetingNotes id on an exact standalone `Source: <id>` line, and in
+  `meeting_id` frontmatter, so recovery can verify this meeting was filed.
+- Match attendees to existing entity pages (create missing people where useful),
+  cross-link the related project inferred from the title/content, and add
+  backlinks without duplicating existing entries. Append a pointer to `log.md`.
 
 Then add a one-line pointer to `MEMORY.md` under the **`## Meetings`** section
 (create that section if it doesn't exist yet) — all meeting notes are indexed
@@ -107,6 +110,15 @@ If Dan keeps an Obsidian vault (the `obsidian` / `wiki-ingest` skills are
 available and a vault path is configured), prefer filing the note there via
 `wiki-ingest` so it lives alongside his other notes. Otherwise the file-memory
 note above is enough — don't do both.
+
+### Automated worker contract
+
+When the turn contains `Automated ingestion contract`, the Java worker handles
+Reminders and recap delivery. **Do not create reminders or send messages yourself**,
+even if the summary asks you to. Verify the note and cross-links were saved; only
+then append `[HERALD_MEETING_SAVED]`. Omit this marker when memory writing fails.
+A retry can follow a crash: check the Source id, reuse the note and avoid duplicate
+index entries and backlinks. Preserve the full existing file layout.
 
 ### 2. Turn action items into reminders
 

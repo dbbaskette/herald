@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -84,7 +85,8 @@ class SkillsController {
         if (skillFile == null || !Files.exists(skillFile)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(Files.readString(skillFile));
+        String content = Files.readString(skillFile);
+        return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(content);
     }
 
     /**
@@ -109,7 +111,8 @@ class SkillsController {
     }
 
     @PutMapping("/{name}")
-    ResponseEntity<?> update(@PathVariable String name, @RequestBody String content)
+    synchronized ResponseEntity<?> update(@PathVariable String name, @RequestBody String content,
+            @RequestHeader(value = "If-Match", required = false) String expected)
             throws IOException {
         if (!isValidName(name)) {
             return ResponseEntity.badRequest().build();
@@ -124,6 +127,8 @@ class SkillsController {
         if (!SkillValidationService.exists(skillsDir, name + "/SKILL.md")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        var conflict = DocumentVersions.check(expected, Files.readString(skillDir.resolve("SKILL.md")));
+        if (conflict != null) return conflict;
         var result = validation.validate(name, content, false);
         if (!result.valid()) return ResponseEntity.unprocessableContent().body(result);
         Path temporary = Files.createTempFile(skillDir, ".skill-", ".tmp");
@@ -133,7 +138,7 @@ class SkillsController {
                     java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } finally { Files.deleteIfExists(temporary); }
         statusSseService.publishSkillReload(Instant.now().toString());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).build();
     }
 
     @PostMapping
@@ -163,7 +168,8 @@ class SkillsController {
     }
 
     @DeleteMapping("/{name}")
-    ResponseEntity<Void> delete(@PathVariable String name) throws IOException {
+    synchronized ResponseEntity<?> delete(@PathVariable String name,
+            @RequestHeader(value = "If-Match", required = false) String expected) throws IOException {
         if (!isValidName(name)) {
             return ResponseEntity.badRequest().build();
         }
@@ -174,6 +180,8 @@ class SkillsController {
         if (!Files.exists(skillDir)) {
             return ResponseEntity.notFound().build();
         }
+        var conflict = DocumentVersions.check(expected, Files.readString(skillDir.resolve("SKILL.md")));
+        if (conflict != null) return conflict;
         deleteRecursively(skillDir);
         statusSseService.publishSkillReload(Instant.now().toString());
         return ResponseEntity.noContent().build();

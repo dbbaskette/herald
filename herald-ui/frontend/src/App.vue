@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { authenticated } from '@/security/consoleAuth'
+import ConsoleAccess from './components/ConsoleAccess.vue'
 import SidebarNav from './components/SidebarNav.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import { useChatStore } from '@/stores/chat'
@@ -28,6 +30,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 function onKeydown(e: KeyboardEvent) {
+  if (!authenticated.value) return
   const meta = e.metaKey || e.ctrlKey
 
   // Cmd/Ctrl + K — open command palette. Allowed even from inputs.
@@ -106,6 +109,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
+  <ConsoleAccess>
   <div class="app-shell">
     <SidebarNav />
     <main class="app-content">
@@ -113,6 +117,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     </main>
     <CommandPalette :open="paletteOpen" @close="paletteOpen = false" />
   </div>
+  </ConsoleAccess>
 </template>
 
 <style scoped>

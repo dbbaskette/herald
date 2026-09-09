@@ -128,3 +128,23 @@ CREATE TABLE IF NOT EXISTS cron_execution (
     message TEXT,
     updated_at TEXT NOT NULL
 );
+
+-- Recoverable ingestion queue. Legacy claims need explicit review when their payload is recovered.
+CREATE TABLE IF NOT EXISTS meeting_ingest_jobs (
+    meeting_id TEXT PRIMARY KEY,
+    title TEXT,
+    payload TEXT NOT NULL,
+    source TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('pending','running','succeeded','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    lease_token TEXT,
+    lease_until INTEGER,
+    reply TEXT,
+    error TEXT,
+    updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meeting_ingest_effects (
+    meeting_id TEXT NOT NULL,
+    effect_key TEXT NOT NULL,
+    PRIMARY KEY(meeting_id,effect_key)
+);

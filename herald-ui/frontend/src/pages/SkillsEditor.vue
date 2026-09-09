@@ -5,6 +5,9 @@ import { useSkillValidation } from '@/lib/useSkillValidation'
 import { setDiagnostics, lintGutter } from '@codemirror/lint'
 import { createSseConnection } from '@/lib/sse'
 import { useSkillsStore } from '@/stores/skills'
+import DraftDialog from '@/components/DraftDialog.vue'
+import DraftConflict from '@/components/DraftConflict.vue'
+import { useDraftGuard } from '@/composables/useDraftGuard'
 import DiffEditor from '@/components/DiffEditor.vue'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -36,10 +39,13 @@ function jumpToDiagnostic(line: number) {
   editorView.focus()
 }
 async function selectSkill(name: string) {
-  if (store.isDirty && !window.confirm('Discard unsaved skill changes?')) return
+  if (!(await guard.allow())) return
   await store.selectSkill(name)
 }
 
+
+const guard = useDraftGuard(() => store.isDirty, () => store.saveSkill(), () => store.discardChanges())
+async function reloadSkill() { if (store.selectedName && await guard.allow()) await store.selectSkill(store.selectedName) }
 
 const editorContainer = ref<HTMLElement | null>(null)
 let editorView: EditorView | null = null
@@ -187,7 +193,7 @@ function syncEditorContent(content: string) {
   }
 }
 
-watch(() => store.savedContent, () => {
+watch(() => store.editorContent, () => {
   syncEditorContent(store.editorContent)
 })
 
@@ -221,6 +227,7 @@ watch(diffMode, async (on) => {
 onMounted(() => {
   skillStream.start()
   void store.fetchSkills()
+  if (store.selectedName) void nextTick(createEditor)
 })
 
 onUnmounted(() => {
@@ -244,6 +251,7 @@ function handleDiscard() {
 }
 
 async function openNewSkillModal() {
+  if (!(await guard.allow())) return
   newSkillName.value = ''
   newSkillError.value = ''
   showNewModal.value = true
@@ -253,6 +261,7 @@ async function openNewSkillModal() {
 }
 
 async function handleCreateSkill() {
+  if (!(await guard.allow())) return
   const name = newSkillName.value.trim()
   if (!name) return
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -270,8 +279,9 @@ async function handleCreateSkill() {
 }
 
 async function handleDelete() {
-  if (!store.selectedName) return
+  if (!store.selectedName || !(await guard.allow())) return
   const ok = await store.deleteSkill(store.selectedName)
+  if (store.conflict) confirmingDelete.value = false
   if (ok) {
     confirmingDelete.value = false
     syncEditorContent('')
@@ -289,6 +299,9 @@ function formatTime(ts: string | null): string {
 
 <template>
   <div class="skills-page">
+    <DraftDialog :open="guard.open.value" :busy="guard.busy.value" @choose="guard.choose" />
+    <DraftConflict v-if="store.conflict" :latest="store.conflict.content" :draft="store.editorContent"
+      @edit="store.editorContent = $event" @latest="store.resolveConflict(true)" @reconcile="store.resolveConflict(false)" />
     <NowStripe />
     <PageHeader title="Skills" path="/skills">
       <template #right>
@@ -357,6 +370,7 @@ function formatTime(ts: string | null): string {
             </transition>
           </div>
           <div class="toolbar-actions">
+            <button class="action-btn" @click="reloadSkill">Reload file</button>
             <button
               class="action-btn action-save"
               :disabled="!store.isDirty || store.saving || store.selectedReadOnly || !validation.valid"

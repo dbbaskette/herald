@@ -67,3 +67,5 @@ hashes to avoid attributing replacement text to an earlier conversation.
 The legacy key/value store is labeled separately. The Obsidian tab is hidden
 when no vault is configured. A graph visualization remains optional and is not
 included in this change.
+
+See [draft safety and versioned writes](console-draft-safety.md) for Save / Discard / Stay navigation, external-edit reconciliation, and the required `If-Match` header on skill and prompt mutations.
