@@ -106,6 +106,8 @@ public class StatusSseService {
         Integer pendingCommandCount = safeCount("SELECT COUNT(*) FROM commands WHERE status = 'pending'");
         Integer memoryCount = safeCount("SELECT COUNT(*) FROM memory");
         Integer cronCount = safeCount("SELECT COUNT(*) FROM cron_jobs");
+        Integer skillCount = countSkills();
+        List<Map<String, Object>> cron = cronSnapshot();
 
         boolean botRunning = checkBotHealth();
 
@@ -131,7 +133,7 @@ public class StatusSseService {
         model.put("estimatedTokenSpend", "—");
 
         Map<String, Object> skills = new HashMap<>();
-        skills.put("totalLoaded", countSkills());
+        skills.put("totalLoaded", skillCount != null ? skillCount : 0);
         skills.put("lastReload", null);
         skills.put("parseErrors", List.of());
 
@@ -142,7 +144,12 @@ public class StatusSseService {
         result.put("mcp", List.of());
         result.put("skills", skills);
         result.put("memory", memory);
-        result.put("cron", List.of());
+        result.put("cron", cron != null ? cron : List.of());
+        result.put("capabilities", Map.of(
+                "mcp", Map.of("state", "unknown", "message", "MCP connection telemetry is unavailable in this console."),
+                "memory", capability(memoryCount != null, "Memory database could not be read."),
+                "skills", capability(skillCount != null, "One or more skill directories could not be read."),
+                "cron", capability(cron != null, "Cron jobs could not be read.")));
         result.put("recentActivity", List.of());
         result.put("messageCount", messageCount != null ? messageCount : 0);
         result.put("pendingCommandCount", pendingCommandCount != null ? pendingCommandCount : 0);
@@ -150,6 +157,25 @@ public class StatusSseService {
         result.put("timestamp", Instant.now().toString());
 
         return result;
+    }
+
+    private static Map<String, String> capability(boolean available, String failure) {
+        return Map.of("state", available ? "available" : "failed", "message", available ? "" : failure);
+    }
+
+    private List<Map<String, Object>> cronSnapshot() {
+        try {
+            return jdbcTemplate.queryForList("SELECT c.name, c.last_run, e.status AS last_result FROM cron_jobs c LEFT JOIN cron_execution e ON e.job_id = c.id ORDER BY c.name").stream().map(row -> {
+                Map<String, Object> job = new HashMap<>();
+                job.put("name", row.get("name"));
+                job.put("lastRun", row.get("last_run"));
+                job.put("nextRun", null);
+                job.put("lastResult", row.get("last_result"));
+                return job;
+            }).toList();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String getActiveModelName() {
@@ -165,7 +191,7 @@ public class StatusSseService {
         return "anthropic/claude-sonnet-4-5";
     }
 
-    private int countSkills() {
+    private Integer countSkills() {
         // Deduplicate across directories — local skills shadow bundled ones with the same name
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (Path dir : skillsDirs) {
@@ -175,7 +201,7 @@ public class StatusSseService {
                         .filter(d -> Files.exists(d.resolve("SKILL.md")))
                         .forEach(d -> seen.add(d.getFileName().toString()));
             } catch (IOException e) {
-                // skip unreadable dirs
+                return null;
             }
         }
         return seen.size();
@@ -185,12 +211,12 @@ public class StatusSseService {
         try {
             return jdbcTemplate.queryForObject(sql, Integer.class);
         } catch (Exception e) {
-            // Table may not exist yet on a fresh install
-            return 0;
+            // Unknown is not an observed zero.
+            return null;
         }
     }
 
-    private boolean checkBotHealth() {
+    boolean checkBotHealth() {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(botHealthUrl))

@@ -55,6 +55,11 @@ public class MeetingNotesCatalog {
      * and action items attached when present. Returns an empty list (never throws)
      * when MeetingNotes isn't installed or its database is missing.
      */
+    public List<MeetingDigest> findCompleted() {
+        return findByDateRange(LocalDate.of(1, 1, 1), LocalDate.of(9999, 12, 31)).stream()
+                .filter(MeetingDigest::readyForIngest).toList();
+    }
+
     public List<MeetingDigest> findByDateRange(LocalDate from, LocalDate to) {
         Path dbPath = expand(config.meetingNotesDbPath());
         if (!Files.exists(dbPath)) {

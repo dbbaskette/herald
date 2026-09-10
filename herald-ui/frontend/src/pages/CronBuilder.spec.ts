@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, enableAutoUnmount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import CronBuilder from './CronBuilder.vue'
+
+enableAutoUnmount(afterEach)
 
 const sampleJobs = [
   {
@@ -21,6 +23,7 @@ function mountPage() {
   return mount(CronBuilder, {
     global: {
       plugins: [createPinia()],
+      stubs: { NowStripe: true },
     },
   })
 }
@@ -68,7 +71,7 @@ describe('CronBuilder.vue', () => {
 
   it('opens edit panel when New Job is clicked', async () => {
     const wrapper = mountPage()
-    const newJobBtn = wrapper.find('button')
+    const newJobBtn = wrapper.findAll('button').find(b => b.text() === '+ New job')!
     await newJobBtn.trigger('click')
     expect(wrapper.text()).toContain('Name')
     expect(wrapper.text()).toContain('Schedule')
@@ -134,7 +137,7 @@ describe('CronBuilder.vue', () => {
 
   it('visual cron builder generates valid expression', async () => {
     const wrapper = mountPage()
-    const newJobBtn = wrapper.find('button')
+    const newJobBtn = wrapper.findAll('button').find(b => b.text() === '+ New job')!
     await newJobBtn.trigger('click')
 
     // Default should show an expression
@@ -160,5 +163,52 @@ describe('CronBuilder.vue', () => {
     const deleteBtn = wrapper.findAll('button').find(button => button.text() === 'del')!
     await deleteBtn.trigger('click')
     expect(wrapper.text()).toContain('delete')
+  })
+
+  it('preserves six-field steps ranges and lists when saving an existing job', async () => {
+    const expression = '15 */10 9-17 * * MON,WED'
+    const advanced = { ...sampleJobs[1], expression }
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init?: RequestInit) => Promise.resolve({
+      ok: true, json: async () => init?.method === 'PUT' ? advanced : [advanced],
+    })))
+    const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Weekly Review'))
+    await wrapper.findAll('button').find(b => b.text() === 'edit')!.trigger('click')
+    expect((wrapper.find('#cron-expression').element as HTMLInputElement).value).toBe(expression)
+    await wrapper.findAll('button').find(b => b.text() === 'Save')!.trigger('click')
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/cron/2', expect.objectContaining({
+      method: 'PUT', body: JSON.stringify({ name: advanced.name, expression, promptText: advanced.promptText, enabled: false }),
+    })))
+    wrapper.unmount()
+  })
+
+  it('keeps draft and shows backend validation errors', async () => {
+    const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Weekly Review'))
+    await wrapper.findAll('button').find(b => b.text() === 'edit')!.trigger('click')
+    await wrapper.find('#cron-expression').setValue('999 * * * *')
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 400, json: async () => ({ message: 'Invalid cron expression: minute must be 0-59' }) } as Response)
+    await wrapper.findAll('button').find(b => b.text() === 'Save')!.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').text()).toContain('minute must be 0-59'))
+    expect((wrapper.find('#cron-expression').element as HTMLInputElement).value).toBe('999 * * * *')
+    wrapper.unmount()
+  })
+
+  it('refreshes queued execution and stops polling when unmounted', async () => {
+    vi.useFakeTimers()
+    try {
+      const queued = { ...sampleJobs[1], status: 'queued' }
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [queued] }))
+      const wrapper = mountPage()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(wrapper.text()).toContain('queued')
+      vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => [{ ...queued, status: 'completed' }] } as Response)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(wrapper.text()).toContain('completed')
+      wrapper.unmount()
+      const calls = vi.mocked(fetch).mock.calls.length
+      await vi.advanceTimersByTimeAsync(15000)
+      expect(fetch).toHaveBeenCalledTimes(calls)
+    } finally { vi.useRealTimers() }
   })
 })

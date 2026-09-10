@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useMemoryStore } from '@/stores/memory'
 import { useObsidianStore } from '@/stores/obsidian'
 import {
@@ -12,6 +12,8 @@ import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionRule from '@/components/SectionRule.vue'
 import StatusGlyph from '@/components/StatusGlyph.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import { useChatStore } from '@/stores/chat'
 import MemoryHealthBar from '@/components/MemoryHealthBar.vue'
 
 type TabId = 'wiki' | 'kv' | 'obsidian'
@@ -21,6 +23,35 @@ const router = useRouter()
 const store = useMemoryStore()
 const obsidian = useObsidianStore()
 const fileMemory = useFileMemoryStore()
+
+const chat = useChatStore()
+const obsidianEnabled = ref(false)
+const deletingMemory = ref(false)
+const contextPaths = ref<string[]>([])
+let contextGeneration = 0
+let contextTimer: ReturnType<typeof setInterval> | undefined
+async function refreshContext() {
+  const generation = ++contextGeneration
+  try {
+    const res = await fetch(`/api/memory/files/context?${new URLSearchParams({conversationId: chat.conversationId})}`)
+    const value = res.ok ? await res.json() : null
+    if (generation === contextGeneration) contextPaths.value = value?.active === true && Array.isArray(value.paths) ? value.paths.filter((p: unknown) => typeof p === 'string') : []
+  } catch { if (generation === contextGeneration) contextPaths.value = [] }
+}
+watch(() => chat.conversationId, () => { contextPaths.value = []; refreshContext() })
+onUnmounted(() => { ++contextGeneration; clearInterval(contextTimer) })
+function canLeave() {
+  if (fileMemory.dirty || fileMemory.saving) { fileMemory.error = 'Save or discard your draft before leaving.'; return false }
+  return true
+}
+onBeforeRouteLeave(canLeave)
+onBeforeRouteUpdate(canLeave)
+watch(() => fileMemory.selected?.path, () => { deletingMemory.value = false })
+function beforeUnload(event: BeforeUnloadEvent) { if (fileMemory.dirty) { event.preventDefault(); event.returnValue = '' } }
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
+const selectedMetadata = computed(() => Object.values(fileMemory.grouped).flat().find(p => p.path === fileMemory.selected?.path))
+async function deleteMemory() { if(await fileMemory.deleteSelected()) deletingMemory.value = false }
 
 const activeTab = ref<TabId>('wiki')
 
@@ -35,15 +66,17 @@ const importStatus = ref<{ imported: number; errors: string[] } | null>(null)
 const obsidianQuery = ref('')
 const obsidianFolder = ref('')
 
-const tabs: { id: TabId; label: string; hint: string }[] = [
+const allTabs: { id: TabId; label: string; hint: string }[] = [
   { id: 'wiki',     label: 'Wiki',      hint: 'Typed long-term pages — concepts, entities, sources. The store Herald learns from.' },
-  { id: 'kv',       label: 'Key·Value', hint: 'SQLite key-value entries for quick facts and preferences.' },
+  { id: 'kv',       label: 'Legacy Key·Value', hint: 'SQLite key-value entries for quick facts and preferences.' },
   { id: 'obsidian', label: 'Obsidian',  hint: 'Search the connected Obsidian vault.' },
 ]
 
-const tabHint = computed(() => tabs.find((t) => t.id === activeTab.value)?.hint ?? '')
+const tabs = computed(() => allTabs.filter(t => t.id !== 'obsidian' || obsidianEnabled.value))
+const tabHint = computed(() => tabs.value.find((t) => t.id === activeTab.value)?.hint ?? '')
 
 function setTab(tab: TabId) {
+  if (fileMemory.dirty || fileMemory.saving) { fileMemory.error = 'Save or discard your draft before leaving.'; return }
   activeTab.value = tab
   router.replace({ query: { ...route.query, tab } })
 }
@@ -58,7 +91,7 @@ watch(
   () => route.query,
   async (q) => {
     const tab = q.tab as TabId | undefined
-    if (tab && tabs.some((t) => t.id === tab)) activeTab.value = tab
+    if (tab && tabs.value.some((t) => t.id === tab)) activeTab.value = tab
     const path = q.path as string | undefined
     if (path) await openPathFromQuery(path)
   },
@@ -67,7 +100,9 @@ watch(
 
 onMounted(() => {
   store.fetchEntries()
-  obsidian.fetchFolders()
+  fetch('/api/memory/files/capabilities').then(r => r.ok ? r.json() : {obsidian: false}).then(value => { obsidianEnabled.value = value.obsidian === true; if (obsidianEnabled.value) obsidian.fetchFolders() }).catch(() => {})
+  refreshContext()
+  contextTimer = setInterval(refreshContext, 5000)
   fileMemory.fetchPages()
 })
 
@@ -156,6 +191,17 @@ function formatTime(ts: string | null): string {
     <!-- ── Wiki ─────────────────────────────────────────────────── -->
     <div v-show="activeTab === 'wiki'">
       <MemoryHealthBar />
+      <form class="filter-bar" @submit.prevent="fileMemory.fetchPages()">
+        <input v-model="fileMemory.query" aria-label="Search memory text" class="input" placeholder="Search filenames and full text…" />
+        <input v-model="fileMemory.tag" aria-label="Filter memory tag" class="input" placeholder="Tag…" />
+        <button class="btn-secondary" :disabled="fileMemory.loading">Search</button>
+      </form>
+      <p class="hint">Context badges show actual reads during the executing turn of {{ chat.conversationId }}. Tool text is not retained after the turn. Files over 256 KiB are listed by filename only.</p>
+      <div v-if="fileMemory.trash" class="alert" role="status">
+        Moved to {{ fileMemory.trash.trashPath }}
+        <button class="btn-secondary" :disabled="fileMemory.saving" @click="fileMemory.restore()">Undo delete</button>
+      </div>
+      <ConfirmModal :open="deletingMemory" title="Move memory to trash?" :message="`Move ${fileMemory.selected?.path} to .memory-trash? You can undo this deletion.`" confirm-label="Move to trash" danger @confirm="deleteMemory" @cancel="deletingMemory = false" />
       <div v-if="fileMemory.error" class="alert alert-err">
         <StatusGlyph kind="err" /> {{ fileMemory.error }}
       </div>
@@ -169,7 +215,17 @@ function formatTime(ts: string | null): string {
           <span class="reader-path">{{ fileMemory.selected.path }}</span>
           <button class="btn-secondary" @click="fileMemory.clearSelected()">← Back</button>
         </div>
-        <pre class="reader-body">{{ fileMemory.selected.content }}</pre>
+        <p v-if="contextPaths.includes(fileMemory.selected.path)" class="hint">In current context</p>
+        <p class="hint" v-if="selectedMetadata?.conversationId">Why is this here? Written from <RouterLink :to="{path: '/history', query: {conversationId: selectedMetadata.conversationId}}">{{ selectedMetadata.conversationId }}</RouterLink> {{ selectedMetadata.createdAt || '' }}</p>
+        <p v-else class="hint">No conversation attribution recorded for this memory.</p>
+        <textarea v-model="fileMemory.draft" class="reader-body memory-editor" aria-label="Memory Markdown editor" :disabled="fileMemory.saving || fileMemory.selectedLoading" spellcheck="false" />
+        <div class="reader-head">
+          <span>{{ fileMemory.dirty ? 'Unsaved changes' : 'Saved' }}</span>
+          <button class="btn-primary" :disabled="!fileMemory.dirty || fileMemory.saving || !fileMemory.selected.version" @click="fileMemory.save()">Save</button>
+          <button class="btn-secondary" :disabled="!fileMemory.dirty || fileMemory.saving" @click="fileMemory.discardDraft()">Discard draft</button>
+          <button class="btn-secondary" :disabled="fileMemory.dirty || fileMemory.saving" @click="fileMemory.openPage(fileMemory.selected.path)">Reload</button>
+          <button class="btn-secondary" :disabled="fileMemory.dirty || fileMemory.saving || !fileMemory.selected.version" @click="deletingMemory = true">Delete</button>
+        </div>
       </div>
 
       <!-- Grouped list -->
@@ -196,7 +252,7 @@ function formatTime(ts: string | null): string {
                 @click="fileMemory.openPage(page.path)"
               >
                 <span class="page-row__path">{{ page.path }}</span>
-                <span class="page-row__desc">{{ page.description || '—' }}</span>
+                <span class="page-row__desc">{{ contextPaths.includes(page.path) ? 'In current context · ' : '' }}{{ page.description || '—' }} {{ page.tags?.map(t => '#' + t).join(' ') }}</span>
                 <span class="page-row__size">{{ formatBytes(page.size) }}</span>
               </button>
             </div>
@@ -341,6 +397,7 @@ function formatTime(ts: string | null): string {
 </template>
 
 <style scoped>
+.memory-editor { width: 100%; min-height: 24rem; box-sizing: border-box; background: var(--paper-2); border: 0; font-family: monospace; }
 .memory-page { max-width: 1080px; }
 
 .header-actions { display: flex; gap: 8px; }

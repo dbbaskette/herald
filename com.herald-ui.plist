@@ -30,7 +30,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>SERVER_ADDRESS</key>
-        <string>0.0.0.0</string>
+        <string>127.0.0.1</string>
     </dict>
 </dict>
 </plist>

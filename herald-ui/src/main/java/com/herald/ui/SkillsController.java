@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,8 +38,10 @@ class SkillsController {
     private final Path skillsDir;
     private final Path bundledSkillsDir;
     private final StatusSseService statusSseService;
+    private final SkillValidationService validation;
 
-    SkillsController(HeraldUiConfig config, StatusSseService statusSseService) {
+    SkillsController(HeraldUiConfig config, StatusSseService statusSseService, SkillValidationService validation) {
+        this.validation = validation;
         this.skillsDir = resolvePath(config.skillsPath());
         String bundledPath = config.bundledSkillsPath();
         this.bundledSkillsDir = (bundledPath != null && !bundledPath.isBlank())
@@ -82,7 +85,8 @@ class SkillsController {
         if (skillFile == null || !Files.exists(skillFile)) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(Files.readString(skillFile));
+        String content = Files.readString(skillFile);
+        return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).body(content);
     }
 
     /**
@@ -100,14 +104,15 @@ class SkillsController {
             return ResponseEntity.notFound().build();
         }
         Path bundled = bundledSkillsDir.resolve(name).resolve("SKILL.md");
-        if (!Files.exists(bundled)) {
+        if (!SkillValidationService.exists(bundledSkillsDir, name + "/SKILL.md")) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(Files.readString(bundled));
     }
 
     @PutMapping("/{name}")
-    ResponseEntity<Void> update(@PathVariable String name, @RequestBody String content)
+    synchronized ResponseEntity<?> update(@PathVariable String name, @RequestBody String content,
+            @RequestHeader(value = "If-Match", required = false) String expected)
             throws IOException {
         if (!isValidName(name)) {
             return ResponseEntity.badRequest().build();
@@ -119,9 +124,21 @@ class SkillsController {
         if (!Files.isDirectory(skillDir)) {
             return ResponseEntity.notFound().build();
         }
-        Files.writeString(skillDir.resolve("SKILL.md"), content);
+        if (!SkillValidationService.exists(skillsDir, name + "/SKILL.md")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        var conflict = DocumentVersions.check(expected, Files.readString(skillDir.resolve("SKILL.md")));
+        if (conflict != null) return conflict;
+        var result = validation.validate(name, content, false);
+        if (!result.valid()) return ResponseEntity.unprocessableContent().body(result);
+        Path temporary = Files.createTempFile(skillDir, ".skill-", ".tmp");
+        try {
+            Files.writeString(temporary, content);
+            Files.move(temporary, skillDir.resolve("SKILL.md"),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally { Files.deleteIfExists(temporary); }
         statusSseService.publishSkillReload(Instant.now().toString());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok().eTag(DocumentVersions.etag(content)).build();
     }
 
     @PostMapping
@@ -136,7 +153,7 @@ class SkillsController {
         Files.createDirectories(skillDir);
         String template = """
                 ---
-                name: %s
+                name: "%s"
                 description: >
                   TODO: Describe what this skill does and when it should be used.
                 ---
@@ -151,7 +168,8 @@ class SkillsController {
     }
 
     @DeleteMapping("/{name}")
-    ResponseEntity<Void> delete(@PathVariable String name) throws IOException {
+    synchronized ResponseEntity<?> delete(@PathVariable String name,
+            @RequestHeader(value = "If-Match", required = false) String expected) throws IOException {
         if (!isValidName(name)) {
             return ResponseEntity.badRequest().build();
         }
@@ -162,6 +180,8 @@ class SkillsController {
         if (!Files.exists(skillDir)) {
             return ResponseEntity.notFound().build();
         }
+        var conflict = DocumentVersions.check(expected, Files.readString(skillDir.resolve("SKILL.md")));
+        if (conflict != null) return conflict;
         deleteRecursively(skillDir);
         statusSseService.publishSkillReload(Instant.now().toString());
         return ResponseEntity.noContent().build();
@@ -173,12 +193,12 @@ class SkillsController {
         try (Stream<Path> entries = Files.list(dir)) {
             entries.filter(Files::isDirectory).forEach(skillDir -> {
                 Path skillFile = skillDir.resolve("SKILL.md");
-                if (Files.exists(skillFile)) {
+                if (SkillValidationService.exists(dir, skillDir.getFileName() + "/SKILL.md")) {
                     try {
                         String content = Files.readString(skillFile);
                         Map<String, String> frontmatter = parseFrontmatter(content);
                         String dirName = skillDir.getFileName().toString();
-                        String name = frontmatter.getOrDefault("name", dirName);
+                        String name = dirName; // API identity must remain the directory, including invalid drafts.
                         String description = frontmatter.getOrDefault("description", "");
                         // Has a bundled origin if a directory with the same name
                         // (dir name, not display name) exists in bundledSkillsDir.
@@ -193,49 +213,42 @@ class SkillsController {
         }
     }
 
-    @SuppressWarnings("unchecked")
     static Map<String, String> parseFrontmatter(String content) {
         Map<String, String> result = new LinkedHashMap<>();
-        if (content == null || !content.startsWith("---")) {
-            return result;
-        }
-        try (BufferedReader reader = new BufferedReader(new StringReader(content))) {
-            reader.readLine(); // skip opening ---
-            StringBuilder yaml = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.equals("---")) {
-                    break;
-                }
-                yaml.append(line).append("\n");
-            }
-            if (!yaml.isEmpty()) {
-                Yaml yamlParser = new Yaml();
-                Map<String, Object> parsed = yamlParser.load(yaml.toString());
-                if (parsed != null) {
-                    parsed.forEach((k, v) -> {
-                        if (v != null) {
-                            result.put(k, v.toString().strip());
-                        }
-                    });
-                }
-            }
-        }
-        catch (IOException e) {
-            // should not happen with StringReader
+        if (content == null || content.length() > SkillValidationService.MAX_CONTENT) return result;
+        String[] lines = content.split("\\R", -1);
+        if (lines.length == 0 || !lines[0].equals("---")) return result;
+        for (int end = 1; end < lines.length; end++) {
+            if (!lines[end].equals("---")) continue;
+            try {
+                Object parsed = SkillValidationService.parser().load(
+                        String.join("\n", java.util.Arrays.copyOfRange(lines, 1, end)));
+                if (parsed instanceof Map<?, ?> map) map.forEach((k, v) -> {
+                    if (k instanceof String key && v instanceof String value) result.put(key, value.strip());
+                });
+            } catch (RuntimeException ignored) { /* Invalid files remain selectable for repair. */ }
+            break;
         }
         return result;
     }
 
+    @PostMapping("/validate")
+    ResponseEntity<?> validate(@RequestBody SkillValidationPayload payload) {
+        if (!isValidName(payload.name())) return ResponseEntity.badRequest().build();
+        return ResponseEntity.ok(validation.validate(payload.name(), payload.content(), true));
+    }
+
+    record SkillValidationPayload(String name, String content) {}
+
     private Path resolveSkillFile(String name) {
         // Check local first, then bundled
         Path local = skillsDir.resolve(name).resolve("SKILL.md");
-        if (Files.exists(local)) {
+        if (SkillValidationService.exists(skillsDir, name + "/SKILL.md")) {
             return local;
         }
         if (bundledSkillsDir != null) {
             Path bundled = bundledSkillsDir.resolve(name).resolve("SKILL.md");
-            if (Files.exists(bundled)) {
+            if (SkillValidationService.exists(bundledSkillsDir, name + "/SKILL.md")) {
                 return bundled;
             }
         }

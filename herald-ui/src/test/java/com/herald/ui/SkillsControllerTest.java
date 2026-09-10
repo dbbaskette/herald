@@ -71,6 +71,49 @@ class SkillsControllerTest {
     }
 
     @Test
+    void createdBooleanAndNumericNamesRemainYamlStrings() throws Exception {
+        for (String name : new String[]{"true", "on", "123"}) {
+            mockMvc.perform(post("/api/skills").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"" + name + "\"}"))
+                    .andExpect(status().isCreated());
+            String content = Files.readString(skillsDir.resolve(name + "/SKILL.md"));
+            org.assertj.core.api.Assertions.assertThat(SkillsController.parseFrontmatter(content).get("name")).isEqualTo(name);
+        }
+    }
+
+    @Test
+    void validationBlocksBrokenYamlAtSaveWithoutChangingDisk() throws Exception {
+        createSkill("repair", "---\nname: repair\ndescription: valid\n---\nBody");
+        mockMvc.perform(post("/api/skills/validate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"repair\",\"content\":\"---\\nname: one\\nname: two\\ndescription: hi\\n---\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.diagnostics[0].line").value(3));
+        mockMvc.perform(put("/api/skills/repair").header("If-Match", DocumentVersions.etag(Files.readString(skillsDir.resolve("repair/SKILL.md")))).contentType(MediaType.TEXT_PLAIN)
+                .content("---\nname: repair\ndescription: [\n---"))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.diagnostics[0].severity").value("error"));
+        org.assertj.core.api.Assertions.assertThat(Files.readString(skillsDir.resolve("repair/SKILL.md")))
+                .contains("description: valid");
+        mockMvc.perform(get("/api/skills")).andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsStaleAndMissingVersionsWithoutOverwritingExternalEdits() throws Exception {
+        createSkill("guarded", "original");
+        String version = mockMvc.perform(get("/api/skills/guarded")).andReturn().getResponse().getHeader("ETag");
+        mockMvc.perform(put("/api/skills/guarded").contentType(MediaType.TEXT_PLAIN).content("draft"))
+                .andExpect(status().is(428));
+        Files.writeString(skillsDir.resolve("guarded/SKILL.md"), "external");
+        mockMvc.perform(put("/api/skills/guarded").header("If-Match", version)
+                .contentType(MediaType.TEXT_PLAIN).content("draft"))
+                .andExpect(status().isPreconditionFailed()).andExpect(jsonPath("$.content").value("external"));
+        mockMvc.perform(delete("/api/skills/guarded").header("If-Match", version))
+                .andExpect(status().isPreconditionFailed());
+        org.assertj.core.api.Assertions.assertThat(Files.readString(skillsDir.resolve("guarded/SKILL.md")))
+                .isEqualTo("external");
+    }
+
+    @Test
     void listReturnsEmptyArrayWhenNoSkills() throws Exception {
         mockMvc.perform(get("/api/skills"))
                 .andExpect(status().isOk())
@@ -141,7 +184,7 @@ class SkillsControllerTest {
         createSkill("my-skill", "---\nname: my-skill\ndescription: A skill\n---\n# Original\n");
 
         String updated = "---\nname: my-skill\ndescription: Updated\n---\n# Updated\n";
-        mockMvc.perform(put("/api/skills/my-skill")
+        mockMvc.perform(put("/api/skills/my-skill").header("If-Match", DocumentVersions.etag(Files.readString(skillsDir.resolve("my-skill/SKILL.md"))))
                         .contentType(MediaType.TEXT_PLAIN)
                         .content(updated))
                 .andExpect(status().isOk());
@@ -168,7 +211,7 @@ class SkillsControllerTest {
         Path skillFile = skillsDir.resolve("new-skill").resolve("SKILL.md");
         assert Files.exists(skillFile);
         String content = Files.readString(skillFile);
-        assert content.contains("name: new-skill");
+        org.assertj.core.api.Assertions.assertThat(SkillsController.parseFrontmatter(content).get("name")).isEqualTo("new-skill");
         assert content.contains("description:");
     }
 
@@ -186,7 +229,7 @@ class SkillsControllerTest {
     void deleteRemovesSkillDirectory() throws Exception {
         createSkill("to-delete", "# Delete me");
 
-        mockMvc.perform(delete("/api/skills/to-delete"))
+        mockMvc.perform(delete("/api/skills/to-delete").header("If-Match", DocumentVersions.etag(Files.readString(skillsDir.resolve("to-delete/SKILL.md")))))
                 .andExpect(status().isNoContent());
 
         assert !Files.exists(skillsDir.resolve("to-delete"));

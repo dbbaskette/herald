@@ -77,9 +77,15 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
         }
     }
 
-    public record Memory(String dbPath, MemoryApproval approval) {
+    public record Memory(String dbPath, MemoryApproval approval, CompactionStrategy compactionStrategy) {
         @ConstructorBinding
-        public Memory {}
+        public Memory {
+            compactionStrategy = compactionStrategy == null ? CompactionStrategy.RECURSIVE_SUMMARY : compactionStrategy;
+        }
+
+        public Memory(String dbPath, MemoryApproval approval) {
+            this(dbPath, approval, null);
+        }
 
         /** Backwards-compatible 1-arg ctor predating the approval block. */
         public Memory(String dbPath) {
@@ -105,6 +111,12 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
     public record MemoryApproval(Boolean enabled, Map<String, String> byType,
                                  String deleteAny, String renameAny,
                                  String defaultMode, Integer timeoutSeconds) {
+    }
+
+    public enum CompactionStrategy { RECURSIVE_SUMMARY, SLIDING_WINDOW }
+
+    public CompactionStrategy compactionStrategy() {
+        return memory == null ? CompactionStrategy.RECURSIVE_SUMMARY : memory.compactionStrategy();
     }
 
     public record LongTermMemory(String memoriesDir) {

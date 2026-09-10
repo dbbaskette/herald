@@ -19,6 +19,8 @@ export const useSkillsStore = defineStore('skills', () => {
   })
   const editorContent = ref('')
   const savedContent = ref('')
+  const version = ref('')
+  const conflict = ref<{ content: string; version: string } | null>(null)
   /** Bundled (read-only) version of the currently selected skill, or empty if none. */
   const bundledContent = ref('')
   const loading = ref(false)
@@ -45,13 +47,23 @@ export const useSkillsStore = defineStore('skills', () => {
     }
   }
 
+  let selectionGeneration = 0
   async function selectSkill(name: string) {
+    const generation = ++selectionGeneration
+    const previousDraft = editorContent.value
     loading.value = true
     error.value = null
     try {
       const res = await fetch(`/api/skills/${encodeURIComponent(name)}`)
       if (!res.ok) throw new Error(res.statusText)
       const content = await res.text()
+      if (generation !== selectionGeneration) return
+      if (editorContent.value !== previousDraft) {
+        error.value = 'Your draft changed while loading. Select the skill again after saving or discarding it.'
+        return
+      }
+      conflict.value = null
+      version.value = res.headers.get('ETag') ?? ''
       selectedName.value = name
       editorContent.value = content
       savedContent.value = content
@@ -61,28 +73,44 @@ export const useSkillsStore = defineStore('skills', () => {
       if (summary?.hasBundled) {
         try {
           const bundledRes = await fetch(`/api/skills/${encodeURIComponent(name)}/bundled`)
-          if (bundledRes.ok) bundledContent.value = await bundledRes.text()
+          if (bundledRes.ok) {
+            const baseline = await bundledRes.text()
+            if (generation === selectionGeneration) bundledContent.value = baseline
+          }
         } catch { /* leave empty */ }
       }
     } catch (e: any) {
-      error.value = e.message
+      if (generation === selectionGeneration) error.value = e.message
     } finally {
-      loading.value = false
+      if (generation === selectionGeneration) loading.value = false
     }
   }
 
   async function saveSkill(): Promise<boolean> {
-    if (!selectedName.value || !isDirty.value) return false
+    if (!selectedName.value || !isDirty.value || selectedReadOnly.value || saving.value) return false
+    const name = selectedName.value, draft = editorContent.value
     saving.value = true
     error.value = null
     try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(selectedName.value)}`, {
+      const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'text/plain' },
-        body: editorContent.value,
+        headers: { 'Content-Type': 'text/plain', 'If-Match': version.value },
+        body: draft,
       })
-      if (!res.ok) throw new Error(res.statusText)
-      savedContent.value = editorContent.value
+      if (res.status === 412 || res.status === 428) {
+        const latest = await res.json()
+        if (selectedName.value === name) conflict.value = latest
+        throw new Error('This file changed externally. Review the conflict below. Your draft is preserved.')
+      }
+      if (!res.ok) {
+        if (res.status === 422) {
+          const validation = await res.json()
+          const errors = validation.diagnostics?.filter((d: any) => d.severity === 'error')
+          throw new Error(errors?.map((d: any) => `Line ${d.line}: ${d.message}`).join(' ') || 'Fix invalid skill frontmatter before saving.')
+        }
+        throw new Error(res.statusText || 'Skill save failed. Your draft is preserved.')
+      }
+      if (selectedName.value === name) { savedContent.value = draft; version.value = res.headers.get('ETag') ?? ''; conflict.value = null }
       return true
     } catch (e: any) {
       error.value = e.message
@@ -93,6 +121,9 @@ export const useSkillsStore = defineStore('skills', () => {
   }
 
   async function createSkill(name: string): Promise<boolean> {
+    const previousName = selectedName.value
+    const previousDraft = editorContent.value
+    const previousGeneration = selectionGeneration
     error.value = null
     try {
       const res = await fetch('/api/skills', {
@@ -105,7 +136,10 @@ export const useSkillsStore = defineStore('skills', () => {
         throw new Error(res.status === 409 ? 'Skill already exists' : text || res.statusText)
       }
       await fetchSkills()
-      await selectSkill(name)
+      // Creation may finish after the modal was dismissed and editing resumed.
+      // Keep the new file in the list without replacing that newer editor state.
+      if (selectedName.value === previousName && editorContent.value === previousDraft
+          && selectionGeneration === previousGeneration) await selectSkill(name)
       return true
     } catch (e: any) {
       error.value = e.message
@@ -116,7 +150,8 @@ export const useSkillsStore = defineStore('skills', () => {
   async function deleteSkill(name: string): Promise<boolean> {
     error.value = null
     try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE', headers: { 'If-Match': version.value } })
+      if (res.status === 412 || res.status === 428) conflict.value = await res.json()
       if (!res.ok) throw new Error(res.statusText)
       if (selectedName.value === name) {
         selectedName.value = null
@@ -131,13 +166,22 @@ export const useSkillsStore = defineStore('skills', () => {
     }
   }
 
+  function resolveConflict(useLatest: boolean) {
+    if (!conflict.value) return
+    savedContent.value = conflict.value.content
+    version.value = conflict.value.version
+    if (useLatest) editorContent.value = conflict.value.content
+    conflict.value = null
+    error.value = null
+  }
+
   function discardChanges() {
     editorContent.value = savedContent.value
   }
 
   return {
     skills, skillNames, selectedName, selectedReadOnly, editorContent, savedContent,
-    bundledContent, hasBundled, loading, saving, isDirty, error,
+    version, conflict, resolveConflict, bundledContent, hasBundled, loading, saving, isDirty, error,
     fetchSkills, selectSkill, saveSkill, createSkill, deleteSkill, discardChanges,
   }
 })

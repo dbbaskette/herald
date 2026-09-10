@@ -8,11 +8,13 @@
  * single clear "OFFLINE" state with a red glyph + last-seen time
  * instead of a row of dashes.
  */
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/status'
 import StatusGlyph from './StatusGlyph.vue'
 
 const status = useStatusStore()
+onMounted(() => { status.connectSSE(); if (!status.hasData && !status.loading) void status.fetchStatus() })
+onUnmounted(() => status.disconnectSSE())
 
 const liveKind = computed<'live-pulse' | 'err' | 'idle'>(() => {
   if (!status.status.bot.running) return 'err'
@@ -33,8 +35,14 @@ const alertKind = computed<'attention' | 'na'>(() =>
 </script>
 
 <template>
+  <div v-if="!status.hasData || status.stale" class="now-stripe now-stripe--disconnected" role="status">
+    <StatusGlyph kind="idle" size="sm" />
+    <span class="now-stripe__label">{{ status.connectionLabel }}</span>
+    <span v-if="status.lastUpdated" class="caption">Last updated {{ new Date(status.lastUpdated).toLocaleString() }}</span>
+    <button v-if="!status.loading" type="button" @click="status.retry()">Retry</button>
+  </div>
   <!-- Offline state — a single clear chip, not a row of dashes -->
-  <div v-if="!status.status.bot.running" class="now-stripe now-stripe--offline">
+  <div v-else-if="!status.status.bot.running" class="now-stripe now-stripe--offline">
     <StatusGlyph kind="err" size="sm" />
     <span class="now-stripe__label">Bot offline</span>
     <span class="now-stripe__sep">·</span>

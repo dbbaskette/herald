@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springaicommunity.agent.common.task.subagent.SubagentReference;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -54,7 +54,7 @@ class HeraldAgentConfigIntegrationTest {
 
         JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
-        assertThat(chatMemory).isInstanceOf(MessageWindowChatMemory.class);
+        assertThat(chatMemory).isInstanceOf(TurnSafeChatMemory.class);
 
         ChatModel mockModel = mock(ChatModel.class);
 

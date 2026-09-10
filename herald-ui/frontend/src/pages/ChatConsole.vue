@@ -348,6 +348,7 @@ watch(() => store.sending, (sending, wasSending) => {
 })
 
 onUnmounted(() => {
+  statusStore.disconnectSSE()
   if (processingTimer) clearInterval(processingTimer)
   document.removeEventListener('click', onDocumentClick)
   approvals.stopPolling()

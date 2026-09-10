@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.herald.config.HeraldConfig;
 import com.herald.meetings.MeetingDigest;
+import com.herald.meetings.MeetingIngestLedger;
 import com.herald.meetings.MeetingIngestService;
 import com.herald.meetings.MeetingNotesCatalog;
 
@@ -68,6 +69,9 @@ public class MeetingsController {
             return ResponseEntity.ok(new IngestAck("ignored", payload.meeting().id()));
         }
 
+        if (payload.summaryMarkdown() == null || payload.summaryMarkdown().isBlank()) {
+            return ResponseEntity.badRequest().body(new IngestAck("incomplete-summary", payload.meeting().id()));
+        }
         boolean claimed = ingestService.claimAndIngest(payload.toDigest(), "webhook");
         if (!claimed) {
             return ResponseEntity.ok(new IngestAck("duplicate", payload.meeting().id()));
@@ -105,12 +109,22 @@ public class MeetingsController {
 
         List<MeetingDigest> all = catalog.findByDateRange(start, end);
         List<MeetingDigest> ready = all.stream()
-                .filter(m -> "done".equalsIgnoreCase(m.status()) && m.summaryMarkdown() != null)
+                .filter(MeetingDigest::readyForIngest)
                 .toList();
         int queued = ingestService.backfillAsync(ready, "backfill");
         log.info("Backfill {}..{}: {} completed meeting(s), {} queued", start, end, ready.size(), queued);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(new BackfillAck(start.toString(), end.toString(), ready.size(), queued));
+                .body(new BackfillAck(start.toString(), end.toString(), ready.size(), queued, ready.stream().map(MeetingDigest::id).toList()));
+    }
+
+    @GetMapping("/progress")
+    public List<MeetingIngestLedger.Progress> progress() { return ingestService.progress(); }
+
+    @PostMapping("/retry")
+    public ResponseEntity<IngestAck> retry(@RequestParam("id") String id) {
+        return ingestService.retry(id)
+                ? ResponseEntity.accepted().body(new IngestAck("accepted",id))
+                : ResponseEntity.status(HttpStatus.CONFLICT).body(new IngestAck("not-failed",id));
     }
 
     private LocalDate parseDateOrToday(String date) {
@@ -166,5 +180,5 @@ public class MeetingsController {
 
     /** Result of kicking off a backfill: the resolved range, completed meetings found,
      *  and how many were queued for enrichment (the rest were already in memory). */
-    public record BackfillAck(String from, String to, int found, int queued) {}
+    public record BackfillAck(String from, String to, int found, int queued, List<String> meetingIds) {}
 }

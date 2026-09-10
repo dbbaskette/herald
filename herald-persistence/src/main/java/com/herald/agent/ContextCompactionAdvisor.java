@@ -1,5 +1,8 @@
 package com.herald.agent;
 
+import com.herald.config.HeraldConfig.CompactionStrategy;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -28,10 +31,9 @@ import java.util.Map;
  * Advisor that monitors conversation history token usage and compacts old messages
  * when the estimated token count exceeds 80% of the configured context window.
  *
- * <p>When compaction triggers, the oldest messages are removed from chat history and
- * an LLM-generated summary of the dropped portion is written to {@code log.md}
- * (a {@code COMPACT} event) and {@code hot.md} (overwritten with the full summary
- * as session-continuity context).</p>
+ * <p>Eviction preserves complete user turns. Recursive mode retains a tagged
+ * synthetic summary turn and writes continuity files; sliding mode drops old
+ * complete turns without calling a model. Failed summaries leave history intact.</p>
  *
  * <p>Must run before {@code OneShotMemoryAdvisor} so that compaction happens
  * before history is loaded into the prompt.</p>
@@ -42,6 +44,8 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
     static final double CEILING_RATIO = 0.8;
     static final int CHARS_PER_TOKEN = 4;
 
+    public static final String SYNTHETIC = "herald.compaction.synthetic";
+    private final CompactionStrategy strategy;
     private final ChatMemory chatMemory;
     private final ChatModel summaryModel;
     private final int maxContextTokens;
@@ -54,6 +58,12 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
 
     ContextCompactionAdvisor(ChatMemory chatMemory, ChatModel summaryModel, int maxContextTokens,
                              Path logFile, Path hotFile) {
+        this(chatMemory, summaryModel, maxContextTokens, logFile, hotFile, CompactionStrategy.RECURSIVE_SUMMARY);
+    }
+
+    public ContextCompactionAdvisor(ChatMemory chatMemory, ChatModel summaryModel, int maxContextTokens,
+                                    Path logFile, Path hotFile, CompactionStrategy strategy) {
+        this.strategy = strategy == null ? CompactionStrategy.RECURSIVE_SUMMARY : strategy;
         this.chatMemory = chatMemory;
         this.summaryModel = summaryModel;
         this.maxContextTokens = maxContextTokens;
@@ -80,24 +90,20 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        if (COMPACTION_DONE.get()) {
-            return chain.nextStream(request);
-        }
-        COMPACTION_DONE.set(true);
-        compactIfNeeded(request);
-        return chain.nextStream(request)
-                .doFinally(signal -> COMPACTION_DONE.remove());
+        return Flux.deferContextual(context -> {
+            String key = "herald.compaction.done";
+            if (context.hasKey(key)) return chain.nextStream(request);
+            compactIfNeeded(request);
+            return chain.nextStream(request).contextWrite(c -> c.put(key, true));
+        });
     }
 
     private void compactIfNeeded(ChatClientRequest request) {
         String conversationId = resolveConversationId(request);
-        List<Message> history = chatMemory.get(conversationId);
-
-        int estimatedTokens = estimateTokens(history);
-        int ceiling = (int) (maxContextTokens * CEILING_RATIO);
-
-        if (estimatedTokens > ceiling) {
-            compactHistory(conversationId, history, ceiling);
+        synchronized (chatMemory) {
+            List<Message> history = chatMemory.get(conversationId);
+            int ceiling = (int) (maxContextTokens * CEILING_RATIO);
+            if (estimateTokens(history) > ceiling) compactHistory(conversationId, history, ceiling);
         }
     }
 
@@ -121,11 +127,14 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
     }
 
     static int estimateMessageTokens(Message message) {
-        String text = message.getText();
-        if (text == null || text.isEmpty()) {
-            return 0;
+        int chars = message.getText() == null ? 0 : message.getText().length();
+        if (message instanceof AssistantMessage assistant) {
+            for (var call : assistant.getToolCalls()) chars += call.arguments().length() + call.name().length();
         }
-        return text.length() / CHARS_PER_TOKEN;
+        if (message instanceof ToolResponseMessage tool) {
+            for (var response : tool.getResponses()) chars += response.responseData().length();
+        }
+        return (chars + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN;
     }
 
     /**
@@ -136,20 +145,23 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
      * @return a short human-readable report describing what happened
      */
     public String forceCompact(String conversationId) {
-        List<Message> history = chatMemory.get(conversationId);
-        if (history == null || history.isEmpty()) {
-            return "No conversation history to compact.";
+        synchronized (chatMemory) {
+            List<Message> history = chatMemory.get(conversationId);
+            if (history == null || history.isEmpty()) {
+                return "No conversation history to compact.";
+            }
+            int before = estimateTokens(history);
+            int msgsBefore = history.size();
+            // Request half the current token estimate, subject to safe turn boundaries.
+            int target = Math.max(0, before / 2);
+            if (!compactHistory(conversationId, history, target)) {
+                return "History unchanged: no safe complete turn to remove, or summary unavailable.";
+            }
+            List<Message> after = chatMemory.get(conversationId);
+            int tokensAfter = estimateTokens(after);
+            return String.format("Compacted %d → %d messages (~%d → %d tokens).",
+                    msgsBefore, after == null ? 0 : after.size(), before, tokensAfter);
         }
-        int before = estimateTokens(history);
-        int msgsBefore = history.size();
-        // Drive the target down so the loop always removes at least the oldest
-        // half. Keeps compaction useful even well under the token ceiling.
-        int target = Math.max(0, before / 2);
-        compactHistory(conversationId, history, target);
-        List<Message> after = chatMemory.get(conversationId);
-        int tokensAfter = estimateTokens(after);
-        return String.format("Compacted %d → %d messages (~%d → %d tokens).",
-                msgsBefore, after == null ? 0 : after.size(), before, tokensAfter);
     }
 
     /**
@@ -175,46 +187,48 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
         return maxContextTokens;
     }
 
-    private void compactHistory(String conversationId, List<Message> history, int targetTokens) {
-        int currentTokens = estimateTokens(history);
-        int tokensToRemove = currentTokens - targetTokens;
-        int removedTokens = 0;
-        int splitIndex = 0;
-
-        for (int i = 0; i < history.size() && removedTokens < tokensToRemove; i++) {
-            removedTokens += estimateMessageTokens(history.get(i));
-            splitIndex = i + 1;
+    private boolean compactHistory(String conversationId, List<Message> history, int targetTokens) {
+        // System instructions are never summarized or evicted. A previous synthetic
+        // turn is included in the next summary, but is not a real eviction boundary.
+        List<Message> system = history.stream().filter(SystemMessage.class::isInstance).toList();
+        List<Message> dialogue = history.stream().filter(m -> !(m instanceof SystemMessage)).toList();
+        int remove = estimateTokens(history) - targetTokens;
+        int prospective = 0;
+        while (prospective < dialogue.size() && remove > 0) {
+            remove -= estimateMessageTokens(dialogue.get(prospective++));
         }
-
-        if (splitIndex == 0) {
-            return;
+        int split = TurnSafeChatMemory.priorUserBoundary(dialogue, prospective);
+        if (split <= 0 || dialogue.subList(0, split).stream().noneMatch(TurnSafeChatMemory::isRealUser)) {
+            return false;
         }
-
-        // Don't remove all messages — keep at least the most recent pair
-        if (splitIndex >= history.size()) {
-            splitIndex = Math.max(0, history.size() - 2);
+        List<Message> dropped = dialogue.subList(0, split);
+        String summary = strategy == CompactionStrategy.SLIDING_WINDOW ? "" : generateSummary(dropped);
+        // Fail closed: model failures and empty output must not destroy context.
+        if (strategy != CompactionStrategy.SLIDING_WINDOW && summary.isBlank()) return false;
+        List<Message> remaining = new ArrayList<>(system);
+        if (!summary.isBlank()) {
+            remaining.add(UserMessage.builder().text("Summary of earlier conversation (context only):")
+                    .metadata(Map.of(SYNTHETIC, true)).build());
+            remaining.add(AssistantMessage.builder().content(summary)
+                    .properties(Map.of(SYNTHETIC, true)).build());
         }
-
-        if (splitIndex == 0) {
-            return;
+        remaining.addAll(dialogue.subList(split, dialogue.size()));
+        if (chatMemory instanceof TurnSafeChatMemory memory) {
+            memory.replace(conversationId, remaining);
+        } else {
+            // Compatibility with externally supplied ChatMemory implementations.
+            chatMemory.clear(conversationId);
+            try {
+                chatMemory.add(conversationId, remaining);
+            } catch (RuntimeException failure) {
+                chatMemory.clear(conversationId);
+                chatMemory.add(conversationId, history);
+                throw failure;
+            }
         }
-
-        List<Message> dropped = new ArrayList<>(history.subList(0, splitIndex));
-        List<Message> remaining = new ArrayList<>(history.subList(splitIndex, history.size()));
-
-        String summary = generateSummary(dropped);
-
-        chatMemory.clear(conversationId);
-        if (!remaining.isEmpty()) {
-            chatMemory.add(conversationId, remaining);
-        }
-
-        log.info("Compacted context: removed {} messages (~{} tokens). "
-                        + "Remaining: {} messages (~{} tokens)",
-                splitIndex, removedTokens,
-                remaining.size(), estimateTokens(remaining));
-
-        persistSummary(summary, splitIndex, removedTokens, remaining.size());
+        log.info("Compacted context: removed {} messages; kept {} messages", split, remaining.size());
+        persistSummary(summary, split, estimateTokens(dropped), remaining.size());
+        return true;
     }
 
     private String generateSummary(List<Message> dropped) {
@@ -270,14 +284,14 @@ public class ContextCompactionAdvisor implements CallAdvisor, StreamAdvisor {
             String role = switch (msg) {
                 case UserMessage ignored -> "User";
                 case AssistantMessage ignored -> "Assistant";
+                case ToolResponseMessage ignored -> "Tool";
                 default -> "System";
             };
             String text = msg.getText();
+            if (msg instanceof ToolResponseMessage tool) text = tool.getResponses().toString();
+            if (msg instanceof AssistantMessage assistant && assistant.hasToolCalls()) text = text + assistant.getToolCalls();
             if (text != null && !text.isBlank()) {
-                String truncated = text.length() > 500
-                        ? text.substring(0, 500) + "..."
-                        : text;
-                sb.append(role).append(": ").append(truncated).append("\n\n");
+                sb.append(role).append(": ").append(text).append("\n\n");
             }
         }
         return sb.toString().stripTrailing();

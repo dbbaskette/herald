@@ -85,4 +85,12 @@ class CronJobRepositoryTest {
     void getByIdReturnsNullForMissing() {
         assertThat(repository.getById(99999)).isNull();
     }
+
+    @Test
+    void directDeleteCannotRemoveBuiltInJob() {
+        jdbcTemplate.update("INSERT INTO cron_jobs(name,schedule,prompt,built_in) VALUES('protected','0 9 * * *','prompt',1)");
+        Long id = jdbcTemplate.queryForObject("SELECT id FROM cron_jobs WHERE name='protected'",Long.class);
+        assertThat(repository.delete(id)).isFalse();
+        assertThat(repository.getById(id)).isNotNull();
+    }
 }

@@ -315,7 +315,7 @@ Herald turns [MeetingNotes](https://github.com/dbbaskette/MeetingNotes) (a local
 | Path | Trigger | When |
 |---|---|---|
 | **Webhook** (real-time) | MeetingNotes posts `meeting.completed` to `POST /api/meetings/ingest` | the moment a recording finishes processing |
-| **Daily catch-up** | `@Scheduled` job re-scans the day's meetings | 6 pm (set `HERALD_MEETINGNOTES_CATCHUP_CRON`, `-` to disable) — backstops anything the webhook missed |
+| **Daily catch-up** | `@Scheduled` job re-scans completed meeting history | 6 pm (set `HERALD_MEETINGNOTES_CATCHUP_CRON`, `-` to disable) — backstops anything the webhook missed |
 | **Backfill** | console **Settings → Meetings → Bring into memory** (or `POST /api/meetings/backfill?days=N`) | on demand, for a date range |
 
 **Design notes:**
@@ -324,6 +324,8 @@ Herald turns [MeetingNotes](https://github.com/dbbaskette/MeetingNotes) (a local
 - **Full summary, verbatim.** MeetingNotes already distilled the transcript, so the note stores that summary complete — no summarizing the summary.
 - **Dedup ledger.** A `meetings_ingested` table ensures a meeting that arrives via both the webhook and a catch-up is enriched exactly once; a failed enrichment releases its claim so it can retry.
 - **Unattended writes auto-apply.** Webhook/catch-up/backfill turns run as a `SYSTEM` channel, so memory writes skip the interactive approval prompt (there's no human to answer it).
+
+See [durable recovery, progress and optional recap/Reminders delivery](docs/integrations/meeting-recovery.md).
 
 **Enable it** — in the MeetingNotes app → Settings → Webhook exporter: toggle on, set the URL to `http://127.0.0.1:8081/api/meetings/ingest`, template **Compact**, owner filter `all`. Paths default to `~/Documents/MeetingNotes`; override with `HERALD_MEETINGNOTES_DB_PATH` / `HERALD_MEETINGNOTES_DIR`.
 
@@ -409,6 +411,11 @@ sequenceDiagram
 ```
 
 ## Getting Started
+
+### Remote access
+
+Both services now listen on loopback by default. For your phone or another computer, use the [Tailscale/SSH remote-access guide](docs/remote-access.md), enable optional console authentication, and follow the [security checklist](docs/security-checklist.md). Run `./run.sh config validate` to check effective console exposure settings.
+
 
 This guide walks you through setting up the full Telegram + memory + cron experience.
 
@@ -528,6 +535,8 @@ Logs land in `~/Library/Logs/herald.log`.
 cd herald-ui/frontend && npm ci && npm run build && cd ../..
 ./mvnw -pl herald-ui spring-boot:run
 ```
+
+See [Console scheduling, skills and memory](docs/console-editing.md) for validation, recoverable memory edits and run-state behavior.
 
 Then open [http://localhost:8080](http://localhost:8080). The console requires Safari 16.4+, Chrome 111+, or Firefox 128+ for Tailwind CSS 4. Node is required to build the console assets, but not to run the packaged Java application.
 
