@@ -34,6 +34,7 @@ public class BrowserTools implements AutoCloseable {
     private volatile boolean closed;
     private final ThreadLocal<java.util.concurrent.atomic.AtomicBoolean> cancellation=new ThreadLocal<>();
     private static final int TIMEOUT_MS=10_000;
+    private static final int BROWSER_LAUNCH_TIMEOUT_MS=30_000;
     private static class Session {
         final BrowserContext context; final Page page;
         long lastAccess=System.currentTimeMillis(); int actions; int requests; boolean mutation;
@@ -156,7 +157,8 @@ public class BrowserTools implements AutoCloseable {
         if(browser!=null && browser.isConnected()) return;
         if(playwright!=null) playwright.close();
         playwright=Playwright.create(new Playwright.CreateOptions().setEnv(Map.of("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD","1")));
-        var options=new BrowserType.LaunchOptions().setHeadless(headless).setChromiumSandbox(true).setTimeout(TIMEOUT_MS);
+        var options=new BrowserType.LaunchOptions().setHeadless(headless).setChromiumSandbox(true)
+                .setTimeout(BROWSER_LAUNCH_TIMEOUT_MS);
         if(!executable.isBlank()) options.setExecutablePath(Path.of(executable));
         browser=playwright.chromium().launch(options);
     }
