@@ -43,7 +43,25 @@ class StatusSseServiceTest {
         var jobs = (List<Map<String, Object>>) snapshot.get("cron");
         assertThat(jobs).hasSize(1);
         assertThat(jobs.getFirst()).containsEntry("name", "morning").containsEntry("lastResult", "completed").containsEntry("nextRun", null);
-        assertThat(((Map<?, ?>) ((Map<?, ?>) snapshot.get("capabilities")).get("memory")).get("state")).isEqualTo("available");
+        assertThat(((Map<?, ?>) ((Map<?, ?>) snapshot.get("capabilities")).get("memory")).get("state")).isEqualTo("healthy");
         assertThat(((Map<?, ?>) snapshot.get("skills")).get("totalLoaded")).isEqualTo(1);
+    }
+
+    @Test void keepsDisabledRemoteStateAndExposesProviderCapabilities() {
+        var jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(0);
+        when(jdbc.queryForList(anyString())).thenReturn(List.of());
+        var service = spy(new StatusSseService(jdbc, 1, directory.toString(), ""));
+        doReturn(true).when(service).checkBotHealth();
+        doReturn(Map.of(
+                "memory", Map.of("state", "disabled", "message", "Persistence is disabled."),
+                "google-workspace", Map.of("state", "unavailable", "message", "gws is unavailable."),
+                "provider:openai", Map.of("state", "healthy", "message", "Configured.")))
+                .when(service).checkBotCapabilities();
+
+        var capabilities = (Map<String, Map<String, String>>) service.buildStatus().get("capabilities");
+        assertThat(capabilities.get("memory")).containsEntry("state", "disabled");
+        assertThat(capabilities.get("google-workspace")).containsEntry("state", "unavailable");
+        assertThat(capabilities.get("provider:openai")).containsEntry("state", "healthy");
     }
 }

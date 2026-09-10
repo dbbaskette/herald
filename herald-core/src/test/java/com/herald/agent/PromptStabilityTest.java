@@ -89,7 +89,8 @@ class PromptStabilityTest {
                         new HeraldConfig.A2aAgent("zebra", "http://z", Map.of()),
                         new HeraldConfig.A2aAgent("Alpha", "http://a", Map.of()),
                         new HeraldConfig.A2aAgent("mango", "http://m", Map.of()),
-                        new HeraldConfig.A2aAgent("bravo", "http://b", Map.of()))));
+                        new HeraldConfig.A2aAgent("bravo", "http://b", Map.of())), null,
+                        new HeraldConfig.A2a.Client(true)));
 
         List<String> names1 = config.a2aAgents().stream().map(HeraldConfig.A2aAgent::name).toList();
         List<String> names2 = config.a2aAgents().stream().map(HeraldConfig.A2aAgent::name).toList();

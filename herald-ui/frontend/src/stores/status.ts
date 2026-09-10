@@ -47,11 +47,12 @@ export interface ActivityEntry {
 }
 
 export interface CapabilityStatus {
-  state: 'available' | 'disabled' | 'failed' | 'unknown'
+  state: 'healthy' | 'disabled' | 'unconfigured' | 'unavailable' | 'failed' | 'unknown'
   message: string
+  setupAction?: string
 }
 export interface SystemStatus {
-  capabilities?: Partial<Record<'mcp' | 'memory' | 'skills' | 'cron', CapabilityStatus>>
+  capabilities?: Record<string, CapabilityStatus>
   healthy: boolean
   bot: BotStatus
   model: ModelStatus
@@ -86,14 +87,20 @@ export function parseStatus(value: unknown): SystemStatus {
   const bool = (v: unknown): boolean => { if (typeof v !== 'boolean') throw new Error('Invalid status flag'); return v }
   const array = <T>(v: unknown, parse: (item: any) => T): T[] => { if (!Array.isArray(v) || v.length > 10000) throw new Error('Invalid status list'); return v.map(parse) }
   const d = object(value), b = object(d.bot), m = object(d.model), s = object(d.skills), memory = object(d.memory)
-  const capabilities: SystemStatus['capabilities'] = {}
+  const capabilities: Record<string, CapabilityStatus> = Object.create(null)
   if (d.capabilities !== undefined) {
     const raw = object(d.capabilities)
-    for (const key of ['mcp', 'memory', 'skills', 'cron'] as const) {
-      if (raw[key] === undefined) continue
-      const v = object(raw[key])
-      if (!['available', 'disabled', 'failed', 'unknown'].includes(v.state)) throw new Error('Invalid capability state')
-      capabilities[key] = { state: v.state, message: str(v.message) }
+    const entries = Object.entries(raw)
+    if (entries.length > 100) throw new Error('Invalid capability list')
+    for (const [key, value] of entries) {
+      if (!/^[a-z0-9][a-z0-9:_-]{0,99}$/i.test(key)) throw new Error('Invalid capability id')
+      const v = object(value)
+      if (!['healthy', 'disabled', 'unconfigured', 'unavailable', 'failed', 'unknown'].includes(v.state)) throw new Error('Invalid capability state')
+      capabilities[key] = {
+        state: v.state,
+        message: str(v.message),
+        ...(v.setupAction === undefined ? {} : { setupAction: str(v.setupAction) }),
+      }
     }
   }
   return {

@@ -4,7 +4,7 @@ New to Herald? Start here. This guide walks you from zero to your first working 
 
 ## What is Herald?
 
-Herald is a program that runs an AI assistant powered by Claude (and optionally other models). You can run it two ways:
+Herald is a program that runs an AI assistant with Anthropic, OpenAI, Gemini, Ollama, or LM Studio. You can run it two ways:
 
 - **Task agent** — give it a prompt, it does the job, it exits. Good for one-off automation. No setup beyond a file and an API key.
 - **Personal assistant** — an always-on bot you chat with over Telegram. It remembers things across conversations, checks your calendar/email, and runs on a schedule.
@@ -13,7 +13,7 @@ Same program. The mode is just configuration.
 
 ## What you'll build here
 
-A tiny task agent named `hello-agent` that you can have a back-and-forth conversation with in your terminal. Nothing is stored, nothing is sent to Telegram. Just you, Claude, and your local machine.
+A tiny task agent named `hello-agent` that you can have a back-and-forth conversation with in your terminal. Nothing is stored and nothing is sent to Telegram.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ For this guide, you need:
 | **Java 21+** | Herald is a Java program | `java -version` |
 | **Node.js** | Console build; use `nvm install && nvm use` (22.23.1) | `node -v` |
 | **Maven wrapper** | To build the JAR (ships with the repo) | `./mvnw -version` |
-| **Anthropic API key** | To talk to Claude | Sign up at [console.anthropic.com](https://console.anthropic.com) |
+| **One model provider** | To run the agent | Use an Anthropic, OpenAI, or Gemini API key, or a local Ollama/LM Studio base URL |
 
 Node.js is needed to build the included console, but not to run the packaged agent. You do **not** need a Telegram bot, a database, or a Google account for this guide.
 
@@ -67,6 +67,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 java -jar "$(./scripts/find-artifact.sh bot)" --agents=hello-agent.md
 ```
 
+That example uses Anthropic. You can instead set `OPENAI_API_KEY`,
+`GEMINI_API_KEY`, `OLLAMA_BASE_URL`, or `LMSTUDIO_BASE_URL`, and select it with
+`HERALD_DEFAULT_PROVIDER`. See [Providers and capabilities](provider-capabilities.md)
+for validation, fallback order, and model defaults.
+
 You'll land in an interactive prompt. Try:
 
 ```
@@ -83,8 +88,8 @@ Five things worth understanding:
 
 1. **You launched `herald-bot.jar` with `--agents=hello-agent.md`.** That flag puts Herald in task-agent mode — no database, no Telegram, just a chat loop in your terminal.
 2. **Herald read your agent definition.** The `name`, `model`, and `tools` fields told it how to set up the agent. The prose became the system prompt.
-3. **You typed a message.** Herald sent it to Claude along with the system prompt.
-4. **Claude might have called a tool.** Because `tools: [filesystem]` was set, Claude could read files off your disk to answer — without you having to paste file contents into chat.
+3. **You typed a message.** Herald sent it to the selected model along with the system prompt.
+4. **The model might have called a tool.** Because `tools: [filesystem]` was set, it could read files off your disk to answer — without you having to paste file contents into chat.
 5. **You got a reply.** The loop continues until you exit.
 
 This is the whole model: **definition + prompt + tools → agent**. Everything else Herald does is more of the same with more tools and more persistence.
@@ -130,15 +135,16 @@ Herald does a **preflight check before Spring even boots** (issue #283), so comm
 misconfigurations surface as one-line errors with fix hints — not 40-line stack traces.
 The exact text below is what Herald prints; the fixes match what it tells you to do.
 
-### `Herald can't start: ANTHROPIC_API_KEY is not set.`
+### `Herald can't start: <provider setting> is not set.`
 
 ```text
-Fix: `export ANTHROPIC_API_KEY=sk-ant-...` or add it to .env.
+Fix: Configure a supported provider in .env or Spring properties.
 See: docs/getting-started-101.md#prerequisites
 ```
 
-`export` it in the same shell before running, or put it in a `.env` file at the
-repo root and use `./run.sh` (which sources `.env` automatically).
+Set one hosted provider key or one local provider base URL in the same shell, or
+put it in `.env` and use `./run.sh` (which sources `.env` automatically). If the
+requested default is missing, Herald uses the first configured provider.
 
 ### `Herald can't start: Java N is too old (need 21+).`
 
@@ -148,16 +154,12 @@ Fix: Install JDK 21 — `brew install openjdk@21` on macOS, or use SDKMAN: `sdk 
 
 After installing, confirm with `java -version` — it should report 21 or newer.
 
-### `Herald can't start: HERALD_TELEGRAM_BOT_TOKEN is not set.`
+### Telegram is inactive
 
-```text
-Fix: Create a bot via @BotFather and put the token in .env.
-     For task-agent mode (no Telegram), pass `--agents=path.md`.
-```
-
-Personal-assistant mode requires a Telegram bot. **Task-agent mode** (the path
-this guide walks you through) skips this check — pass `--agents=hello-agent.md`
-on the command line and Herald drops the Telegram requirement.
+Telegram is optional in both assistant and task-agent modes. Configure both
+`HERALD_TELEGRAM_BOT_TOKEN` and `HERALD_TELEGRAM_ALLOWED_CHAT_ID` to activate it.
+A blank or partial pair is reported as unconfigured and creates no Telegram
+poller, sender, or scheduler.
 
 ### `Herald can't start: Database directory not writable: <path>.`
 

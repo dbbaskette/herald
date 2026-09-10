@@ -40,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/meetings")
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingsController {
 
     private static final Logger log = LoggerFactory.getLogger(MeetingsController.class);

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnBean(CronService.class)
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class CronTools {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");

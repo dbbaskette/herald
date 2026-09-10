@@ -5,12 +5,13 @@ import java.util.concurrent.TimeUnit;
 import com.herald.config.HeraldConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import okhttp3.OkHttpClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
+import com.herald.config.TelegramConfiguredCondition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty("herald.telegram.bot-token")
+@Conditional(TelegramConfiguredCondition.class)
 public class TelegramBotConfig {
 
     /**

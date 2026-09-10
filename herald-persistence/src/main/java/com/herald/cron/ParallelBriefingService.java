@@ -20,6 +20,7 @@ import java.util.UUID;
  * parallel + background subagent execution from the Spring AI Agentic Patterns series.
  */
 @Service
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class ParallelBriefingService {
 
     private static final Logger log = LoggerFactory.getLogger(ParallelBriefingService.class);

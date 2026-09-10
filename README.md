@@ -79,9 +79,9 @@ Browse long-term memory grouped by type, edit skills with live reload, and manag
 
 Most agent projects pick one personality: "chatty assistant" **or** "scripted task runner." Herald runs both off the same codebase because the split is just configuration, not architecture:
 
-- **Personal assistant** — Telegram bot token + database path. Runs 24/7, builds long-term memory of who you are via typed Markdown files, manages Gmail and Calendar, delegates deep research to specialist subagents, runs on cron.
+- **Personal assistant** — Telegram bot token + allowed chat ID. Runs 24/7 with the default SQLite memory path and cron, builds long-term memory of who you are via typed Markdown files, and can opt into Gmail, Calendar, and other integrations.
 - **Task agent** — `--agents=my-agent.md`. One-shot or REPL, zero persistence, exits when done. The agent file defines the personality, tools, and model.
-- **Hybrid** — turn either dial up or down. Keep the DB but drop Telegram. Add Telegram to a task agent for notifications. Pick what you need, skip what you don't.
+- **Hybrid** — run assistant mode with persistence but no Telegram, or disable persistence and keep only explicitly configured assistant capabilities. Task mode always keeps assistant persistence, Telegram, and schedulers off.
 
 The reference implementation of [Spring AI's Agentic Patterns](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/) series, adapted for personal use.
 
@@ -136,7 +136,7 @@ flowchart TB
 | **AskUserQuestion** | [Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool/) | ✅ | Upstream `AskUserQuestionTool` with `TelegramQuestionHandler` implementing `QuestionHandler`. Single-select options render as inline keyboard buttons; multi-select and free-text fall back to text messaging. Blocks on `CompletableFuture` with a 30-minute timeout (`herald.telegram.question-timeout-minutes`). The agent turn runs on a dedicated executor so a pending question never stalls Telegram polling. |
 | **TodoWrite** | [Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite/) | ✅ | Upstream `TodoWriteTool` with `pending → in_progress → completed` states. A `todoEventHandler` dispatches formatted progress to `MessageSender` (Telegram) with status symbols, or prints to stdout when no transport is configured. |
 | **Subagent Orchestration** | [Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents/) | ✅ | `TaskTool` + `TaskOutputTool` with multi-model tier routing. Uses all four built-in subagents (Explore, General-Purpose, Plan, Bash) plus a custom **research** agent (Opus, deep analysis + web search) in `.claude/agents/`. |
-| **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Remote A2A agents configured under `herald.a2a.agents`; each entry is registered as a `SubagentReference` alongside local subagents and dispatched via the same `TaskTool`. Resolution is lazy — `AgentCard` fetched on first delegation. |
+| **A2A Protocol** | [Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration/) | ✅ | Enable `herald.a2a.client.enabled`, then configure remote agents under `herald.a2a.agents`; each is registered alongside local subagents and dispatched through the same `TaskTool`. |
 | **AutoMemoryTools** | [Part 6](https://spring.io/blog/2026/04/07/spring-ai-agentic-patterns-6-memory-tools/) | ✅ ↗ | Herald-owned `HeraldAutoMemoryAdvisor` replaces the upstream advisor and decorates each mutating `ToolCallback` so successful ops append to `log.md`. Extended taxonomy (`concept`, `entity`, `source`) beyond the blog's four types. `MEMORY.md` is a type-grouped catalog. Sibling `wiki-ingest` / `wiki-query` / `wiki-lint` skills close the compounding-knowledge loop. Optional `obsidian-vault` mode switches new pages to `[[wikilinks]]`. |
 | **Session API** | [Part 7](https://spring.io/blog/2026/04/15/spring-ai-session-management/) | ⏳ | Targets Spring AI 2.1 (Nov 2026). Today Herald uses `OneShotMemoryAdvisor` + `ContextCompactionAdvisor` over `ChatMemory`/`MessageWindowChatMemory` — functionally similar (windowed history + auto-compaction) but lacks turn-safe boundaries, pluggable compaction strategies, and `conversation_search`. Migration tracked in the comparison doc. |
 
@@ -332,7 +332,7 @@ Herald turns [MeetingNotes](https://github.com/dbbaskette/MeetingNotes) (a local
 
 See [durable recovery, progress and optional recap/Reminders delivery](docs/integrations/meeting-recovery.md).
 
-**Enable it** — in the MeetingNotes app → Settings → Webhook exporter: toggle on, set the URL to `http://127.0.0.1:8081/api/meetings/ingest`, template **Compact**, owner filter `all`. Paths default to `~/Documents/MeetingNotes`; override with `HERALD_MEETINGNOTES_DB_PATH` / `HERALD_MEETINGNOTES_DIR`.
+**Enable it** — set `HERALD_MEETINGNOTES_ENABLED=true`. In the MeetingNotes app → Settings → Webhook exporter: toggle on, set the URL to `http://127.0.0.1:8081/api/meetings/ingest`, template **Compact**, owner filter `all`. Paths default to `~/Documents/MeetingNotes`; override with `HERALD_MEETINGNOTES_DB_PATH` / `HERALD_MEETINGNOTES_DIR`. Set `HERALD_MEETINGNOTES_ENABLED=false` to remove the API, catalog, recovery, catch-up, ingestion, and their probes while preserving queued data.
 
 ## Telegram Commands
 
@@ -387,8 +387,8 @@ Herald is a modular Spring Boot monorepo. One JAR (`herald-bot.jar`) does everyt
 
 | Configuration | What Herald becomes |
 |---------------|-------------------|
-| `bot-token` + `db-path` | Personal assistant (Telegram + memory + cron) |
-| `db-path` only | Persistent agent without Telegram (REST API) |
+| Nonblank `bot-token` + `allowed-chat-id` | Personal assistant (Telegram + default memory + cron) |
+| Persistence enabled with Telegram blank | Persistent agent without Telegram (REST API) |
 | `--agents=file.md` | Task agent (one-shot or REPL, no persistence) |
 | `--agents=file.md --prompt="..."` | Single-prompt execution, exits when done |
 
@@ -555,6 +555,7 @@ Herald talks to Gmail, Calendar, Drive, Docs, Sheets, Tasks, and Contacts throug
 # In .env — from Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID (Desktop):
 GOOGLE_WORKSPACE_CLI_CLIENT_ID=...apps.googleusercontent.com
 GOOGLE_WORKSPACE_CLI_CLIENT_SECRET=GOCSPX-...
+HERALD_GOOGLE_ENABLED=true
 ```
 
 Then authenticate — one flow covers every scope Herald uses:
@@ -572,13 +573,13 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key | Yes | — |
-| `HERALD_TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | Yes | — |
-| `HERALD_TELEGRAM_ALLOWED_CHAT_ID` | Your Telegram chat ID | Yes | — |
-| `OPENAI_API_KEY` | OpenAI API key | No | — |
-| `GEMINI_API_KEY` | Google Gemini API key | No | — |
-| `OLLAMA_BASE_URL` | Ollama server URL | No | — |
-| `HERALD_DEFAULT_PROVIDER` | Boot-time provider (`anthropic`, `openai`, `ollama`, `gemini`) | No | `anthropic` |
+| `ANTHROPIC_API_KEY` | Anthropic API key | One model provider required | — |
+| `HERALD_TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | Telegram only | — |
+| `HERALD_TELEGRAM_ALLOWED_CHAT_ID` | Your Telegram chat ID | Telegram only | — |
+| `OPENAI_API_KEY` | OpenAI API key | One model provider required | — |
+| `GEMINI_API_KEY` | Google Gemini API key | One model provider required | — |
+| `OLLAMA_BASE_URL` | Ollama server URL | One model provider required | — |
+| `HERALD_DEFAULT_PROVIDER` | Boot-time provider (`anthropic`, `openai`, `gemini`, `ollama`, `lmstudio`); falls back to the first configured provider | No | `anthropic` |
 | `HERALD_MODEL_DEFAULT` | Main agent model | No | `claude-sonnet-4-5` |
 | `HERALD_MODEL_HAIKU` | Fast/cheap subagent tier | No | `claude-haiku-4-5` |
 | `HERALD_MODEL_SONNET` | Mid-tier subagent | No | `claude-sonnet-4-5` |
@@ -586,7 +587,7 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 | `HERALD_MODEL_OPENAI` | OpenAI subagent tier | No | `gpt-4o` |
 | `HERALD_MODEL_OLLAMA` | Ollama (local) subagent tier | No | `llama3.2` |
 | `HERALD_MODEL_GEMINI` | Gemini subagent tier | No | `gemini-2.5-flash` |
-| `LMSTUDIO_BASE_URL` | LM Studio OpenAI-compatible base URL — set to enable the provider + auto-discovery | No | — |
+| `LMSTUDIO_BASE_URL` | LM Studio OpenAI-compatible base URL — set to enable the provider + auto-discovery | One model provider required | — |
 | `HERALD_MODEL_LMSTUDIO` | LM Studio model id (overridden by whatever's loaded once discovery runs) | No | `qwen/qwen3.5-35b-a3b` |
 | `HERALD_MODEL_CATALOG_<PROVIDER>` | Comma-separated model list shown in the console switcher (`ANTHROPIC`, `OPENAI`, `GEMINI`, ...) | No | Curated per provider |
 | `GOOGLE_WORKSPACE_CLI_CLIENT_ID` | OAuth client ID for Google Workspace (`.env` is the source of truth) | No | — |
@@ -603,6 +604,13 @@ When a Google call fails, Herald maps the error to an actionable hint the agent 
 | `HERALD_MEETINGNOTES_DB_PATH` | MeetingNotes read-only SQLite catalog (date-query backstop) | No | `~/Documents/MeetingNotes/db.sqlite` |
 | `HERALD_MEETINGNOTES_DIR` | MeetingNotes library root (holds `meetings/{slug}/summary.md`) | No | `~/Documents/MeetingNotes` |
 | `HERALD_MEETINGNOTES_CATCHUP_CRON` | Daily meeting catch-up schedule (Spring cron); `-` disables | No | `0 0 18 * * *` |
+| `HERALD_PERSISTENCE_ENABLED` | Create SQLite-backed assistant services | No | `true` |
+| `HERALD_CRON_ENABLED` | Register cron services and schedules when persistence is enabled | No | `true` |
+| `HERALD_MEETINGNOTES_ENABLED` | Register all MeetingNotes ingestion, API, recovery, and catch-up components | No | `false` |
+| `HERALD_GOOGLE_ENABLED` | Probe and register Google Workspace CLI tools | No | `false` |
+| `HERALD_REMINDERS_ENABLED` | Probe and register Apple Reminders tools | No | `false` |
+| `HERALD_A2A_CLIENT_ENABLED` | Register configured remote A2A agents for outbound delegation | No | `false` |
+| `HERALD_A2A_SERVER_ENABLED` | Expose Herald's inbound A2A AgentCard and JSON-RPC endpoint | No | `false` |
 | `HERALD_AGENT_MAX_CONTEXT_TOKENS` | Token limit before context compaction | No | `200000` |
 | `HERALD_ANTHROPIC_CACHE_STRATEGY` | Anthropic prompt-cache strategy: `none` / `tools_only` / `system_only` / `system_and_tools` / `conversation_history` | No | `system_and_tools` |
 | `HERALD_MEMORY_CONSOLIDATION_TRIGGER` | First-turn-of-day memory consolidation reminder: `daily` / `off` | No | `daily` |
@@ -647,24 +655,25 @@ Pass `--agents=` to the same `herald-bot.jar` and it becomes a task agent. No Te
    java -jar herald-bot.jar --agents=my-agent.md
    ```
 
-The only required env var is `ANTHROPIC_API_KEY` (or the key for whichever provider your agent uses). Everything else activates based on what config is present:
+Configure one model provider: an Anthropic, OpenAI, or Gemini API key, or an Ollama or LM Studio base URL. Task mode deliberately leaves assistant integrations off even if their normal-mode flags, paths, or credentials are present:
 
-| What you set | What Herald does |
+| Task-mode input | What Herald does |
 |-------------|-----------------|
-| Nothing extra | Task agent — in-memory conversation, console I/O |
-| `herald.memory.db-path` | Adds persistent memory and cron |
-| `herald.telegram.bot-token` | Adds Telegram transport |
-| Both | Full personal assistant mode |
+| One configured model provider | In-memory conversation and console I/O |
+| `tools` in the agent definition | Adds only the requested task tools |
+| Assistant persistence, Telegram, cron, MeetingNotes, Google, or Reminders configuration | Keeps those long-running integrations disabled in task mode |
 
 See [`examples/`](examples/) for ready-to-use agent definitions (`cf-analyzer.md`, `code-reviewer.md`, `csv-reporter.md`, `report-writer.md`) and [`docs/agents-md-spec.md`](docs/agents-md-spec.md) for the full format.
 
 ## A2A Agents (remote subagents)
 
-Herald can delegate to remote A2A-compliant agents alongside its local subagents. Declare each remote agent under `herald.a2a.agents` in `herald.yaml`:
+Herald can delegate to remote A2A-compliant agents alongside its local subagents. The client is explicitly opt-in; enable it and declare each remote agent under `herald.a2a.agents` in `herald.yaml`:
 
 ```yaml
 herald:
   a2a:
+    client:
+      enabled: true
     agents:
       - name: airbnb-agent
         url: http://localhost:10001/airbnb
@@ -676,7 +685,8 @@ herald:
 
 - `name` is a local label used in startup logs. The real display name comes from the resolved `AgentCard`.
 - `metadata` is an optional map passed verbatim to the underlying `SubagentReference`.
-- Resolution is **lazy** — Herald does not fetch `/.well-known/agent-card.json` at startup. A misconfigured or unreachable URL surfaces only on the first delegation to that agent.
+- Client and server switches are independent. Agent entries stay inactive unless `herald.a2a.client.enabled=true` (or `HERALD_A2A_CLIENT_ENABLED=true`). Herald resolves AgentCards while constructing the task tool; a bad endpoint therefore surfaces during enabled client startup.
+- Full provider selection, optional capability, precedence, and restart behavior is in [Providers and capabilities](docs/provider-capabilities.md). Settings save/apply semantics are in [Console settings](docs/settings.md).
 
 ## Project Structure
 

@@ -30,7 +30,7 @@ public final class Doctor {
 
     public static void main(String[] args) {
         OutputMode mode = parseMode(args);
-        Doctor doctor = new Doctor(defaultChecks(), System.out);
+        Doctor doctor = new Doctor(defaultChecks(args, System.getenv()), System.out);
         int exitCode = doctor.run(mode);
         System.exit(exitCode);
     }
@@ -149,44 +149,37 @@ public final class Doctor {
      *         (runtime → config → data → skills → external CLIs → ports).
      */
     public static List<HealthCheck> defaultChecks() {
-        Map<String, String> env = System.getenv();
+        return defaultChecks(new String[0], System.getenv());
+    }
+
+    public static List<HealthCheck> defaultChecks(String[] args, Map<String, String> env) {
+        var environment = DiagnosticEnvironment.load(args, env);
         List<HealthCheck> list = new ArrayList<>();
 
         // Runtime.
         list.add(new JavaRuntimeCheck());
 
-        // API keys — presence-only; full validation would hit the network and
-        // cost real dollars on some providers.
-        list.add(new EnvVarCheck("Anthropic API key", "ANTHROPIC_API_KEY",
-                EnvVarCheck.Severity.FAIL,
-                "Run `claude setup-token` and copy the token into .env"));
-        list.add(new EnvVarCheck("OpenAI API key (optional)", "OPENAI_API_KEY",
-                EnvVarCheck.Severity.WARN,
-                "Optional — only needed when using OpenAI provider"));
-        list.add(new EnvVarCheck("Gemini API key (optional)", "GEMINI_API_KEY",
-                EnvVarCheck.Severity.WARN,
-                "Optional — only needed when using Gemini provider"));
-
-        // Telegram.
-        list.add(new EnvVarCheck("Telegram bot token", "HERALD_TELEGRAM_BOT_TOKEN",
-                EnvVarCheck.Severity.FAIL,
-                "Create a bot via @BotFather and paste the token in .env"));
-        list.add(new EnvVarCheck("Telegram allowed chat ID", "HERALD_TELEGRAM_ALLOWED_CHAT_ID",
-                EnvVarCheck.Severity.WARN,
-                "Without this, Herald ignores every message. Set to your Telegram chat id"));
+        list.add(new com.herald.doctor.checks.ProviderCapabilityCheck(environment));
+        list.add(new com.herald.doctor.checks.TelegramCapabilityCheck(environment));
 
         // Data.
-        list.add(new DatabaseCheck());
+        if (com.herald.config.IntegrationLifecycle.persistenceEnabled(environment)) {
+            String path = env.getOrDefault("HERALD_DB_PATH", environment.getProperty("herald.memory.db-path", "~/.herald/herald.db"));
+            if (path.startsWith("~/")) path = System.getProperty("user.home") + path.substring(1);
+            list.add(new DatabaseCheck(Path.of(path)));
+        } else list.add(inactive("SQLite database", "DISABLED: persistence is inactive."));
         list.add(new MemoryDirCheck());
 
         // Skills.
         list.add(new SkillsDirCheck());
 
         // External CLIs — all optional; each skill's Step 0 installs what it needs.
-        list.add(new ExternalCliCheck("Google Workspace CLI", "gws",
+        if (com.herald.config.IntegrationLifecycle.googleEnabled(environment)) list.add(new ExternalCliCheck("Google Workspace CLI", "gws",
                 "brew install googleworkspace-cli  (then `gws auth login`)"));
-        list.add(new ExternalCliCheck("Reminders CLI (macOS)", "reminders",
+        else list.add(inactive("Google Workspace CLI", "DISABLED: Google integration is inactive."));
+        if (com.herald.config.IntegrationLifecycle.remindersEnabled(environment)) list.add(new ExternalCliCheck("Reminders CLI (macOS)", "reminders",
                 "brew install keith/formulae/reminders-cli"));
+        else list.add(inactive("Reminders CLI (macOS)", "DISABLED: Reminders integration is inactive."));
         list.add(new ExternalCliCheck("GitHub CLI", "gh",
                 "brew install gh  (needed by github / skill-browser skills)"));
         list.add(new ExternalCliCheck("Whisper (voice transcription)", "whisper",
@@ -204,6 +197,13 @@ public final class Doctor {
         list.add(new PortCheck("herald-ui", 8080));
 
         return list;
+    }
+
+    private static HealthCheck inactive(String name, String message) {
+        return new HealthCheck() {
+            public String name() { return name; }
+            public Result run() { return Result.ok(message); }
+        };
     }
 
     private static int parseInt(String raw, int fallback) {

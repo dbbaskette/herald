@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @ConditionalOnBean(JdbcTemplate.class)
+@org.springframework.context.annotation.Conditional(com.herald.config.PersistenceEnabledCondition.class)
 public class BudgetPolicy {
 
     private static final Logger log = LoggerFactory.getLogger(BudgetPolicy.class);

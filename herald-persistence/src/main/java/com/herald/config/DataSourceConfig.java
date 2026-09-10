@@ -13,7 +13,6 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,12 +22,12 @@ import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
 @Configuration
+@org.springframework.context.annotation.Conditional(com.herald.config.PersistenceEnabledCondition.class)
 public class DataSourceConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceConfig.class);
 
     @Bean
-    @ConditionalOnProperty(name = "herald.memory.db-path")
     public DataSource dataSource(HeraldConfig heraldConfig) {
         String dbPath = resolveDbPath(heraldConfig.dbPath());
         ensureParentDirectory(dbPath);
@@ -43,7 +42,6 @@ public class DataSourceConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "herald.memory.db-path")
     public DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
         populator.addScript(new ClassPathResource("schema.sql"));
@@ -60,7 +58,6 @@ public class DataSourceConfig {
 
     @Bean
     @org.springframework.context.annotation.Primary
-    @ConditionalOnProperty(name = "herald.memory.db-path")
     public ChatMemoryRepository chatMemoryRepository(JdbcTemplate jdbcTemplate) {
         return new JsonChatMemoryRepository(jdbcTemplate);
     }

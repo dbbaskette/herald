@@ -54,8 +54,16 @@ public class RemindersAvailabilityChecker {
         this.osName = osName == null ? "" : osName;
     }
 
+    private boolean enabled = true;
+
+    @Autowired
+    void configureLifecycle(org.springframework.core.env.Environment environment) {
+        enabled = com.herald.config.IntegrationLifecycle.remindersEnabled(environment);
+    }
+
     @PostConstruct
     void checkAvailability() {
+        if (!enabled) return;
         isMac = osName.toLowerCase().startsWith("mac");
         if (!isMac) {
             remindersAvailable = false;

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 /** Confirms durable summary content, independently of the model's prose response. */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingNoteVerifier {
     private final HeraldConfig config;
     public MeetingNoteVerifier(HeraldConfig config) { this.config=config; }

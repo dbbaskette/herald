@@ -15,7 +15,8 @@ import com.pengrad.telegrambot.response.BaseResponse;
 import com.pengrad.telegrambot.response.SendResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
+import com.herald.config.TelegramConfiguredCondition;
 import org.springframework.stereotype.Component;
 
 import reactor.core.Disposable;
@@ -31,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-@ConditionalOnProperty("herald.telegram.bot-token")
+@Conditional(TelegramConfiguredCondition.class)
 public class TelegramSender implements MessageSender {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramSender.class);

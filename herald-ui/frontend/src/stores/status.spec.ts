@@ -62,6 +62,24 @@ describe('useStatusStore', () => {
     expect(store.loading).toBe(false)
   })
 
+  it('parses normalized capability states and setup actions', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ...fullStatus, capabilities: {
+        memory: { state: 'disabled', message: 'Persistence skipped.' },
+        'provider:gemini': { state: 'healthy', message: 'Configured.', setupAction: 'docs/provider-capabilities.md' },
+        'google-workspace': { state: 'unavailable', message: 'gws missing.' },
+      } }),
+    }))
+
+    const store = useStatusStore()
+    await store.fetchStatus()
+
+    expect(store.status.capabilities?.memory.state).toBe('disabled')
+    expect(store.status.capabilities?.['provider:gemini'].setupAction).toBe('docs/provider-capabilities.md')
+    expect(store.status.capabilities?.['google-workspace'].state).toBe('unavailable')
+  })
+
   it('resets to defaults on fetch error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 

@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
  * and persists token usage to the model_usage table.
  */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.PersistenceEnabledCondition.class)
 public class AgentMetrics implements AgentTurnListener {
 
     private static final Logger log = LoggerFactory.getLogger(AgentMetrics.class);

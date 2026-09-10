@@ -131,10 +131,20 @@ class DoctorTest {
     }
 
     @Test
+    void taskModeReportsDisabledIntegrationsWithoutProbing() {
+        var checks = Doctor.defaultChecks(new String[]{"--agents=fixture.md"}, java.util.Map.of("OPENAI_API_KEY", "fixture"));
+        for (String name : java.util.List.of("Telegram", "SQLite database", "Google Workspace CLI", "Reminders CLI (macOS)")) {
+            var check = checks.stream().filter(c -> c.name().equals(name)).findFirst().orElseThrow();
+            assertThat(check.run().message()).contains("DISABLED");
+            assertThat(check.run().status()).isEqualTo(HealthCheck.Status.OK);
+        }
+    }
+
+    @Test
     void defaultChecksExposesFullBattery() {
         List<HealthCheck> checks = Doctor.defaultChecks();
         assertThat(checks).extracting(HealthCheck::name)
-                .contains("Java runtime", "Anthropic API key", "Telegram bot token",
+                .contains("Java runtime", "Model provider", "Telegram",
                         "SQLite database", "Memory directory", "Skills directory",
                         "Google Workspace CLI", "Reminders CLI (macOS)",
                         "herald-bot port 8081", "herald-ui port 8080");

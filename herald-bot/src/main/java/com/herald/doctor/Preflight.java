@@ -18,9 +18,9 @@ import java.util.Map;
  * <ul>
  *   <li>{@code --doctor} — preflight is skipped; the doctor command runs the
  *       same checks itself with richer output.</li>
- *   <li>{@code --agents=<path>} — task-agent mode; only the provider key + Java
+ *   <li>{@code --agents=<path>} — task-agent mode; only a configured provider + Java
  *       runtime are required. Telegram and DB checks are skipped.</li>
- *   <li>otherwise — personal-assistant mode; full check set.</li>
+ *   <li>otherwise — personal-assistant mode; provider and enabled persistence checks. Telegram is optional.</li>
  * </ul>
  *
  * <p>Failed checks render as:
@@ -65,39 +65,19 @@ public final class Preflight {
                     "docs/getting-started-101.md#prerequisites"));
         }
 
-        // Provider key — at minimum Anthropic, since that's the default provider
-        // and the one the bundled config templates assume. We don't validate
-        // alternative-provider keys here (too many to enumerate); the AgentService
-        // will surface a clean error if the user picked one without a key.
-        if (isBlank(env.get("ANTHROPIC_API_KEY"))) {
-            issues.add(new Issue(
-                    "ANTHROPIC_API_KEY is not set.",
-                    "`export ANTHROPIC_API_KEY=sk-ant-...` or add it to .env.",
+        var environment = DiagnosticEnvironment.load(args, env);
+        var providers = com.herald.config.ProviderCapabilities.resolve(environment);
+        if (!providers.usable()) {
+            String reason = providers.providers().stream().filter(p -> p.id().equals(providers.requestedProvider()))
+                    .map(com.herald.config.CapabilityStatus::message).findFirst().orElse("Unsupported provider " + providers.requestedProvider() + ".");
+            issues.add(new Issue(reason, "Configure a supported provider in .env or Spring properties.",
                     "docs/getting-started-101.md#prerequisites"));
         }
 
-        if (mode == Mode.ASSISTANT) {
-            // Telegram is the default surface — without a token + chat id the bot
-            // boots but ignores everything, which is confusing and looks like a hang.
-            if (isBlank(env.get("HERALD_TELEGRAM_BOT_TOKEN"))) {
-                issues.add(new Issue(
-                        "HERALD_TELEGRAM_BOT_TOKEN is not set.",
-                        "Create a bot via @BotFather and put the token in .env. "
-                                + "For task-agent mode (no Telegram), pass `--agents=path.md` "
-                                + "and Herald skips the Telegram requirement.",
-                        "docs/getting-started-101.md#step-1--create-a-telegram-bot"));
-            }
-            if (isBlank(env.get("HERALD_TELEGRAM_ALLOWED_CHAT_ID"))) {
-                issues.add(new Issue(
-                        "HERALD_TELEGRAM_ALLOWED_CHAT_ID is not set.",
-                        "Without it, Herald rejects every message. Find your chat id at "
-                                + "https://api.telegram.org/bot<TOKEN>/getUpdates after sending "
-                                + "your bot a message.",
-                        "docs/getting-started-101.md#step-1--create-a-telegram-bot"));
-            }
-
+        if (com.herald.config.ProviderCapabilities.hasText(environment.getProperty("agents"))) mode = Mode.TASK;
+        if (com.herald.config.IntegrationLifecycle.persistenceEnabled(environment)) {
             // db-path parent must be writable so SQLite can create the WAL files.
-            Path dbPath = resolveDbPath(env);
+            Path dbPath = resolveDbPath(Map.of("HERALD_DB_PATH", env.getOrDefault("HERALD_DB_PATH", environment.getProperty("herald.memory.db-path", "~/.herald/herald.db"))));
             Path parent = dbPath.getParent();
             if (parent != null) {
                 try {

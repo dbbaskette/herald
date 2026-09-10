@@ -16,7 +16,7 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.setup.OpenAiSetup;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import com.herald.config.ConditionalOnProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,30 +28,29 @@ import org.springframework.context.annotation.Configuration;
 public class ModelProviderConfig {
 
     @Bean("openaiChatModel")
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.openai.api-key:}')")
+    @ConditionalOnProvider("openai")
     public ChatModel openaiChatModel(HeraldConfig config) {
         var openaiConfig = config.providers().openai();
-        String apiKey = openaiConfig.apiKey() != null ? openaiConfig.apiKey() : "";
-        String baseUrl = openaiConfig.baseUrl() != null ? openaiConfig.baseUrl() : "https://api.openai.com";
+        String apiKey = valueOrDefault(openaiConfig.apiKey(), "");
+        String baseUrl = valueOrDefault(openaiConfig.baseUrl(), "https://api.openai.com");
         return buildOpenAiChatModel(apiKey, baseUrl);
     }
 
     @Bean("ollamaChatModel")
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.ollama.base-url:}')")
+    @ConditionalOnProvider("ollama")
     public ChatModel ollamaChatModel(HeraldConfig config) {
         var ollamaConfig = config.providers().ollama();
-        String apiKey = ollamaConfig.apiKey() != null ? ollamaConfig.apiKey() : "ollama";
-        String baseUrl = ollamaConfig.baseUrl() != null ? ollamaConfig.baseUrl() : "http://localhost:11434";
+        String apiKey = valueOrDefault(ollamaConfig.apiKey(), "ollama");
+        String baseUrl = valueOrDefault(ollamaConfig.baseUrl(), "http://localhost:11434");
         return buildOpenAiChatModel(apiKey, baseUrl);
     }
 
     @Bean("geminiChatModel")
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.gemini.api-key:}')")
+    @ConditionalOnProvider("gemini")
     public ChatModel geminiChatModel(HeraldConfig config) {
         var geminiConfig = config.providers().gemini();
-        String apiKey = geminiConfig.apiKey() != null ? geminiConfig.apiKey() : "";
-        String baseUrl = geminiConfig.baseUrl() != null ? geminiConfig.baseUrl()
-                : "https://generativelanguage.googleapis.com/v1beta/openai";
+        String apiKey = valueOrDefault(geminiConfig.apiKey(), "");
+        String baseUrl = valueOrDefault(geminiConfig.baseUrl(), "https://generativelanguage.googleapis.com/v1beta/openai");
         // Gemini 3.x requires thought_signature round-trip on assistant tool_calls.
         // Wrap the OpenAI HttpClient with an interceptor that captures + replays it.
         GeminiThoughtSignatureHttpClient sharedSig = new GeminiThoughtSignatureHttpClient(
@@ -76,25 +75,29 @@ public class ModelProviderConfig {
     }
 
     @Bean("lmstudioChatModel")
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.lmstudio.base-url:}')")
+    @ConditionalOnProvider("lmstudio")
     public ChatModel lmstudioChatModel(HeraldConfig config) {
         var lmstudioConfig = config.providers().lmstudio();
-        String apiKey = lmstudioConfig.apiKey() != null ? lmstudioConfig.apiKey() : "lm-studio";
-        String baseUrl = lmstudioConfig.baseUrl() != null ? lmstudioConfig.baseUrl() : "http://localhost:1234";
+        String apiKey = valueOrDefault(lmstudioConfig.apiKey(), "lm-studio");
+        String baseUrl = valueOrDefault(lmstudioConfig.baseUrl(), "http://localhost:1234");
         return buildOpenAiChatModel(apiKey, baseUrl);
     }
 
     @Bean("lmstudioEmbeddingModel")
-    @ConditionalOnExpression("!T(org.springframework.util.StringUtils).isEmpty('${herald.providers.lmstudio.base-url:}')")
+    @ConditionalOnProvider("lmstudio")
     public EmbeddingModel lmstudioEmbeddingModel(HeraldConfig config) {
         var lmstudioConfig = config.providers().lmstudio();
-        String apiKey = lmstudioConfig.apiKey() != null ? lmstudioConfig.apiKey() : "lm-studio";
-        String baseUrl = lmstudioConfig.baseUrl() != null ? lmstudioConfig.baseUrl() : "http://localhost:1234";
+        String apiKey = valueOrDefault(lmstudioConfig.apiKey(), "lm-studio");
+        String baseUrl = valueOrDefault(lmstudioConfig.baseUrl(), "http://localhost:1234");
         OpenAIClient client = buildSyncClient(apiKey, baseUrl);
         OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
                 .model("text-embedding-nomic-embed-text-v2-moe")
                 .build();
         return new OpenAiEmbeddingModel(client, MetadataMode.EMBED, options);
+    }
+
+    private static String valueOrDefault(String value, String fallback) {
+        return value != null && !value.isBlank() ? value.trim() : fallback;
     }
 
     private static ChatModel buildOpenAiChatModel(String apiKey, String baseUrl) {

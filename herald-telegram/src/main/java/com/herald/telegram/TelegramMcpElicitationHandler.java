@@ -6,13 +6,14 @@ import io.modelcontextprotocol.spec.McpSchema.ElicitResult.Action;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.mcp.annotation.McpElicitation;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
+import com.herald.config.TelegramConfiguredCondition;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
 @Component
-@ConditionalOnProperty("herald.telegram.bot-token")
+@Conditional(TelegramConfiguredCondition.class)
 public class TelegramMcpElicitationHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramMcpElicitationHandler.class);

@@ -27,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.TelegramConfiguredCondition.class)
 public class CommandHandler implements SlashCommandDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
@@ -49,8 +50,8 @@ public class CommandHandler implements SlashCommandDispatcher {
     private final java.util.Optional<RetrospectiveService> retrospectiveService;
     private final java.util.Optional<BudgetPolicy> budgetPolicy;
 
-    public CommandHandler(CronService cronService, ChatMemory chatMemory,
-                          TelegramSender sender, UsageTracker usageTracker, ModelSwitcher modelSwitcher,
+    public CommandHandler(@org.jspecify.annotations.Nullable CronService cronService, ChatMemory chatMemory,
+                          TelegramSender sender, @org.jspecify.annotations.Nullable UsageTracker usageTracker, ModelSwitcher modelSwitcher,
                           @Qualifier("activeToolNames") List<String> activeToolNames,
                           ReloadableSkillsTool reloadableSkillsTool,
                           AgentService agentService,
@@ -257,6 +258,7 @@ public class CommandHandler implements SlashCommandDispatcher {
     }
 
     private void handleCron(String[] parts) {
+        if (cronService == null) { sender.sendMessage("Cron is disabled for this runtime."); return; }
         if (parts.length < 2) {
             sender.sendMessage("Usage: /cron list | enable | disable | edit <name> schedule <expr>");
             return;
@@ -541,6 +543,7 @@ public class CommandHandler implements SlashCommandDispatcher {
     }
 
     private void sendBudgetStatus(BudgetPolicy policy) {
+        if (usageTracker == null) { sender.sendMessage("Usage persistence is disabled for this runtime."); return; }
         var settings = policy.current();
         BigDecimal dailyCost = usageTracker.estimateDailyCost();
         BigDecimal monthlyCost = usageTracker.estimateMonthlyCost();
@@ -619,6 +622,11 @@ public class CommandHandler implements SlashCommandDispatcher {
     }
 
     private void handleModelStatus() {
+        if (usageTracker == null) {
+            sender.sendMessage("Current model: " + modelSwitcher.getActiveProvider() + "/" + modelSwitcher.getActiveModel()
+                    + "\nUsage persistence is disabled for this runtime.");
+            return;
+        }
         UsageTracker.UsageSummary daily = usageTracker.getDailyUsage();
         List<UsageTracker.AgentUsage> breakdown = usageTracker.getDailyUsageByAgent();
         BigDecimal cost = usageTracker.estimateDailyCost();

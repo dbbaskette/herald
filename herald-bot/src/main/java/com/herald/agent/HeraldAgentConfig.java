@@ -5,6 +5,7 @@ import com.herald.agent.failover.FailoverCircuitBreaker;
 import com.herald.agent.failover.FailoverEntry;
 import com.herald.agent.failover.FailoverReason;
 import com.herald.config.HeraldConfig;
+import com.herald.config.ProviderCapabilities;
 import com.herald.cron.CronTools;
 import com.herald.telegram.TelegramQuestionHandler;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
@@ -106,6 +107,10 @@ public class HeraldAgentConfig {
     private com.herald.mcp.McpToolRegistry mcpTools = com.herald.mcp.McpToolRegistry.disabled();
 
     @org.springframework.beans.factory.annotation.Autowired
+    @Qualifier("anthropicChatModel")
+    private ObjectProvider<ChatModel> anthropicProvider;
+
+    @org.springframework.beans.factory.annotation.Autowired
     public void setMcpTools(com.herald.mcp.McpToolRegistry mcpTools) {
         this.mcpTools = mcpTools;
     }
@@ -132,11 +137,34 @@ public class HeraldAgentConfig {
 
     private static final int MAX_CONVERSATION_MESSAGES = 20;
 
+    @Bean("primaryChatModel")
+    @org.springframework.context.annotation.Primary
+    public ChatModel primaryChatModel(
+            HeraldConfig config,
+            @Qualifier("anthropicChatModel") ObjectProvider<ChatModel> anthropic,
+            @Qualifier("openaiChatModel") ObjectProvider<ChatModel> openai,
+            @Qualifier("ollamaChatModel") ObjectProvider<ChatModel> ollama,
+            @Qualifier("geminiChatModel") ObjectProvider<ChatModel> gemini,
+            @Qualifier("lmstudioChatModel") ObjectProvider<ChatModel> lmstudio) {
+        String effective = ProviderCapabilities.resolve(config).effectiveProvider();
+        ObjectProvider<ChatModel> selected = switch (effective == null ? "" : effective) {
+            case "anthropic" -> anthropic;
+            case "openai" -> openai;
+            case "ollama" -> ollama;
+            case "gemini" -> gemini;
+            case "lmstudio" -> lmstudio;
+            default -> throw new IllegalStateException("No configured model provider is available");
+        };
+        ChatModel model = selected.getIfAvailable();
+        if (model == null) throw new IllegalStateException("Configured provider bean is unavailable: " + effective);
+        return model;
+    }
+
     @Bean
     @ConditionalOnBean(ChatMemory.class)
     public ContextCompactionAdvisor contextCompactionAdvisor(
             ChatMemory chatMemory,
-            @Qualifier("anthropicChatModel") ChatModel chatModel,
+            @Qualifier("primaryChatModel") ChatModel chatModel,
             HeraldConfig config) {
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         return new ContextCompactionAdvisor(chatMemory, chatModel, config.maxContextTokens(),
@@ -150,6 +178,7 @@ public class HeraldAgentConfig {
     }
 
     @Bean
+    @org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
     public TaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(4);
@@ -175,7 +204,7 @@ public class HeraldAgentConfig {
                 "MemoryInsert", "MemoryDelete", "MemoryRename"));
         cronTools.ifPresent(t -> names.add("cron"));
         telegramSendTool.ifPresent(t -> names.add("telegram_send"));
-        gwsTools.ifPresent(t -> names.add("gws"));
+        gwsTools.filter(GwsTools::isAvailable).ifPresent(t -> names.add("gws"));
         if (remindersTools.isPresent() && remindersAvailabilityChecker.isAvailable()) {
             names.add("reminders");
         }
@@ -263,7 +292,7 @@ public class HeraldAgentConfig {
 
     @Bean
     public ModelSwitcher modelSwitcher(
-            @Qualifier("anthropicChatModel") ChatModel chatModel,
+            @Qualifier("primaryChatModel") ChatModel chatModel,
             org.springaicommunity.agent.tools.task.repository.TaskRepository taskRepository,
             HeraldConfig config,
             Optional<ContextCompactionAdvisor> contextCompactionAdvisorOpt,
@@ -373,12 +402,20 @@ public class HeraldAgentConfig {
                 config.obsidianVaultPath().isEmpty() ? "<unset>" : config.obsidianVaultPath());
 
         // Configure multi-model routing for subagent delegation
+        String configuredPrimaryProvider = ProviderCapabilities.resolve(config).effectiveProvider();
+        if (configuredPrimaryProvider == null) configuredPrimaryProvider = config.defaultProvider();
+        ChatModel anthropicModel = configuredAnthropic(config);
+        if (anthropicModel == null && "anthropic".equals(configuredPrimaryProvider)) anthropicModel = chatModel;
         var subagentTypeBuilder = ClaudeSubagentType.builder()
                 .chatClientBuilder("default", SubagentToolCallbackCompatibility.wrap(ChatClient.builder(chatModel)
-                        .defaultAdvisors(ExecutionAdvisors.create(executionLimits, executionBudgetCheck))))
-                .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
-                .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
-                .chatClientBuilder("opus", chatClientBuilderForModel(chatModel, opusModel));
+                        .defaultAdvisors(ExecutionAdvisors.create(executionLimits, executionBudgetCheck))));
+
+        if (anthropicModel != null) {
+            subagentTypeBuilder
+                    .chatClientBuilder("haiku", chatClientBuilderForModel(anthropicModel, haikuModel))
+                    .chatClientBuilder("sonnet", chatClientBuilderForModel(anthropicModel, sonnetModel))
+                    .chatClientBuilder("opus", chatClientBuilderForModel(anthropicModel, opusModel));
+        }
 
         openaiChatModel.ifPresent(model ->
                 subagentTypeBuilder.chatClientBuilder("openai", chatClientBuilderForModel(model, openaiModel)));
@@ -484,14 +521,15 @@ public class HeraldAgentConfig {
 
         // Register available provider ChatModels and their default model names
         Map<String, ChatModel> availableModels = new LinkedHashMap<>();
-        availableModels.put("anthropic", chatModel);
+        if (anthropicModel != null) availableModels.put("anthropic", anthropicModel);
         openaiChatModel.ifPresent(model -> availableModels.put("openai", model));
         ollamaChatModel.ifPresent(model -> availableModels.put("ollama", model));
         geminiChatModel.ifPresent(model -> availableModels.put("gemini", model));
         lmstudioChatModel.ifPresent(model -> availableModels.put("lmstudio", model));
+        availableModels.putIfAbsent(configuredPrimaryProvider, chatModel);
 
         Map<String, String> providerDefaultModels = new LinkedHashMap<>();
-        providerDefaultModels.put("anthropic", defaultModel);
+        if (anthropicModel != null) providerDefaultModels.put("anthropic", defaultModel);
         if (openaiChatModel.isPresent()) providerDefaultModels.put("openai", openaiModel);
         if (ollamaChatModel.isPresent()) providerDefaultModels.put("ollama", ollamaModel);
         if (geminiChatModel.isPresent()) providerDefaultModels.put("gemini", geminiModel);
@@ -501,7 +539,7 @@ public class HeraldAgentConfig {
         // the configured catalog unioned with the provider's default model, so the
         // active default always appears even if it's missing from the catalog env.
         Map<String, List<String>> providerModelCatalog = new LinkedHashMap<>();
-        providerModelCatalog.put("anthropic", mergeCatalog(anthropicCatalog, defaultModel));
+        if (anthropicModel != null) providerModelCatalog.put("anthropic", mergeCatalog(anthropicCatalog, defaultModel));
         if (openaiChatModel.isPresent()) providerModelCatalog.put("openai", mergeCatalog(openaiCatalog, openaiModel));
         if (ollamaChatModel.isPresent()) providerModelCatalog.put("ollama", mergeCatalog(ollamaCatalog, ollamaModel));
         if (geminiChatModel.isPresent()) providerModelCatalog.put("gemini", mergeCatalog(geminiCatalog, geminiModel));
@@ -509,16 +547,11 @@ public class HeraldAgentConfig {
 
         // Resolve the default provider from env var (falls back to anthropic)
         String requestedProvider = config.defaultProvider();
-        String initialProvider;
-        String initialModel;
-        if (availableModels.containsKey(requestedProvider)) {
-            initialProvider = requestedProvider;
-            initialModel = providerDefaultModels.getOrDefault(requestedProvider, defaultModel);
-        } else {
-            log.warn("Requested default provider '{}' is not available (missing API key?), falling back to anthropic",
-                    requestedProvider);
-            initialProvider = "anthropic";
-            initialModel = defaultModel;
+        String initialProvider = configuredPrimaryProvider;
+        String initialModel = providerDefaultModels.getOrDefault(initialProvider, defaultModel);
+        if (!requestedProvider.equals(initialProvider)) {
+            log.warn("Requested default provider '{}' is unavailable; using configured provider '{}'",
+                    requestedProvider, initialProvider);
         }
 
         // Build the initial client from the resolved provider (apply Anthropic skills for main agent)
@@ -546,6 +579,13 @@ public class HeraldAgentConfig {
                 clientBuilderFactory, initialClient, initialProvider, initialModel, config.anthropicSkills());
         switcher.loadPersistedOverride();
         return switcher;
+    }
+
+    private ChatModel configuredAnthropic(HeraldConfig config) {
+        boolean configured = ProviderCapabilities.resolve(config).providers().stream()
+                .anyMatch(status -> status.id().equals("anthropic")
+                        && status.state() == com.herald.config.CapabilityState.HEALTHY);
+        return configured && anthropicProvider != null ? anthropicProvider.getIfAvailable() : null;
     }
 
 
@@ -634,7 +674,7 @@ public class HeraldAgentConfig {
         tools.add(validateSkillTool);
 
         telegramSendToolOpt.ifPresent(tools::add);
-        gwsToolsOpt.ifPresent(tools::add);
+        gwsToolsOpt.filter(GwsTools::isAvailable).ifPresent(tools::add);
         if (remindersAvailabilityChecker.isAvailable()) {
             remindersToolsOpt.ifPresent(tools::add);
         }

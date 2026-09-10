@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -23,6 +24,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import tools.jackson.databind.json.JsonMapper;
+
 @Component
 public class StatusSseService {
 
@@ -30,6 +33,7 @@ public class StatusSseService {
 
     private final JdbcTemplate jdbcTemplate;
     private final String botHealthUrl;
+    private final String botCapabilitiesUrl;
     private final HttpClient httpClient;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final List<Path> skillsDirs;
@@ -41,6 +45,7 @@ public class StatusSseService {
                             @Value("${herald.ui.bundled-skills-path:}") String bundledSkillsPath) {
         this.jdbcTemplate = jdbcTemplate;
         this.botHealthUrl = "http://localhost:" + botPort + "/actuator/health";
+        this.botCapabilitiesUrl = "http://localhost:" + botPort + "/api/capabilities";
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
@@ -145,11 +150,16 @@ public class StatusSseService {
         result.put("skills", skills);
         result.put("memory", memory);
         result.put("cron", cron != null ? cron : List.of());
-        result.put("capabilities", Map.of(
-                "mcp", Map.of("state", "unknown", "message", "MCP connection telemetry is unavailable in this console."),
-                "memory", capability(memoryCount != null, "Memory database could not be read."),
-                "skills", capability(skillCount != null, "One or more skill directories could not be read."),
-                "cron", capability(cron != null, "Cron jobs could not be read.")));
+        Map<String, Map<String, String>> capabilities = new LinkedHashMap<>();
+        if (botRunning) capabilities.putAll(checkBotCapabilities());
+        capabilities.putIfAbsent("mcp", Map.of("state", "unknown", "message", "MCP connection telemetry is unavailable in this console."));
+        if (capabilities.containsKey("mcp-client")) capabilities.put("mcp", capabilities.get("mcp-client"));
+        capabilities.compute("memory", (key, reported) -> useObservedState(reported,
+                capability(memoryCount != null, "Memory database could not be read.")));
+        capabilities.put("skills", capability(skillCount != null, "One or more skill directories could not be read."));
+        capabilities.compute("cron", (key, reported) -> useObservedState(reported,
+                capability(cron != null, "Cron jobs could not be read.")));
+        result.put("capabilities", capabilities);
         result.put("recentActivity", List.of());
         result.put("messageCount", messageCount != null ? messageCount : 0);
         result.put("pendingCommandCount", pendingCommandCount != null ? pendingCommandCount : 0);
@@ -160,7 +170,13 @@ public class StatusSseService {
     }
 
     private static Map<String, String> capability(boolean available, String failure) {
-        return Map.of("state", available ? "available" : "failed", "message", available ? "" : failure);
+        return Map.of("state", available ? "healthy" : "failed", "message", available ? "Observed successfully." : failure);
+    }
+
+    private static Map<String, String> useObservedState(Map<String, String> reported,
+                                                         Map<String, String> observed) {
+        if (reported == null || "healthy".equals(reported.get("state"))) return observed;
+        return reported;
     }
 
     private List<Map<String, Object>> cronSnapshot() {
@@ -228,6 +244,54 @@ public class StatusSseService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Map<String, String>> checkBotCapabilities() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(botCapabilitiesUrl))
+                    .timeout(Duration.ofSeconds(2))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200 || response.body().length() >= 65_536) return Map.of();
+            Object decoded = JsonMapper.builder().build().readValue(response.body(), Map.class);
+            if (!(decoded instanceof Map<?, ?> root)) return Map.of();
+            Map<String, Map<String, String>> result = new LinkedHashMap<>();
+            addStatuses(result, root.get("capabilities"), "");
+            if (root.get("providers") instanceof Map<?, ?> providers) {
+                addStatuses(result, providers.get("states"), "provider:");
+            }
+            return result;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return Map.of();
+        } catch (Exception unavailable) {
+            return Map.of();
+        }
+    }
+
+    private static void addStatuses(Map<String, Map<String, String>> destination,
+                                    Object value, String prefix) {
+        if (!(value instanceof List<?> statuses) || statuses.size() > 100) return;
+        for (Object item : statuses) {
+            if (!(item instanceof Map<?, ?> status)) continue;
+            Object id = status.get("id"), state = status.get("state"), message = status.get("message");
+            Object setupAction = status.get("setupAction");
+            if (!(id instanceof String capabilityId) || capabilityId.isBlank() || capabilityId.length() > 100
+                    || !(state instanceof String capabilityState) || !validState(capabilityState)
+                    || !(message instanceof String capabilityMessage) || capabilityMessage.length() > 20_000) continue;
+            Map<String, String> parsed = new LinkedHashMap<>();
+            parsed.put("state", capabilityState);
+            parsed.put("message", capabilityMessage);
+            if (setupAction instanceof String action && action.length() <= 2_000) parsed.put("setupAction", action);
+            destination.put(prefix + capabilityId, Map.copyOf(parsed));
+        }
+    }
+
+    private static boolean validState(String state) {
+        return List.of("healthy", "disabled", "unconfigured", "unavailable", "failed", "unknown").contains(state);
     }
 
     private String formatUptime(Instant start) {

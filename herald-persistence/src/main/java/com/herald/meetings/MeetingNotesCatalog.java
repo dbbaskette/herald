@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
  * never writes to the MeetingNotes database.</p>
  */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingNotesCatalog {
 
     private static final Logger log = LoggerFactory.getLogger(MeetingNotesCatalog.class);

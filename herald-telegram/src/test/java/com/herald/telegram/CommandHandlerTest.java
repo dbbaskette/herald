@@ -77,6 +77,19 @@ class CommandHandlerTest {
                 java.util.Optional.empty());
     }
 
+    @Test
+    void cronAndUsageCommandsExplainDisabledPersistenceWithoutBreakingTelegram() {
+        handler = new CommandHandler(null, chatMemory, sender, null, modelSwitcher,
+                List.of(), reloadableSkillsTool, agentService, 200_000, approvalGate,
+                java.util.Optional.empty(), promptDumpAdvisor, java.util.Optional.empty(),
+                java.util.Optional.empty(), java.util.Optional.empty());
+        assertThat(handler.handle("/cron list")).isTrue();
+        assertThat(handler.handle("/model status")).isTrue();
+        verify(sender).sendMessage("Cron is disabled for this runtime.");
+        verify(sender).sendMessage(contains("Usage persistence is disabled"));
+        verifyNoInteractions(cronService, usageTracker);
+    }
+
     // --- handle() routing ---
 
     @Test

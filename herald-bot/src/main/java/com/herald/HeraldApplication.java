@@ -3,9 +3,9 @@ package com.herald;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(exclude = {
+        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
         org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
         org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
         org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration.class,
@@ -15,7 +15,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         org.springframework.boot.data.jdbc.autoconfigure.DataJdbcRepositoriesAutoConfiguration.class
 })
 @ConfigurationPropertiesScan
-@EnableScheduling
 public class HeraldApplication {
 
     public static void main(String[] args) {

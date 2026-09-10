@@ -216,11 +216,17 @@ it('distinguishes unknown telemetry, disabled capability and actual failure', as
     mcp: { state: 'unknown', message: 'Connection telemetry unavailable.' },
     memory: { state: 'failed', message: 'Database could not be read.' },
     skills: { state: 'disabled', message: 'Skills disabled in configuration.' },
+    'google-workspace': { state: 'unavailable', message: 'gws CLI is not installed.', setupAction: 'docs/provider-capabilities.md' },
+    'provider:openai': { state: 'healthy', message: 'Configured; remote availability has not been probed.' },
   } }))
   const wrapper = mountPage()
   await vi.waitFor(() => expect(wrapper.text()).toContain('Unknown. Connection telemetry unavailable.'))
-  expect(wrapper.text()).toContain('Unavailable. Database could not be read.')
+  expect(wrapper.text()).toContain('Failed. Database could not be read.')
   expect(wrapper.text()).toContain('Disabled. Skills disabled in configuration.')
+  expect(wrapper.text()).toContain('google workspace')
+  expect(wrapper.text()).toContain('Unavailable')
+  expect(wrapper.text()).toContain('openai provider')
+  expect(wrapper.text()).toContain('Ready')
   expect(wrapper.text()).not.toContain('No MCP servers configured')
   expect(wrapper.text()).not.toContain('150')
   wrapper.unmount()

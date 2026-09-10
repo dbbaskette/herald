@@ -30,10 +30,33 @@ function formatTime(ts: string | null): string {
 
 function capabilityNotice(name: 'mcp' | 'memory' | 'skills' | 'cron'): string | null {
   const capability = store.status.capabilities?.[name]
-  if (!capability || capability.state === 'available') return null
-  const label = capability.state === 'disabled' ? 'Disabled' : capability.state === 'failed' ? 'Unavailable' : 'Unknown'
+  if (!capability || capability.state === 'healthy') return null
+  const label = capabilityLabel(capability.state)
   return `${label}. ${capability.message}`
 }
+
+function capabilityLabel(state: string): string {
+  return ({
+    healthy: 'Ready', disabled: 'Disabled', unconfigured: 'Setup needed',
+    unavailable: 'Unavailable', failed: 'Failed', unknown: 'Unknown',
+  } as Record<string, string>)[state] ?? 'Unknown'
+}
+
+function displayCapability(id: string): string {
+  if (id.startsWith('provider:')) return `${id.slice(9)} provider`
+  return id.replace(/-/g, ' ')
+}
+
+function setupHref(action?: string): string | null {
+  if (!action) return null
+  if (/^https?:\/\//.test(action)) return action
+  if (action.startsWith('docs/')) return `https://github.com/dbbaskette/herald/blob/main/${action}`
+  return null
+}
+
+const detailedCapabilities = computed(() => Object.entries(store.status.capabilities ?? {})
+  .filter(([id]) => !['mcp', 'mcp-client', 'memory', 'skills', 'cron'].includes(id))
+  .sort(([left], [right]) => left.localeCompare(right)))
 
 const botGlyph = computed<'live' | 'err'>(() =>
   store.status.bot.running ? 'live' : 'err',
@@ -197,6 +220,31 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
         </table>
       </SectionCard>
 
+      <SectionCard
+        v-if="detailedCapabilities.length"
+        label="Capabilities"
+        tone="info"
+        :trailing="`${detailedCapabilities.length} reported`"
+      >
+        <div class="capability-list">
+          <div v-for="[id, capability] in detailedCapabilities" :key="id" class="capability-row">
+            <div>
+              <div class="capability-name">{{ displayCapability(id) }}</div>
+              <div class="caption">{{ capability.message }}</div>
+            </div>
+            <div class="capability-actions">
+              <span class="result-badge" :class="capability.state">{{ capabilityLabel(capability.state) }}</span>
+              <a
+                v-if="setupHref(capability.setupAction) && capability.state !== 'healthy' && capability.state !== 'disabled'"
+                :href="setupHref(capability.setupAction)!"
+                target="_blank"
+                rel="noopener"
+              >Setup</a>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
       <!-- Recent activity -->
       <SectionCard label="Recent activity" tone="info">
         <div v-if="store.status.recentActivity.length === 0" class="empty">
@@ -320,6 +368,22 @@ const mcpGlyph = (s: string): 'live' | 'err' | 'idle' =>
   font-style: italic;
   padding: 8px 0;
 }
+
+.capability-list { display: flex; flex-direction: column; }
+.capability-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--paper-3);
+}
+.capability-row:last-child { border-bottom: none; }
+.capability-name { color: var(--ink); font-weight: 600; text-transform: capitalize; }
+.capability-actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.result-badge.healthy { color: var(--ok); }
+.result-badge.disabled { color: var(--graphite-2); }
+.result-badge.unconfigured, .result-badge.unavailable, .result-badge.unknown { color: var(--gold-dim); }
+.result-badge.failed { color: var(--err); }
 
 /* Parse errors block inside Skills card */
 .parse-errors {

@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
  * set it to {@code -} to disable.</p>
  */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingCatchupJob {
 
     private static final Logger log = LoggerFactory.getLogger(MeetingCatchupJob.class);

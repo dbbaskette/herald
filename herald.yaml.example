@@ -1,65 +1,83 @@
-telegram:
-  allowed_chat_id: 123456789
-  bot_token: ${TELEGRAM_BOT_TOKEN}
+# Optional external Spring configuration for Herald.
+# Load with: ./run.sh all --spring.config.additional-location=file:./herald.yaml
+# Environment variables shown here remain the normal secrets/config source.
 
-providers:
-  anthropic:
-    api_key: ${ANTHROPIC_API_KEY}
-  openai:
-    api_key: ${OPENAI_API_KEY}
-    base_url: https://api.openai.com
-  ollama:
-    base_url: http://localhost:11434
-    api_key: ollama
+herald:
+  providers:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.openai.com
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+    ollama:
+      api-key: ${OLLAMA_API_KEY:ollama}
+      base-url: ${OLLAMA_BASE_URL:}
+    lmstudio:
+      api-key: ${LMSTUDIO_API_KEY:lm-studio}
+      base-url: ${LMSTUDIO_BASE_URL:}
 
-agent:
-  provider: anthropic
-  model: claude-sonnet-4-5
-  max_tokens: 8192
-  persona: |
-    Your name is Herald. You are Dan's personal AI agent — autonomous,
-    capable, dry wit. Dan is Head of Technical Marketing at Broadcom/VMware
-    (Tanzu). Direct and technical. Occasionally reference your namesake.
-    You have access to specialist subagents for deep research. Use them.
-  system_prompt_extra: |
-    # Additional Instructions
-    # Add any extra instructions here that will be appended to the base system prompt.
-  # Anthropic Native Skills — cloud-sandboxed document generation
-  # Available: xlsx, docx, pptx, pdf
-  # anthropic_skills:
-  #   - xlsx
-  #   - docx
+  agent:
+    default-provider: ${HERALD_DEFAULT_PROVIDER:anthropic}
+    persona: ${HERALD_AGENT_PERSONA:}
+    system-prompt-extra: ${HERALD_AGENT_SYSTEM_PROMPT_EXTRA:}
+    context-file: ${HERALD_AGENT_CONTEXT_FILE:~/.herald/CONTEXT.md}
+    max-context-tokens: ${HERALD_AGENT_MAX_CONTEXT_TOKENS:200000}
+    anthropic-skills: []
+    model-failover:
+      enabled: ${HERALD_MODEL_FAILOVER_ENABLED:false}
+      # chain:
+      #   - provider: anthropic
+      #     model: claude-sonnet-4-5
+      #   - provider: openai
+      #     model: gpt-4o
 
-subagents:
-  dir: .claude/agents
-  models:
-    haiku: claude-haiku-4-5
-    sonnet: claude-sonnet-4-5
-    opus: claude-opus-4-5
+  telegram:
+    bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
+    allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}
 
-skills:
-  dir: skills
-  watch: true
+  persistence:
+    enabled: ${HERALD_PERSISTENCE_ENABLED:true}
+  memory:
+    db-path: ~/.herald/herald.db
+    compaction-strategy: ${HERALD_MEMORY_COMPACTION_STRATEGY:recursive-summary}
+  long-term-memory:
+    memories-dir: ${HERALD_MEMORIES_DIR:~/.herald/memories}
+  cron:
+    enabled: ${HERALD_CRON_ENABLED:true}
+    timezone: ${HERALD_CRON_TIMEZONE:America/New_York}
 
-memory:
-  db_path: ~/.herald/herald.db
+  meetingnotes:
+    enabled: ${HERALD_MEETINGNOTES_ENABLED:false}
+    recap-enabled: ${HERALD_MEETINGNOTES_RECAP_ENABLED:true}
+    reminders-enabled: ${HERALD_MEETINGNOTES_REMINDERS_ENABLED:true}
+    db-path: ${HERALD_MEETINGNOTES_DB_PATH:~/Documents/MeetingNotes/db.sqlite}
+    dir: ${HERALD_MEETINGNOTES_DIR:~/Documents/MeetingNotes}
 
-cron:
-  timezone: America/New_York
-  morning_briefing:
-    enabled: true
-    schedule: '0 7 * * 1-5'
+  google:
+    enabled: ${HERALD_GOOGLE_ENABLED:false}
+  reminders:
+    enabled: ${HERALD_REMINDERS_ENABLED:false}
+  obsidian:
+    vault-path: ${HERALD_OBSIDIAN_VAULT_PATH:}
+    vault-mode: ${HERALD_OBSIDIAN_VAULT_MODE:auto}
+  weather:
+    location: ${HERALD_WEATHER_LOCATION:}
 
-# MCP Servers — configure via environment variables
-# Exact remote tool allowlist: HERALD_MCP_ALLOWED_TOOLS=tool_name_one,tool_name_two
-# Empty denies remote tools. Full Streamable HTTP example: docs/mcp-client.md
-# Set HERALD_MCP_CLIENT_ENABLED=true and provide server URLs:
-#   GCAL_MCP_URL=http://localhost:3000/sse     (Google Calendar MCP)
-#   GMAIL_MCP_URL=http://localhost:3001/sse     (Gmail MCP)
-# Additional MCP servers can be added in application.yaml under
-# spring.ai.mcp.client.sse.connections
+  a2a:
+    client:
+      enabled: ${HERALD_A2A_CLIENT_ENABLED:false}
+    # agents:
+    #   - name: weather-agent
+    #     url: http://localhost:10002/weather
+    server:
+      enabled: ${HERALD_A2A_SERVER_ENABLED:false}
 
-ui:
-  enabled: true
-  port: 8080
-  host: 0.0.0.0
+# MCP is a Spring AI capability rather than a HeraldConfig record.
+spring:
+  ai:
+    mcp:
+      client:
+        enabled: ${HERALD_MCP_CLIENT_ENABLED:false}

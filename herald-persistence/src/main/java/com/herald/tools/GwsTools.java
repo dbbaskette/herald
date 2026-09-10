@@ -11,13 +11,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConditionalOnBean(JdbcTemplate.class)
 public class GwsTools {
 
     private static final Logger log = LoggerFactory.getLogger(GwsTools.class);
@@ -35,12 +29,7 @@ public class GwsTools {
     private final GwsAvailabilityChecker gwsAvailabilityChecker;
     private final ProcessRunner processRunner;
 
-    @Autowired
-    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker,
-                    @SuppressWarnings("unused") JdbcTemplate jdbcTemplate) {
-        // jdbcTemplate param kept so existing callers + @ConditionalOnBean still
-        // wire correctly. No longer used — Google creds come from the process
-        // env, not the settings table.
+    public GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker) {
         this(gwsAvailabilityChecker, GwsTools::executeProcess);
     }
 
@@ -49,12 +38,7 @@ public class GwsTools {
         this.processRunner = processRunner;
     }
 
-    /** Test-only overload kept for existing call sites; jdbcTemplate ignored. */
-    GwsTools(GwsAvailabilityChecker gwsAvailabilityChecker,
-             @SuppressWarnings("unused") JdbcTemplate jdbcTemplate,
-             ProcessRunner processRunner) {
-        this(gwsAvailabilityChecker, processRunner);
-    }
+    public boolean isAvailable() { return gwsAvailabilityChecker.isAvailable(); }
 
     @Tool(description = "List Gmail threads. Returns JSON array of recent email threads with subject, sender, and snippet. Output is always JSON.")
     public String gmail_threads_list() {

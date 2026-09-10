@@ -10,6 +10,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class CronRepository {
 
     private final JdbcTemplate jdbcTemplate;

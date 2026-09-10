@@ -29,7 +29,7 @@ fixed. The daily smoke harness exercises every one end-to-end.
 | Capability | One-sentence test |
 |---|---|
 | `herald-bot` boots clean | Start-up under 20s; no `ERROR`-level log lines in the first 30s; `/actuator/health` returns 200. |
-| `./run.sh doctor` accuracy | Exits 0 on a healthy install; exits 1 with `ANTHROPIC_API_KEY` mentioned when the key is unset; exits 2 when the SQLite file is corrupt. |
+| `./run.sh doctor` accuracy | Exits 0 on a healthy install; exits 1 with the selected provider's missing setting when no provider is usable; exits 2 when enabled SQLite is corrupt. |
 | Telegram ↔ Claude loop | A free-text Telegram message produces a non-empty streamed reply within 15s. |
 | Memory advisor injects `MEMORY.md` | After a turn that mentions a known memory entity, the reply references the entity and `MEMORY.md` appears in the dumped prompt. |
 | `hot.md` session-continuity | Restart `herald-bot`; the next reply references content from the prior session via `hot.md`. |
@@ -52,7 +52,7 @@ these is a "fix this week" priority, not a merge blocker.
 | `wiki-ingest` | Ingest a known URL; assert a new file under `memories/sources/` with takeaways + cross-links. |
 | `wiki-query` | Query for a known concept; reply cites the matching `memories/concepts/<page>.md`. |
 | Management console | `/status`, `/memory`, `/cron`, `/skills` pages render without errors at `http://localhost:8080`. |
-| MeetingNotes bridge (#367, in flight) | A finished MeetingNotes meeting auto-files a `memories/meetings/...` page within 30s; Telegram receives a summary push. |
+| MeetingNotes bridge | When explicitly enabled, a finished MeetingNotes meeting auto-files a `memories/meetings/...` page within 30s; Telegram receives a summary push when Telegram is configured. |
 
 ### Tier 2 — Best-effort
 
@@ -63,7 +63,7 @@ new "could we add…" should justify why it isn't Tier 2 cruft from day one.
 - CLI task-agent mode (`--agents=foo.md`)
 - Multi-provider model routing — Anthropic is gold; OpenAI / Gemini / Ollama / LM Studio are best-effort
 - A2A protocol
-- Streaming chat (open PR #340) — ship it but don't depend on it
+- Streaming chat — available in Telegram and the console, but keep it best-effort
 - Image / file uploads via web chat
 - Telegram inline keyboards for `AskUserQuestion` / `TodoWrite`
 - `/think`, `/trace`, `/why`, `/compact`, `/budget` commands
@@ -79,7 +79,7 @@ justify their existence — justify keeping them.**
 
 - Most `feature/*` branches more than 30 days old (`ephemeral-mode-218-221`,
   `phase2-ephemeral-222-225`, `phase3-module-split-226-230`, `phase4-agents-md-231-234`,
-  `module-inventory`, `conditional-advisors-tools`, `streaming-chat` once #340 lands)
+  `module-inventory`, `conditional-advisors-tools`, `streaming-chat`)
 - All `claude/*` agent branches (the auto-generated agent experiments)
 - Spring AI 2.1 / Session API migration prep — wait for upstream
 - ToolSearchToolCallAdvisor tombstones (already removed; remove remaining refs)
@@ -107,7 +107,7 @@ list once triage is done.
 | Tier | Issues |
 |---|---|
 | Tier 0 | _none currently — file as found_ |
-| Tier 1 | #367 (MeetingNotes bridge), #368 (daily activity log) |
+| Tier 1 | MeetingNotes bridge, daily activity log |
 | Tier 2 | #310 (menu-bar app), #311 (Gmail push), #312 (Tailscale), #321 (skill autosave), #331 (ClawHub), #365 (screen-context advisor), #366 (hotkey overlay), #369 (federated search), #370 (integration breadth) |
 | Tier 3 | #371 (mobile apps) |
 
