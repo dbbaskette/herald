@@ -11,6 +11,7 @@ export const useMemoryStore = defineStore('memory', () => {
   const entries = ref<MemoryEntry[]>([])
   const loading = ref(false)
   const filter = ref('')
+  const error = ref<string | null>(null)
 
   const filteredEntries = computed(() => {
     if (!filter.value) return entries.value
@@ -18,20 +19,24 @@ export const useMemoryStore = defineStore('memory', () => {
     return entries.value.filter(e => e.key.toLowerCase().includes(q))
   })
 
-  async function fetchEntries() {
+  async function fetchEntries(): Promise<boolean> {
     loading.value = true
+    error.value = null
     try {
       const res = await fetch('/api/memory')
       if (!res.ok) throw new Error(res.statusText)
       entries.value = await res.json()
+      return true
     } catch {
-      entries.value = []
+      error.value = 'Unable to load legacy entries. Retry before exporting a backup.'
+      return false
     } finally {
       loading.value = false
     }
   }
 
   async function updateEntry(key: string, value: string): Promise<boolean> {
+    error.value = null
     try {
       const res = await fetch(`/api/memory/${encodeURIComponent(key)}`, {
         method: 'PUT',
@@ -48,6 +53,7 @@ export const useMemoryStore = defineStore('memory', () => {
       }
       return true
     } catch {
+      error.value = 'Legacy entry was not saved. Your edit is preserved; retry when the service is available.'
       return false
     }
   }
@@ -69,18 +75,24 @@ export const useMemoryStore = defineStore('memory', () => {
     }
   }
 
-  async function exportJson(): Promise<void> {
-    const data: Record<string, string> = {}
-    for (const entry of entries.value) {
-      data[entry.key] = entry.value
+  /** Compatibility backup of legacy SQLite keys/values only, never learned memory files. */
+  async function exportJson(): Promise<boolean> {
+    if (loading.value || !(await fetchEntries())) return false
+    try {
+      const data = Object.fromEntries(entries.value.map(entry => [entry.key, entry.value]))
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      try {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'herald-legacy-memory-backup.json'
+        a.click()
+      } finally { URL.revokeObjectURL(url) }
+      return true
+    } catch {
+      error.value = 'Unable to export the legacy backup. No entries were changed.'
+      return false
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'memory-export.json'
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   async function importJson(file: File): Promise<{ imported: number; errors: string[] }> {
@@ -110,5 +122,5 @@ export const useMemoryStore = defineStore('memory', () => {
     return { imported, errors }
   }
 
-  return { entries, loading, filter, filteredEntries, fetchEntries, updateEntry, addEntry, deleteEntry, exportJson, importJson }
+  return { entries, loading, error, filter, filteredEntries, fetchEntries, updateEntry, addEntry, deleteEntry, exportJson, importJson }
 })

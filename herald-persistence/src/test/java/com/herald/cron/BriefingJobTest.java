@@ -144,7 +144,7 @@ class BriefingJobTest {
 
         String result = job.buildMorningPrompt();
 
-        assertThat(result).contains("memory_list");
+        assertThat(result).contains("MemoryView", "MEMORY.md", "Markdown notes").doesNotContain("memory_list");
         assertThat(result).contains("Top Priorities");
     }
 
@@ -228,7 +228,7 @@ class BriefingJobTest {
         assertThat(result).contains("Week Recap");
         assertThat(result).contains("Open Items");
         assertThat(result).contains("Suggestions");
-        assertThat(result).contains("memory_list");
+        assertThat(result).contains("MemoryView", "MEMORY.md", "Markdown notes").doesNotContain("memory_list");
     }
 
     // --- buildParallelMorningPrompt tests ---

@@ -49,7 +49,7 @@ describe('MemoryViewer.vue', () => {
 
   it('shows tab labels', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.text()).toContain('Wiki')
+    expect(wrapper.text()).toContain('File Memory')
     expect(wrapper.text()).toContain('Key·Value')
     expect(wrapper.findAll('.tab-btn').map(b => b.text())).not.toContain('Obsidian')
   })
@@ -85,7 +85,7 @@ describe('MemoryViewer.vue', () => {
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain('no memory entries yet')
+      expect(wrapper.text()).toContain('no legacy entries retained')
     })
   })
 
@@ -99,8 +99,8 @@ describe('MemoryViewer.vue', () => {
   it('has export and import buttons on kv tab', async () => {
     const wrapper = await mountPage()
     await switchToKvTab(wrapper)
-    expect(wrapper.text()).toContain('Export')
-    expect(wrapper.text()).toContain('Import')
+    expect(wrapper.text()).toContain('Export legacy backup')
+    expect(wrapper.text()).toContain('Import legacy JSON')
   })
 })
 
@@ -134,4 +134,20 @@ describe('wiki editor', () => {
     expect(wrapper.text()).toContain('Unsaved changes')
     wrapper.unmount()
   })
+})
+
+it('distinguishes canonical learned files from legacy manual references and scopes backup controls', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve({
+    ok: true, json: async () => url === '/api/memory' ? sampleEntries : {},
+  })))
+  const wrapper = await mountPage()
+  expect(wrapper.find('.hint').text()).toContain('Canonical learned memory')
+  expect(wrapper.findAll('.header-actions button')).toHaveLength(0)
+  await switchToKvTab(wrapper)
+  expect(wrapper.find('.hint').text()).toContain('not automatically learned')
+  expect(wrapper.find('.legacy-ownership').text()).toContain('do not update learned Markdown notes or runtime settings')
+  expect(wrapper.find('.legacy-ownership').text()).toContain('overwrites matching keys')
+  expect(wrapper.findAll('.header-actions button').map(button => button.text()))
+    .toEqual(['Export legacy backup', 'Import legacy JSON'])
+  wrapper.unmount()
 })

@@ -56,6 +56,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Optional capability: driver is packaged, browser binaries are never installed at startup. -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.62.0</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -90,7 +90,7 @@ public class BriefingJob {
 
         // Memory priorities — always included
         sb.append("## Section 3 — Top Priorities\n");
-        sb.append("Use memory_list to surface the top 3 priorities or open items from memory.\n\n");
+        sb.append("Use MemoryView to read MEMORY.md and the relevant linked Markdown notes, then surface the top 3 priorities or open items.\n\n");
 
         // Flagged emails — only when GWS available
         if (gwsChecker.isAvailable()) {
@@ -162,7 +162,7 @@ public class BriefingJob {
 
         sb.append("### Thread ").append(threadCount + 1).append(": Priorities\n");
         sb.append("Dispatch: `task` with `run_in_background: true`, subagent: `explore`\n");
-        sb.append("Prompt: \"Use memory_list to surface the top 3 priorities or open items ");
+        sb.append("Prompt: \"Use MemoryView to read MEMORY.md and relevant linked Markdown notes, then surface the top 3 priorities or open items ");
         sb.append("from memory. Return a bullet list.\"\n\n");
 
         sb.append("## Collection Phase\n\n");
@@ -188,7 +188,7 @@ public class BriefingJob {
 
         // Week recap — always included (uses memory)
         sb.append("## Section 1 — Week Recap\n");
-        sb.append("Use memory_list to review stored facts and summarize the key activity, ")
+        sb.append("Use MemoryView to read MEMORY.md and relevant linked Markdown notes, then summarize the key activity, ")
                 .append("tasks, and conversations from this week.\n\n");
 
         // Open items — always included

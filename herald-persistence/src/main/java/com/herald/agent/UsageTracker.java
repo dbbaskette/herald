@@ -108,6 +108,14 @@ public class UsageTracker {
         return estimateCostFromUsage(getDailyUsageByAgent());
     }
 
+    /** Cost already incurred by this active turn but not yet finalized into model_usage. */
+    public BigDecimal estimateExecutionCost(ExecutionUsage execution) {
+        if (execution == null) return BigDecimal.ZERO;
+        return estimateCostFromUsage(execution.models().stream().map(model ->
+                new AgentUsage("active", AgentTurnListener.deriveProvider(model.model()), model.model(),
+                        model.input(), model.output(), model.cacheRead(), model.cacheWrite())).toList());
+    }
+
     private BigDecimal estimateCostFromUsage(List<AgentUsage> usageByAgent) {
         BigDecimal totalCost = BigDecimal.ZERO;
         for (AgentUsage usage : usageByAgent) {

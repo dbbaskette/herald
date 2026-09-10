@@ -51,6 +51,8 @@ cron:
     schedule: '0 7 * * 1-5'
 
 # MCP Servers — configure via environment variables
+# Exact remote tool allowlist: HERALD_MCP_ALLOWED_TOOLS=tool_name_one,tool_name_two
+# Empty denies remote tools. Full Streamable HTTP example: docs/mcp-client.md
 # Set HERALD_MCP_CLIENT_ENABLED=true and provide server URLs:
 #   GCAL_MCP_URL=http://localhost:3000/sse     (Google Calendar MCP)
 #   GMAIL_MCP_URL=http://localhost:3001/sse     (Gmail MCP)

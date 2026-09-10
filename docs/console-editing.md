@@ -64,7 +64,7 @@ uses recorded mutation metadata or existing frontmatter; legacy notes without
 attribution remain usable. `.memory-attribution/` records are tied to content
 hashes to avoid attributing replacement text to an earlier conversation.
 
-The legacy key/value store is labeled separately. The Obsidian tab is hidden
+The legacy key/value store is retained for compatibility/manual reference; it is not learned memory or automatically injected context. Its JSON backup/import covers only legacy keys and values. See [Memory ownership and retention](memory-ownership.md). The Obsidian tab is hidden
 when no vault is configured. A graph visualization remains optional and is not
 included in this change.
 

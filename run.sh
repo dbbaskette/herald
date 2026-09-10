@@ -2,6 +2,11 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Building must never source credentials, bootstrap skills, or touch services.
+if [ "${1:-}" = "build" ]; then
+    shift
+    exec "$SCRIPT_DIR/scripts/build.sh" "$@"
+fi
 ENV_FILE="$SCRIPT_DIR/.env"
 BOT_PORT=8081
 UI_PORT=8080
@@ -30,8 +35,8 @@ if [ "$COMMAND_RAW" = "config" ]; then
     shift
     if [ "${1:-}" != "validate" ]; then echo "Usage: ./run.sh config validate [--spring.config.additional-location=...]"; exit 2; fi
     shift
-    CONFIG_JAR=$(ls -t "$SCRIPT_DIR/herald-ui/target"/herald-ui-*-SNAPSHOT.jar 2>/dev/null | head -1)
-    if [ ! -f "$CONFIG_JAR" ]; then echo "Build the console first: ./mvnw -pl herald-ui -am package -DskipTests"; exit 2; fi
+    CONFIG_JAR=$("$SCRIPT_DIR/scripts/find-artifact.sh" ui 2>/dev/null || true)
+    if [ ! -f "$CONFIG_JAR" ]; then echo "Build the console first: ./scripts/build.sh"; exit 2; fi
     exec java -jar "$CONFIG_JAR" --validate-config "$@"
 fi
 
@@ -431,11 +436,6 @@ case "$cmd" in
             *)    echo "Usage: ./run.sh logs [bot|ui|all]"; exit 1 ;;
         esac
         ;;
-    build)
-        echo "Building all modules..."
-        cd "$SCRIPT_DIR"
-        ./mvnw package -DskipTests
-        ;;
     doctor)
         # Fast diagnostic — checks runtime, API keys, DB, memory dir, skills,
         # external CLIs, ports. Exit code: 0 clean / 1 warnings / 2 failures.
@@ -445,7 +445,7 @@ case "$cmd" in
         cd "$SCRIPT_DIR"
         shift || true
         # Discover the built JAR by glob so version bumps don't break the wrapper.
-        JAR=$(ls -t "$SCRIPT_DIR/herald-bot/target"/herald-bot-*-SNAPSHOT.jar 2>/dev/null | head -1)
+        JAR=$("$SCRIPT_DIR/scripts/find-artifact.sh" bot 2>/dev/null || true)
         if [ ! -f "$JAR" ]; then
             ./mvnw -pl herald-bot -q exec:java \
                 -Dexec.mainClass=com.herald.doctor.Doctor \
@@ -466,7 +466,7 @@ case "$cmd" in
         cd "$SCRIPT_DIR"
         shift || true
         # Discover the built JAR by glob so version bumps don't break the wrapper.
-        JAR=$(ls -t "$SCRIPT_DIR/herald-bot/target"/herald-bot-*-SNAPSHOT.jar 2>/dev/null | head -1)
+        JAR=$("$SCRIPT_DIR/scripts/find-artifact.sh" bot 2>/dev/null || true)
         if [ ! -f "$JAR" ]; then
             ./mvnw -pl herald-bot -q exec:java \
                 -Dexec.mainClass=com.herald.onboard.Onboard \
@@ -483,12 +483,14 @@ case "$cmd" in
                 stop_module "herald-bot" "$BOT_PORT"
                 echo "Starting herald-bot on port $BOT_PORT..."
                 cd "$SCRIPT_DIR"
+                recompile_modules "herald-bot" || exit 1
                 ./mvnw -pl herald-bot spring-boot:run
                 ;;
             ui)
                 stop_module "herald-ui" "$UI_PORT"
                 echo "Starting herald-ui on port $UI_PORT..."
                 cd "$SCRIPT_DIR"
+                recompile_modules "herald-ui" || exit 1
                 ./mvnw -pl herald-ui spring-boot:run
                 ;;
             all)

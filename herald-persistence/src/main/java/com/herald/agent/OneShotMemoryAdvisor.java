@@ -28,7 +28,7 @@ import reactor.core.publisher.Flux;
  * <p>Spring AI's built-in {@code MessageChatMemoryAdvisor} re-runs on every iteration
  * of the {@code ToolCallAdvisor} loop (because the full advisor chain is re-entered).
  * Each iteration loads history, adds new tool messages, and saves — causing exponential
- * message growth in the database. This advisor uses a {@link ThreadLocal} flag to ensure
+ * message growth in the database. This advisor uses request context to ensure
  * memory is loaded before the first model call and saved after the final response, with
  * all intermediate tool iterations passed through untouched.</p>
  */
@@ -38,7 +38,7 @@ class OneShotMemoryAdvisor implements CallAdvisor, StreamAdvisor {
     private static final String CONVERSATION_ID_KEY = "chat_memory_conversation_id";
     private static final String DEFAULT_CONVERSATION_ID = "default";
 
-    private static final ThreadLocal<Boolean> MEMORY_LOADED = ThreadLocal.withInitial(() -> false);
+    private static final String MEMORY_LOADED = OneShotMemoryAdvisor.class.getName() + ".loaded";
 
     private final ChatMemory chatMemory;
     private final int maxMessages;
@@ -50,51 +50,26 @@ class OneShotMemoryAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        if (MEMORY_LOADED.get()) {
-            // Tool-call re-entry: skip memory load/save, pass through
-            return chain.nextCall(request);
-        }
-
-        // First invocation: load memory, run the full chain (including all tool iterations),
-        // then save the new messages.
-        MEMORY_LOADED.set(true);
-
+        if (Boolean.TRUE.equals(request.context().get(MEMORY_LOADED))) return chain.nextCall(request);
         String conversationId = resolveConversationId(request);
-
-        try {
-            List<Message> originalUserMessages = captureUserMessages(request);
-            ChatClientRequest withHistory = loadHistory(request, conversationId);
-
-            // Run the full chain (ToolCallAdvisor loop happens here)
-            ChatClientResponse response = chain.nextCall(withHistory);
-
-            // Save only the captured user message + assistant response
-            saveNewMessages(conversationId, originalUserMessages, response);
-
-            return response;
-        } finally {
-            MEMORY_LOADED.remove();
-        }
+        List<Message> originalUserMessages = captureUserMessages(request);
+        var withHistory = loadHistory(request, conversationId).mutate().context(MEMORY_LOADED, true).build();
+        ChatClientResponse response = chain.nextCall(withHistory);
+        saveNewMessages(conversationId, originalUserMessages, response);
+        return response;
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        if (MEMORY_LOADED.get()) {
-            return chain.nextStream(request);
-        }
-
-        MEMORY_LOADED.set(true);
-
-        String conversationId = resolveConversationId(request);
-        List<Message> originalUserMessages = captureUserMessages(request);
-        ChatClientRequest withHistory = loadHistory(request, conversationId);
-
-        Flux<ChatClientResponse> stream = chain.nextStream(withHistory);
-
-        return new ChatClientMessageAggregator()
-                .aggregateChatClientResponse(stream, aggregated ->
-                        saveNewMessages(conversationId, originalUserMessages, aggregated))
-                .doFinally(signal -> MEMORY_LOADED.remove());
+        // Subscription-scoped state survives scheduler changes and cannot leak after cancellation.
+        return Flux.defer(() -> {
+            if (Boolean.TRUE.equals(request.context().get(MEMORY_LOADED))) return chain.nextStream(request);
+            String conversationId = resolveConversationId(request);
+            List<Message> originalUserMessages = captureUserMessages(request);
+            var withHistory = loadHistory(request, conversationId).mutate().context(MEMORY_LOADED, true).build();
+            return new ChatClientMessageAggregator().aggregateChatClientResponse(chain.nextStream(withHistory),
+                    aggregated -> saveNewMessages(conversationId, originalUserMessages, aggregated));
+        });
     }
 
     private List<Message> captureUserMessages(ChatClientRequest request) {

@@ -41,16 +41,16 @@ spring:
       client:
         enabled: ${HERALD_MCP_CLIENT_ENABLED:false}
         type: SYNC
+        initialized: false # Discover lazily through Herald; unavailable MCP must not abort startup.
+        request-timeout: 5s
         toolcallback:
           enabled: true
-        sse:
-          connections:
-            google-calendar:
-              url: ${GCAL_MCP_URL:}
-            gmail:
-              url: ${GMAIL_MCP_URL:}
+        # Add actual SSE or Streamable HTTP connections in an external config file.
+        # Empty URL placeholders are invalid transports when MCP is enabled.
 
 herald:
+  mcp:
+    allowed-tools: ${HERALD_MCP_ALLOWED_TOOLS:} # Exact exposed names; empty denies every remote tool.
   memory:
     compaction-strategy: ${HERALD_MEMORY_COMPACTION_STRATEGY:recursive-summary}
     db-path: ~/.herald/herald.db

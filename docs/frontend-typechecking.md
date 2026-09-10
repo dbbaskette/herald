@@ -6,7 +6,7 @@ Stock TypeScript 7.0.2 fails with vue-tsc 3.3.11 because it does not export `typ
 
 The package.json alias plus `overrides.typescript: "$typescript"` follows the [maintainer's npm installation guidance](https://github.com/johnsoncodehk/typescript-native-bridge#npm). [Vue's upstream compatibility discussion](https://github.com/vuejs/language-tools/issues/5381) explains the current boundary and future native integration direction.
 
-Run from `herald-ui/frontend`:
+The canonical package/CI command is `./scripts/build.sh` from the repository root; it runs these checks through Maven automatically. See [Building and installing](building.md). For a frontend-only development check, run from `herald-ui/frontend`:
 
 ```sh
 npm ci

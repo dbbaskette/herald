@@ -4,10 +4,8 @@ import com.herald.agent.profile.AgentProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.core.Ordered;
 
 import java.nio.file.Path;
 import java.time.ZoneId;
@@ -149,10 +147,7 @@ public final class AgentFactory {
             advisors.add(new ContextMdAdvisor(Path.of(profile.contextFile())));
         }
 
-        // ToolCallAdvisor must be present for tool use; ordered just before ChatModelCallAdvisor
-        advisors.add(ToolCallAdvisor.builder()
-                .advisorOrder(Ordered.LOWEST_PRECEDENCE - 1)
-                .build());
+        advisors.addAll(ExecutionAdvisors.create(ExecutionLimits.defaults(), () -> {}));
 
         return advisors;
     }

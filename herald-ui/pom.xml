@@ -14,6 +14,11 @@
     <name>Herald UI</name>
     <description>Web console for Herald</description>
 
+    <properties>
+        <skipTests>false</skipTests>
+        <maven.test.skip>false</maven.test.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -44,7 +49,60 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes><exclude>static/**</exclude></excludes>
+            </resource>
+            <resource><directory>${project.build.directory}/generated-resources/console</directory></resource>
+        </resources>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>build-console-resources</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>node</executable>
+                            <arguments>
+                                <argument>${project.basedir}/frontend/scripts/build-console.mjs</argument>
+                                <argument>resources</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>test-console</id>
+                        <phase>test</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>node</executable>
+                            <arguments>
+                                <argument>${project.basedir}/frontend/scripts/build-console.mjs</argument>
+                                <argument>test</argument>
+                                <argument>${skipTests}</argument>
+                                <argument>${maven.test.skip}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>verify-console-package</id>
+                        <phase>verify</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>${project.basedir}/../scripts/VerifyConsolePackage.java</argument>
+                                <argument>${project.build.directory}/generated-resources/console/static</argument>
+                                <argument>${project.build.directory}/${project.build.finalName}.jar</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Copy herald-core's bundled prompts into herald-ui's classpath so
                  the PromptsController can read defaults via ClassPathResource.
                  herald-core can't be a normal dependency — that pulls in Spring AI
