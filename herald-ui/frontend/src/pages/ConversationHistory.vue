@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessagesStore } from '@/stores/messages'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { extractMemoryPath, memoryViewerRoute } from '@/utils/memoryTools'
@@ -16,7 +16,9 @@ const expandedTools = ref<Set<string>>(new Set())
 const expandedSubagents = ref<Set<string>>(new Set())
 const confirmingClear = ref(false)
 
-onMounted(() => { store.fetchMessages() })
+const route = useRoute()
+watch(() => route.query.conversationId, id => { store.conversationId = typeof id === 'string' ? id : ''; store.fetchMessages() }, {immediate: true})
+onUnmounted(() => { store.conversationId = '' })
 
 function toggleToolCall(messageId: string, index: number) {
   const key = `${messageId}-tool-${index}`
@@ -69,6 +71,7 @@ function continueInChat(content: string) {
 <template>
   <div class="history-page">
     <NowStripe />
+    <p v-if="store.conversationId" class="hint">Conversation {{ store.conversationId }} · <RouterLink to="/history">All history</RouterLink></p>
 
     <PageHeader title="History" path="/history">
       <template #right>

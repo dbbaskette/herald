@@ -7,6 +7,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HeraldConfigTest {
 
     @Test
+    void compactionDefaultsToRecursiveAndBindsSlidingWindow() {
+        assertThat(new HeraldConfig.Memory(null).compactionStrategy())
+                .isEqualTo(HeraldConfig.CompactionStrategy.RECURSIVE_SUMMARY);
+        var binder = new org.springframework.boot.context.properties.bind.Binder(
+                new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+                        java.util.Map.of("herald.memory.compaction-strategy", "sliding-window")));
+        var config = binder.bind("herald", HeraldConfig.class).get();
+        assertThat(config.compactionStrategy()).isEqualTo(HeraldConfig.CompactionStrategy.SLIDING_WINDOW);
+    }
+
+
+    @Test
     void dbPathDefaultsToTildePath() {
         HeraldConfig config = new HeraldConfig(null, null, null, null, null, null, null, null, null, null);
         assertThat(config.dbPath()).isEqualTo("~/.herald/herald.db");

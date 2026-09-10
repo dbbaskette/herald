@@ -47,7 +47,7 @@ describe('stores', () => {
       expect(store.loading).toBe(false)
     })
 
-    it('fetchStatus resets to defaults on network error', async () => {
+    it('fetchStatus reports an initial network error without claiming fresh data', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
       const store = useStatusStore()
       await store.fetchStatus()
@@ -56,7 +56,7 @@ describe('stores', () => {
       expect(store.loading).toBe(false)
     })
 
-    it('fetchStatus resets to defaults on non-ok response', async () => {
+    it('fetchStatus reports an initial non-ok response', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: false,
         statusText: 'Internal Server Error',
@@ -67,14 +67,16 @@ describe('stores', () => {
       expect(store.loading).toBe(false)
     })
 
-    it('fetchStatus handles partial data gracefully', async () => {
+    it('fetchStatus rejects incomplete snapshots without claiming health', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ healthy: true }),
       }))
       const store = useStatusStore()
       await store.fetchStatus()
-      expect(store.healthy).toBe(true)
+      expect(store.healthy).toBe(false)
+      expect(store.hasData).toBe(false)
+      expect(store.error).toContain('Unable to fetch status')
       expect(store.status.bot.running).toBe(false)
       expect(store.status.mcp).toEqual([])
     })
@@ -85,6 +87,7 @@ describe('stores', () => {
         onmessage: null as ((event: MessageEvent) => void) | null,
         onerror: null as (() => void) | null,
         close: vi.fn(),
+        addEventListener: vi.fn(),
       }
       vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 
@@ -96,6 +99,7 @@ describe('stores', () => {
       // Simulate connection open
       mockEventSource.onopen!()
       expect(store.connected).toBe(true)
+      store.disconnectSSE()
     })
 
     it('SSE onmessage updates status data', () => {
@@ -104,6 +108,7 @@ describe('stores', () => {
         onmessage: null as ((event: MessageEvent) => void) | null,
         onerror: null as (() => void) | null,
         close: vi.fn(),
+        addEventListener: vi.fn(),
       }
       vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 
@@ -113,11 +118,15 @@ describe('stores', () => {
       const update = {
         healthy: true,
         bot: { running: true, pid: 5678, uptime: '1h', restartCount: 0 },
+        model: { name: 'test', requestsToday: 0, estimatedTokenSpend: '—' },
+        mcp: [], skills: { totalLoaded: 0, lastReload: null, parseErrors: [] },
+        memory: { entryCount: 0, databaseFileSize: '—' }, cron: [], recentActivity: [],
       }
       mockEventSource.onmessage!({ data: JSON.stringify(update) } as MessageEvent)
 
       expect(store.status.bot.running).toBe(true)
       expect(store.status.bot.pid).toBe(5678)
+      store.disconnectSSE()
     })
 
     it('disconnectSSE closes EventSource', () => {
@@ -126,6 +135,7 @@ describe('stores', () => {
         onmessage: null as ((event: MessageEvent) => void) | null,
         onerror: null as (() => void) | null,
         close: vi.fn(),
+        addEventListener: vi.fn(),
       }
       vi.stubGlobal('EventSource', vi.fn(function () { return mockEventSource }))
 

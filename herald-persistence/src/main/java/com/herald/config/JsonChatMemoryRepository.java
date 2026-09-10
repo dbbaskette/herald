@@ -14,6 +14,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -69,21 +71,18 @@ public class JsonChatMemoryRepository implements ChatMemoryRepository {
 
     @Override
     public void saveAll(String conversationId, List<Message> messages) {
-        // Spring AI 2.0.0 MessageWindowChatMemory no longer calls deleteByConversationId
-        // before saveAll — the repository is expected to handle the full replacement.
-        deleteByConversationId(conversationId);
-        for (Message msg : messages) {
-            try {
-                String json = serialize(msg);
-                jdbcTemplate.update(
-                        "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-                        conversationId,
-                        json,
-                        msg.getMessageType().name());
-            } catch (Exception e) {
-                log.warn("Failed to serialize message (type={}): {}", msg.getMessageType(), e.getMessage());
-            }
-        }
+        // Serialize before deleting anything; replace all rows atomically so an
+        // insert failure cannot leave a conversation empty or partially written.
+        List<String> json = messages.stream().map(this::serialize).toList();
+        new TransactionTemplate(new DataSourceTransactionManager(jdbcTemplate.getDataSource()))
+                .executeWithoutResult(status -> {
+                    deleteByConversationId(conversationId);
+                    for (int i = 0; i < messages.size(); i++) {
+                        jdbcTemplate.update(
+                                "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                                conversationId, json.get(i), messages.get(i).getMessageType().name());
+                    }
+                });
     }
 
     @Override
@@ -148,14 +147,16 @@ public class JsonChatMemoryRepository implements ChatMemoryRepository {
         JsonNode node = mapper.readTree(json);
         String type = node.path("type").asText();
 
+        Map<String, Object> metadata = node.has("metadata")
+                ? mapper.convertValue(node.get("metadata"), Map.class) : Map.of();
         return switch (type) {
             case "USER" -> {
                 String content = node.path("content").asText("");
-                yield new UserMessage(content);
+                yield UserMessage.builder().text(content).metadata(metadata).build();
             }
             case "ASSISTANT" -> {
                 String content = node.path("content").asText("");
-                var builder = AssistantMessage.builder().content(content);
+                var builder = AssistantMessage.builder().content(content).properties(metadata);
 
                 if (node.has("toolCalls")) {
                     List<AssistantMessage.ToolCall> toolCalls = new ArrayList<>();
@@ -185,10 +186,10 @@ public class JsonChatMemoryRepository implements ChatMemoryRepository {
                     // Legacy row from old JdbcChatMemoryRepository — skip it
                     yield null;
                 }
-                yield ToolResponseMessage.builder().responses(responses).build();
+                yield ToolResponseMessage.builder().responses(responses).metadata(metadata).build();
             }
             case "SYSTEM" -> {
-                yield new SystemMessage(node.path("content").asText(""));
+                yield SystemMessage.builder().text(node.path("content").asText("")).metadata(metadata).build();
             }
             default -> {
                 log.warn("Unknown message type '{}', treating as USER", type);

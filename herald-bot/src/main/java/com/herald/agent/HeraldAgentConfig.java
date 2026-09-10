@@ -43,7 +43,7 @@ import org.springframework.ai.chat.client.ChatClient;
 // when tools are present).
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
@@ -103,7 +103,7 @@ public class HeraldAgentConfig {
             HeraldConfig config) {
         Path memoriesDir = resolveTildePath(config.memoriesDir());
         return new ContextCompactionAdvisor(chatMemory, chatModel, config.maxContextTokens(),
-                memoriesDir.resolve("log.md"), memoriesDir.resolve("hot.md"));
+                memoriesDir.resolve("log.md"), memoriesDir.resolve("hot.md"), config.compactionStrategy());
     }
 
     @Bean
@@ -154,10 +154,7 @@ public class HeraldAgentConfig {
     @Bean
     @ConditionalOnBean(ChatMemoryRepository.class)
     public ChatMemory chatMemory(ChatMemoryRepository repository) {
-        return MessageWindowChatMemory.builder()
-                .chatMemoryRepository(repository)
-                .maxMessages(MAX_CONVERSATION_MESSAGES)
-                .build();
+        return new TurnSafeChatMemory(repository, MAX_CONVERSATION_MESSAGES);
     }
 
     /**
@@ -555,7 +552,7 @@ public class HeraldAgentConfig {
             // to an inline instance for task-mode runs without a ChatMemory bean.
             advisors.add(contextCompactionAdvisorOpt.orElseGet(() ->
                     new ContextCompactionAdvisor(chatMemory, chatModel, config.maxContextTokens(),
-                            memoryLogPath, hotMdPath)));
+                            memoryLogPath, hotMdPath, config.compactionStrategy())));
             advisors.add(new OneShotMemoryAdvisor(chatMemory, MAX_CONVERSATION_MESSAGES));
         }
 

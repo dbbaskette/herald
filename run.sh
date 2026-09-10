@@ -16,13 +16,23 @@ if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
     set +a
-elif [ "$COMMAND_RAW" != "onboard" ] && [ "$COMMAND_RAW" != "doctor" ] && [ "$COMMAND_RAW" != "build" ]; then
+elif [ "$COMMAND_RAW" != "onboard" ] && [ "$COMMAND_RAW" != "doctor" ] && [ "$COMMAND_RAW" != "build" ] && [ "$COMMAND_RAW" != "config" ]; then
     echo "No .env file found. Run the setup wizard to create one:"
     echo "  ./run.sh onboard"
     echo ""
     echo "Or copy the example manually:"
     echo "  cp .env.example .env"
     exit 1
+fi
+
+# Config validation is read-only and must precede skill/bootstrap/credential sync.
+if [ "$COMMAND_RAW" = "config" ]; then
+    shift
+    if [ "${1:-}" != "validate" ]; then echo "Usage: ./run.sh config validate [--spring.config.additional-location=...]"; exit 2; fi
+    shift
+    CONFIG_JAR=$(ls -t "$SCRIPT_DIR/herald-ui/target"/herald-ui-*-SNAPSHOT.jar 2>/dev/null | head -1)
+    if [ ! -f "$CONFIG_JAR" ]; then echo "Build the console first: ./mvnw -pl herald-ui -am package -DskipTests"; exit 2; fi
+    exec java -jar "$CONFIG_JAR" --validate-config "$@"
 fi
 
 # ── Bootstrap bundled skills ─────────────────────────────────────────
@@ -500,6 +510,7 @@ case "$cmd" in
         echo "  status         Show running services"
         echo "  logs [mod]     Tail logs for bot, ui, or all"
         echo "  build          Build all modules"
+        echo "  config validate Validate console exposure without starting services"
         echo "  doctor [flags] Run diagnostic checks (--json | --quiet)"
         echo "  onboard        Interactive setup wizard (writes .env)"
         echo "  auth [scopes]  Run Google OAuth (default: gmail,calendar,drive,docs,sheets,tasks,people)"

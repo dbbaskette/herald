@@ -49,6 +49,7 @@ import java.util.function.BiPredicate;
  */
 public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor {
 
+    private static final tools.jackson.databind.ObjectMapper JSON = new tools.jackson.databind.ObjectMapper();
     private static final Logger log = LoggerFactory.getLogger(HeraldAutoMemoryAdvisor.class);
     private static final Resource DEFAULT_SYSTEM_PROMPT =
             new ClassPathResource("prompt/AUTO_MEMORY_TOOLS_SYSTEM_PROMPT.md");
@@ -56,16 +57,18 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
             "<system-reminder>Consolidate the long-term memory by summarizing "
                     + "and removing redundant information.</system-reminder>";
 
+    private final Path memoriesRoot;
     private final int order;
     private final String memorySystemPrompt;
     private final List<ToolCallback> memoryToolCallbacks;
     private final BiPredicate<ChatClientRequest, Instant> consolidationTrigger;
 
     private HeraldAutoMemoryAdvisor(
-            int order,
+            Path memoriesRoot, int order,
             String memorySystemPrompt,
             List<ToolCallback> memoryToolCallbacks,
             BiPredicate<ChatClientRequest, Instant> consolidationTrigger) {
+        this.memoriesRoot = memoriesRoot;
         this.order = order;
         this.memorySystemPrompt = memorySystemPrompt;
         this.memoryToolCallbacks = List.copyOf(memoryToolCallbacks);
@@ -84,12 +87,31 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
-        return chain.nextCall(before(request, chain));
+        if (request.context().get("herald.memory.evidence") instanceof MemoryContextEvidence) {
+            return chain.nextCall(request);
+        }
+        var evidence = evidence(request);
+        try { return chain.nextCall(before(withEvidence(request, evidence), chain)); }
+        finally { evidence.publish(false); }
     }
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest request, StreamAdvisorChain chain) {
-        return chain.nextStream(before(request, chain));
+        if (request.context().get("herald.memory.evidence") instanceof MemoryContextEvidence) {
+            return chain.nextStream(request);
+        }
+        // Each subscription owns its evidence. Completion/cancellation may run on
+        // another scheduler, so no ThreadLocal state is used for this guard.
+        return Flux.defer(() -> {
+            var evidence = evidence(request);
+            try {
+                return chain.nextStream(before(withEvidence(request, evidence), chain))
+                        .doFinally(signal -> evidence.publish(false));
+            } catch (RuntimeException exception) {
+                evidence.publish(false);
+                return Flux.error(exception);
+            }
+        });
     }
 
     ChatClientRequest before(ChatClientRequest request, AdvisorChain ignored) {
@@ -117,7 +139,8 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
         }
         for (ToolCallback cb : memoryToolCallbacks) {
             if (!existingNames.contains(cb.getToolDefinition().name())) {
-                merged.add(cb);
+                Object evidence = request.context().get("herald.memory.evidence");
+                merged.add(evidence instanceof MemoryContextEvidence e ? tracked(cb, e) : cb);
             }
         }
         // Spring AI 2.0 GA: ChatOptions are immutable — rebuild via mutate()
@@ -130,6 +153,52 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
                 .augmentSystemMessage(m -> new SystemMessage(augmentedSystem));
 
         return request.mutate().prompt(newPrompt).build();
+    }
+
+    private MemoryContextEvidence evidence(ChatClientRequest request) {
+        Object id = request.context().get("chat_memory_conversation_id");
+        String conversation = id instanceof String s ? s : ChatChannelContext.getConversationId();
+        var evidence = new MemoryContextEvidence(memoriesRoot, conversation);
+        evidence.publish(true);
+        Object hot = request.context().get("herald.memory.hot-path");
+        if (hot instanceof String path) evidence.record(path);
+        return evidence;
+    }
+    private ChatClientRequest withEvidence(ChatClientRequest request, MemoryContextEvidence evidence) {
+        var context = new java.util.HashMap<String,Object>(request.context());
+        context.put("herald.memory.evidence", evidence);
+        return request.mutate().context(context).build();
+    }
+    private ToolCallback tracked(ToolCallback delegate, MemoryContextEvidence evidence) {
+        return new ToolCallback() {
+            public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() { return delegate.getToolDefinition(); }
+            public org.springframework.ai.tool.metadata.ToolMetadata getToolMetadata() { return delegate.getToolMetadata(); }
+            public String call(String input) { return observe(input, delegate.call(input)); }
+            public String call(String input, org.springframework.ai.chat.model.ToolContext context) { return observe(input, delegate.call(input, context)); }
+            private String observe(String input, String result) {
+                String name = delegate.getToolDefinition().name().toLowerCase(java.util.Locale.ROOT);
+                String path = LoggingMemoryToolCallback.extractPath(input);
+                String text = result;
+                // MethodToolCallback normally JSON-encodes a String return value.
+                if (text != null && text.startsWith("\"")) {
+                    try { text = JSON.readValue(text, String.class); }
+                    catch (RuntimeException ignored) { text = null; }
+                }
+                // AutoMemoryTools returns a File:/Lines envelope for successful
+                // reads. Words inside the note (including "error") are arbitrary.
+                if ((name.equals("memoryview") || name.equals("memoryread"))
+                        && text != null && text.startsWith("File: ")
+                        && text.contains("\nLines ")) {
+                    evidence.record(path);
+                }
+                if (LoggingMemoryToolCallback.isMutatingMemoryTool(name)
+                        && !name.equals("memorydelete") && text != null
+                        && text.startsWith("Successfully ")) {
+                    evidence.attribution(path);
+                }
+                return result;
+            }
+        };
     }
 
     public static Builder builder() {
@@ -216,7 +285,7 @@ public final class HeraldAutoMemoryAdvisor implements CallAdvisor, StreamAdvisor
             }
 
             String promptText = readPrompt(memorySystemPrompt);
-            return new HeraldAutoMemoryAdvisor(order, promptText, wrapped, memoryConsolidationTrigger);
+            return new HeraldAutoMemoryAdvisor(memoriesRootDirectory, order, promptText, wrapped, memoryConsolidationTrigger);
         }
 
         private static String readPrompt(Resource resource) {

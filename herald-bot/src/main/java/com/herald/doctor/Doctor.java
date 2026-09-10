@@ -195,6 +195,9 @@ public final class Doctor {
                 new String[]{"-v"},
                 "brew install poppler  — or run /skill markitdown for richer Markdown extraction", false));
 
+        // Declared exposure controls; custom UI Spring files have a dedicated validator.
+        list.add(new com.herald.doctor.checks.NetworkExposureCheck(env));
+
         // Ports.
         int botPort = parseInt(env.getOrDefault("HERALD_SERVER_PORT", "8081"), 8081);
         list.add(new PortCheck("herald-bot", botPort));

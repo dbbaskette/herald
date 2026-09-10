@@ -114,6 +114,46 @@ class TelegramSenderTest {
         verify(bot, atLeast(2)).execute(any(SendMessage.class));
     }
 
+    @Test
+    void strictDeliveryReportsTerminalTelegramFailureWhileLegacySendStillReturns() {
+        SendResponse failure = mock(SendResponse.class);
+        when(failure.isOk()).thenReturn(false);
+        when(failure.errorCode()).thenReturn(403);
+        when(failure.description()).thenReturn("Forbidden: bot blocked");
+        when(bot.execute(any(SendMessage.class))).thenReturn(failure);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendMessageOrThrow("Fixture recap"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("did not acknowledge");
+        org.assertj.core.api.Assertions.assertThatCode(() -> sender.sendMessage("Legacy notification"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void strictDeliveryReportsExhaustedRateLimitRetries() {
+        SendResponse failure = mock(SendResponse.class);
+        when(failure.errorCode()).thenReturn(429);
+        ResponseParameters params = mock(ResponseParameters.class);
+        when(params.retryAfter()).thenReturn(0);
+        when(failure.parameters()).thenReturn(params);
+        when(bot.execute(any(SendMessage.class))).thenReturn(failure);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sender.sendMessageOrThrow("Fixture recap"))
+                .isInstanceOf(IllegalStateException.class);
+        verify(bot, times(3)).execute(any(SendMessage.class));
+    }
+
+    @Test
+    void strictDeliveryAcceptsSuccessfulPlainTextFallback() {
+        SendResponse failure = mock(SendResponse.class);
+        when(failure.errorCode()).thenReturn(400);
+        SendResponse success = mock(SendResponse.class);
+        when(success.isOk()).thenReturn(true);
+        when(bot.execute(any(SendMessage.class))).thenReturn(failure, failure, success);
+        org.assertj.core.api.Assertions.assertThatCode(() -> sender.sendMessageOrThrow("Fixture recap"))
+                .doesNotThrowAnyException();
+        verify(bot, times(3)).execute(any(SendMessage.class));
+    }
+
     // --- #282 typing-action refresh during long tool-call phases ---
 
     @Test

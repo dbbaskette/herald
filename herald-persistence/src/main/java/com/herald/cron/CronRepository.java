@@ -58,7 +58,7 @@ public class CronRepository {
 
     void save(CronJob job) {
         Assert.isTrue(StringUtils.hasText(job.name()), "Job name must not be blank");
-        Assert.isTrue(StringUtils.hasText(job.schedule()), "Job schedule must not be blank");
+        CronService.validateSchedule(job.schedule());
         Assert.isTrue(StringUtils.hasText(job.prompt()), "Job prompt must not be blank");
         jdbcTemplate.update(
                 "INSERT INTO cron_jobs (name, schedule, prompt, enabled) VALUES (?, ?, ?, ?) "
@@ -71,6 +71,7 @@ public class CronRepository {
     }
 
     void updateSchedule(String name, String schedule) {
+        CronService.validateSchedule(schedule);
         jdbcTemplate.update("UPDATE cron_jobs SET schedule = ? WHERE name = ?", schedule, name);
     }
 
@@ -80,9 +81,19 @@ public class CronRepository {
 
     void update(CronJob job) {
         Assert.notNull(job.id(), "Job id must not be null for update");
+        CronService.validateSchedule(job.schedule());
         jdbcTemplate.update(
                 "UPDATE cron_jobs SET name = ?, schedule = ?, prompt = ?, enabled = ? WHERE id = ?",
                 job.name(), job.schedule(), job.prompt(), job.enabled() ? 1 : 0, job.id());
+    }
+
+    void publishTimezone(String timezone) {
+        jdbcTemplate.update("INSERT INTO settings(key,value) VALUES('cron.runtime-timezone',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP", timezone);
+    }
+
+    void executionState(int id, String status, String message) {
+        jdbcTemplate.update("INSERT INTO cron_execution(job_id,status,message,updated_at) VALUES(?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET status=excluded.status,message=excluded.message,updated_at=excluded.updated_at",
+                id, status, message, java.time.Instant.now().toString());
     }
 
     boolean delete(String name) {
@@ -90,7 +101,7 @@ public class CronRepository {
         if (job != null && job.builtIn()) {
             throw new IllegalStateException("Built-in jobs cannot be deleted");
         }
-        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ?", name);
+        int rows = jdbcTemplate.update("DELETE FROM cron_jobs WHERE name = ? AND built_in = 0", name);
         return rows > 0;
     }
 }

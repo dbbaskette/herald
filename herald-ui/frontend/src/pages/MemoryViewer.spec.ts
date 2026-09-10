@@ -25,7 +25,7 @@ async function mountPage() {
 }
 
 async function switchToKvTab(wrapper: ReturnType<typeof mount>) {
-  const kvTab = wrapper.findAll('.tab-btn').find((b) => b.text() === 'Key·Value')
+  const kvTab = wrapper.findAll('.tab-btn').find((b) => b.text() === 'Legacy Key·Value')
   await kvTab!.trigger('click')
 }
 
@@ -51,7 +51,7 @@ describe('MemoryViewer.vue', () => {
     const wrapper = await mountPage()
     expect(wrapper.text()).toContain('Wiki')
     expect(wrapper.text()).toContain('Key·Value')
-    expect(wrapper.text()).toContain('Obsidian')
+    expect(wrapper.findAll('.tab-btn').map(b => b.text())).not.toContain('Obsidian')
   })
 
   it('shows loading state on kv tab initially', async () => {
@@ -101,5 +101,37 @@ describe('MemoryViewer.vue', () => {
     await switchToKvTab(wrapper)
     expect(wrapper.text()).toContain('Export')
     expect(wrapper.text()).toContain('Import')
+  })
+})
+
+describe('wiki editor', () => {
+  it('requires confirmation before a recoverable deletion', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:true,json:async()=>({})}))
+    const wrapper = await mountPage()
+    const {useFileMemoryStore} = await import('@/stores/fileMemory')
+    const store = useFileMemoryStore()
+    store.selected={path:'a.md',content:'A',version:'v1',size:1};store.draft='A'
+    await wrapper.vm.$nextTick()
+    const remove=vi.spyOn(store,'deleteSelected').mockResolvedValue(true)
+    await wrapper.findAll('button').find(b=>b.text()==='Delete')!.trigger('click')
+    expect(remove).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Move memory to trash?')
+    await wrapper.findAll('button').find(b=>b.text()==='Move to trash')!.trigger('click')
+    expect(remove).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+  it('shows attribution and preserves unsaved editor text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:true,json:async()=>({})}))
+    const wrapper=await mountPage()
+    const {useFileMemoryStore}=await import('@/stores/fileMemory');const store=useFileMemoryStore()
+    store.grouped={user:[{path:'a.md',name:null,description:null,type:'user',size:1,lastModified:'today',conversationId:'web-test'}]}
+    store.selected={path:'a.md',content:'A',version:'v1',size:1};store.draft='A'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('a[href="/history?conversationId=web-test"]').exists()).toBe(true)
+    await wrapper.find('textarea[aria-label="Memory Markdown editor"]').setValue('Draft')
+    await wrapper.findAll('button').find(b=>b.text()==='← Back')!.trigger('click')
+    expect(store.draft).toBe('Draft');expect(store.selected?.path).toBe('a.md')
+    expect(wrapper.text()).toContain('Unsaved changes')
+    wrapper.unmount()
   })
 })

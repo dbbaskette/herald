@@ -92,7 +92,7 @@ describe('useStatusStore', () => {
       onopen: null,
       onmessage: null,
       onerror: null,
-      close: closeFn,
+      close: closeFn, addEventListener: vi.fn(),
     } })
     vi.stubGlobal('EventSource', mockEventSource)
 
@@ -113,7 +113,7 @@ describe('useStatusStore', () => {
         onopen: null as any,
         onmessage: null as any,
         onerror: null as any,
-        close: vi.fn(),
+        close: vi.fn(), addEventListener: vi.fn(),
       }
       return esInstance
     }))
@@ -140,7 +140,7 @@ describe('useStatusStore', () => {
         onopen: null as any,
         onmessage: null as any,
         onerror: null as any,
-        close: vi.fn(),
+        close: vi.fn(), addEventListener: vi.fn(),
       }
       return esInstance
     }))
@@ -168,4 +168,56 @@ describe('useStatusStore', () => {
     await store.fetchStatus()
     expect(store.healthy).toBe(true)
   })
+})
+
+describe('snapshot recovery and ownership', () => {
+  let sources: any[]
+  beforeEach(() => {
+    vi.useFakeTimers(); setActivePinia(createPinia()); sources = []
+    vi.stubGlobal('EventSource', vi.fn(function () {
+      const source = { onopen: null, onmessage: null, onerror: null, close: vi.fn(), addEventListener: vi.fn() }
+      sources.push(source); return source
+    }))
+  })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+  it('retains snapshots across nested malformed messages and fetch failure then recovers', async () => {
+    const store = useStatusStore(); store.connectSSE(); sources[0].onopen()
+    sources[0].onmessage({ data: JSON.stringify(fullStatus) })
+    const updated = store.lastUpdated
+    for (const payload of [null, { ...fullStatus, bot: { running: 'yes' } }, { ...fullStatus, skills: { ...fullStatus.skills, parseErrors: [3] } }, { ...fullStatus, mcp: [{ status: 'bogus' }] }]) {
+      sources[0].onmessage({ data: JSON.stringify(payload) })
+      expect(store.status.bot.pid).toBe(1234); expect(store.lastUpdated).toBe(updated); expect(store.stale).toBe(true)
+    }
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')))
+    await store.fetchStatus(); expect(store.status.model.name).toBe(fullStatus.model.name)
+    sources[0].onerror(); expect(store.connectionLabel).toContain('Reconnecting'); vi.advanceTimersByTime(1000)
+    sources[1].onopen(); sources[1].onmessage({ data: JSON.stringify({ ...fullStatus, bot: { ...fullStatus.bot, pid: 5678 } }) })
+    sources[0].onmessage({ data: JSON.stringify(fullStatus) })
+    expect(store.status.bot.pid).toBe(5678); expect(store.stale).toBe(false); store.disconnectSSE()
+  })
+  it('keeps other consumers connected and cancels retry after final release', () => {
+    const store = useStatusStore(); store.connectSSE(); store.connectSSE()
+    expect(sources).toHaveLength(1); sources[0].onopen(); store.disconnectSSE()
+    expect(store.connected).toBe(true); sources[0].onerror(); store.disconnectSSE(); vi.runAllTimers()
+    expect(sources).toHaveLength(1)
+  })
+  it('caps activity and ignores HTTP completion older than a stream snapshot', async () => {
+    const store = useStatusStore(); let finish!: (value: unknown) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { finish = resolve })))
+    const pending = store.fetchStatus(); store.connectSSE()
+    sources[0].onmessage({ data: JSON.stringify({ ...fullStatus, recentActivity: Array.from({ length: 25 }, (_, i) => ({ timestamp: String(i), messagePreview: 'turn', toolCalls: [] })) }) })
+    finish({ ok: true, json: async () => ({ ...fullStatus, healthy: false }) }); await pending
+    expect(store.status.healthy).toBe(true); expect(store.status.recentActivity).toHaveLength(20); store.disconnectSSE()
+  })
+})
+
+it('consumes the named status event actually emitted by the server', () => {
+  setActivePinia(createPinia())
+  const addEventListener = vi.fn()
+  vi.stubGlobal('EventSource', vi.fn(function () { return { onopen: null, onerror: null, onmessage: null, close: vi.fn(), addEventListener } }))
+  const store = useStatusStore(); store.connectSSE()
+  const listener = addEventListener.mock.calls.find(([name]) => name === 'status')![1]
+  listener({ data: JSON.stringify(fullStatus) })
+  expect(store.status.bot.pid).toBe(1234)
+  store.disconnectSSE(); vi.unstubAllGlobals()
 })

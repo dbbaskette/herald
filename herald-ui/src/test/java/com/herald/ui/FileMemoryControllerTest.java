@@ -17,7 +17,7 @@ class FileMemoryControllerTest {
     Path memoriesDir;
 
     @Test
-    void groupsPagesByTypeAndExcludesIndexAndLogFiles() throws IOException {
+    void groupsPagesByTypeIncludingIndexAndHotButExcludesLog() throws IOException {
         write(memoriesDir.resolve("user_profile.md"), """
                 ---
                 name: user_profile
@@ -70,7 +70,7 @@ class FileMemoryControllerTest {
         assertThat(grouped.get("unknown")).extracting("path").contains("orphan.md");
         assertThat(grouped.values().stream().flatMap(List::stream))
                 .extracting("path")
-                .doesNotContain("MEMORY.md", "log.md", "hot.md");
+                .contains("MEMORY.md", "hot.md").doesNotContain("log.md");
     }
 
     @Test

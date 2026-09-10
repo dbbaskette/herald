@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { mount, enableAutoUnmount } from '@vue/test-utils'
+enableAutoUnmount(afterEach)
 import { createPinia } from 'pinia'
 import SkillsEditor from './SkillsEditor.vue'
 import { useSkillsStore } from '@/stores/skills'
@@ -16,7 +17,7 @@ vi.stubGlobal('EventSource', vi.fn(function () { return {
 // Mock CodeMirror — the editor needs a DOM that jsdom can't fully support
 vi.mock('@codemirror/view', () => ({
   EditorView: Object.assign(vi.fn(function () { return {
-    state: { doc: { toString: () => '', length: 0 } },
+    state: { doc: { toString: () => '', length: 0, lines: 1, line: () => ({ from: 0, to: 0 }) } },
     dispatch: vi.fn(),
     destroy: vi.fn(),
   } }), { theme: vi.fn(() => []), updateListener: { of: vi.fn(() => []) } }),
@@ -24,6 +25,7 @@ vi.mock('@codemirror/view', () => ({
   lineNumbers: () => [],
   highlightActiveLine: () => [],
 }))
+vi.mock('@codemirror/lint', () => ({ lintGutter: () => [], setDiagnostics: () => ({}) }))
 vi.mock('@codemirror/state', () => ({
   EditorState: {
     create: vi.fn(() => ({})),
@@ -64,10 +66,25 @@ function mountPage() {
 describe('SkillsEditor.vue', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
+      ok: true, headers: new Headers({ ETag: '"version"' }),
       json: () => Promise.resolve(sampleSkills),
       text: () => Promise.resolve('# My Skill\nContent here'),
     }))
+  })
+
+  it('shows preview and blocks invalid YAML while allowing warning-only drafts', async () => {
+    const wrapper = mountPage()
+    const store = useSkillsStore()
+    store.selectedName = 'my-skill'
+    store.savedContent = 'old'
+    store.editorContent = '---\nname: my-skill\ndescription: >\n  Helpful\n  skill.\n---\nBody'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.validation-preview').text()).toContain('Helpful skill.')
+    expect(wrapper.find('.action-save').attributes('disabled')).toBeUndefined()
+    store.editorContent = '---\nname: one\nname: two\ndescription: valid\n---'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.action-save').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.validation-feedback').text()).toContain('Line 3')
   })
 
   it('renders the page title when no skill is selected', () => {
@@ -205,4 +222,30 @@ describe('SkillsEditor.vue', () => {
     // The chip should show Loaded or a status
     expect(wrapper.text()).toMatch(/live|error|offline/)
   })
+})
+
+it('offers Stay or Discard for a dirty skill reload and new-file action', async () => {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url === '/api/skills'
+    ? new Response(JSON.stringify(sampleSkills)) : new Response('external', { headers: { ETag: '"two"' } })))
+  const wrapper = mountPage(), store = useSkillsStore()
+  store.selectedName = 'my-skill'; store.savedContent = 'saved'; store.editorContent = 'draft'
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('button').find(b => b.text() === 'Reload file')!.trigger('click')
+  await wrapper.vm.$nextTick()
+  expect(wrapper.find('dialog').exists()).toBe(true)
+  await wrapper.findAll('dialog button')[2]!.trigger('click')
+  expect(store.editorContent).toBe('draft')
+  await wrapper.findAll('button').find(b => b.text() === 'Reload file')!.trigger('click')
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('dialog button')[1]!.trigger('click')
+  await vi.waitFor(() => expect(store.editorContent).toBe('external'))
+  store.editorContent = 'another draft'
+  await wrapper.find('button[title="New skill"]').trigger('click')
+  await wrapper.vm.$nextTick()
+  await wrapper.findAll('dialog button')[1]!.trigger('click')
+  await wrapper.vm.$nextTick()
+  expect(store.editorContent).toBe('external')
+  expect(wrapper.find('input[type="text"]').exists()).toBe(true)
 })

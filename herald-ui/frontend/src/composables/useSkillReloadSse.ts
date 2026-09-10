@@ -1,100 +1,52 @@
 import { ref, onUnmounted } from 'vue'
+import { createSseConnection } from '@/lib/sse'
 
 export type SkillReloadStatus = 'loaded' | 'reloading' | 'error'
 
 export function useSkillReloadSse() {
   const status = ref<SkillReloadStatus>('loaded')
   const lastLoadedAt = ref<string | null>(null)
-
-  let eventSource: EventSource | null = null
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  let errorTimer: ReturnType<typeof setTimeout> | null = null
+  let awaitingReload = false
   let reloadingTimer: ReturnType<typeof setTimeout> | null = null
-
-  function connect() {
-    cleanup()
-
-    eventSource = new EventSource('/api/status/stream')
-
-    eventSource.onopen = () => {
-      clearErrorTimer()
-      if (status.value === 'error') {
-        status.value = 'loaded'
-      }
-    }
-
-    eventSource.addEventListener('skill-reload', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data)
-        lastLoadedAt.value = data.timestamp ?? new Date().toISOString()
-      } catch {
-        lastLoadedAt.value = new Date().toISOString()
-      }
-      clearReloadingTimer()
-      status.value = 'loaded'
-    })
-
-    eventSource.onerror = () => {
-      eventSource?.close()
-      eventSource = null
-
-      if (!errorTimer) {
-        errorTimer = setTimeout(() => {
-          status.value = 'error'
-          errorTimer = null
-        }, 10_000)
-      }
-
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null
-        connect()
-      }, 5_000)
-    }
+  function clearReloadingTimer() {
+    if (reloadingTimer !== null) clearTimeout(reloadingTimer)
+    reloadingTimer = null
   }
-
+  const stream = createSseConnection('/api/status/stream', {
+    onState: state => { if (state === 'offline' || state === 'reconnecting') status.value = 'error' },
+    events: {
+      'skill-reload': event => {
+        try {
+          const data = JSON.parse(event.data)
+          if (typeof data?.timestamp !== 'string' || !Number.isFinite(Date.parse(data.timestamp))) return
+          lastLoadedAt.value = data.timestamp
+          awaitingReload = false
+          clearReloadingTimer()
+          status.value = 'loaded'
+          stream.acknowledge()
+        } catch { /* Preserve last known reload state. */ }
+      },
+      status: event => {
+        try {
+          const data = JSON.parse(event.data)
+          if (typeof data?.timestamp !== 'string' || !Number.isFinite(Date.parse(data.timestamp))) return
+          stream.acknowledge()
+          if (status.value === 'error' && !awaitingReload) status.value = 'loaded'
+        } catch { /* Ignore malformed heartbeat. */ }
+      },
+    },
+  })
   function setReloading() {
+    awaitingReload = true
     status.value = 'reloading'
     clearReloadingTimer()
     reloadingTimer = setTimeout(() => {
-      if (status.value === 'reloading') {
-        status.value = 'loaded'
-      }
+      // A timeout is not confirmation that a requested reload succeeded.
+      status.value = 'error'
       reloadingTimer = null
-    }, 2_000)
+    }, 10000)
   }
-
-  function clearErrorTimer() {
-    if (errorTimer) {
-      clearTimeout(errorTimer)
-      errorTimer = null
-    }
-  }
-
-  function clearReloadingTimer() {
-    if (reloadingTimer) {
-      clearTimeout(reloadingTimer)
-      reloadingTimer = null
-    }
-  }
-
-  function cleanup() {
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-    clearErrorTimer()
-    clearReloadingTimer()
-  }
-
-  connect()
-
-  onUnmounted(() => {
-    cleanup()
-  })
-
-  return { status, lastLoadedAt, setReloading }
+  stream.start()
+  onUnmounted(() => { stream.stop(); clearReloadingTimer() })
+  return { status, lastLoadedAt, setReloading, retry: stream.retry }
 }
