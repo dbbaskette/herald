@@ -87,6 +87,16 @@ class BudgetPolicyTest {
     }
 
     @Test
+    void activeTurnUsageStopsNextRoundBeforeFinalPersistence() {
+        stubSetting("budget.daily.usd", "5.00");
+        when(usageTracker.estimateDailyCost()).thenReturn(new BigDecimal("4.90"));
+        var active = new ExecutionUsage(List.of(new ExecutionUsage.ModelUsage("fixture", 1000, 1000, 0, 0)));
+        when(usageTracker.estimateExecutionCost(active)).thenReturn(new BigDecimal("0.11"));
+        assertThat(policy.evaluate(active).isBlocked()).isTrue();
+        assertThat(policy.evaluate(active).message()).contains("Daily budget");
+    }
+
+    @Test
     void evaluateWarnsAt80PercentOfDaily() {
         stubSetting("budget.daily.usd", "5.00");
         when(usageTracker.estimateDailyCost()).thenReturn(new BigDecimal("4.00"));

@@ -22,20 +22,21 @@ For this guide, you need:
 | Thing | Why | How to check |
 |---|---|---|
 | **Java 21+** | Herald is a Java program | `java -version` |
+| **Node.js** | Console build; use `nvm install && nvm use` (22.23.1) | `node -v` |
 | **Maven wrapper** | To build the JAR (ships with the repo) | `./mvnw -version` |
 | **Anthropic API key** | To talk to Claude | Sign up at [console.anthropic.com](https://console.anthropic.com) |
 
-You do **not** need Node.js, a Telegram bot, a database, or a Google account for this guide. Those come later.
+Node.js is needed to build the included console, but not to run the packaged agent. You do **not** need a Telegram bot, a database, or a Google account for this guide.
 
 ## Step 1 — Get the code and build
 
 ```bash
 git clone https://github.com/dbbaskette/herald.git
 cd herald
-./mvnw package -DskipTests
+./scripts/build.sh
 ```
 
-The build produces `herald-bot/target/herald-bot.jar`. First build takes a few minutes; later builds are fast.
+The build produces a versioned executable under `herald-bot/target/`. `./scripts/find-artifact.sh bot` returns its exact path. The first build downloads dependencies; later builds reuse the download caches.
 
 ## Step 2 — Write a tiny agent definition
 
@@ -63,7 +64,7 @@ That's it. No code.
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-java -jar herald-bot/target/herald-bot.jar --agents=hello-agent.md
+java -jar "$(./scripts/find-artifact.sh bot)" --agents=hello-agent.md
 ```
 
 You'll land in an interactive prompt. Try:
@@ -95,7 +96,7 @@ Stay in task-agent mode and experiment:
 - **Change the model.** Swap `model: sonnet` for `model: opus` or `model: haiku` and see how the responses differ.
 - **Change the tools.** Try `tools: [filesystem, shell]` to let the agent run shell commands. (Careful — the agent can now actually run things on your Mac.)
 - **Change the personality.** Rewrite the system prompt so the agent behaves differently. "You are a terse code reviewer" is very different from "You are a patient teacher."
-- **Use one of the included examples.** The `examples/` folder has ready-to-run agents: `code-reviewer.md`, `csv-reporter.md`, `report-writer.md`, `cf-analyzer.md`. Try `java -jar herald-bot/target/herald-bot.jar --agents=examples/code-reviewer.md`.
+- **Use one of the included examples.** The `examples/` folder has ready-to-run agents: `code-reviewer.md`, `csv-reporter.md`, `report-writer.md`, `cf-analyzer.md`. Try `java -jar "$(./scripts/find-artifact.sh bot)" --agents=examples/code-reviewer.md`.
 - **One-shot it.** Add `--prompt="..."` to run a single prompt and exit — handy for scripting: `java -jar ... --agents=examples/code-reviewer.md --prompt="review the latest commit"`.
 
 ## Vocabulary cheat sheet
@@ -169,7 +170,7 @@ or sits on a read-only mount.
 
 ### Other issues (no preflight match)
 
-- **`Could not find or load main class`** — you didn't build yet, or you're pointing at the wrong JAR path. Re-run `./mvnw package -DskipTests` and use the exact path `herald-bot/target/herald-bot.jar`.
+- **`Could not find or load main class`** — you didn't build yet, or you're pointing at the wrong JAR path. Re-run `./scripts/build.sh` and resolve the executable with `./scripts/find-artifact.sh bot`.
 - **The agent keeps apologizing instead of reading files** — you probably forgot `tools: [filesystem]` in the frontmatter, or the path you asked about doesn't exist.
 - **Anything else weird** — run `./run.sh doctor` for the full diagnostic battery (~15 checks: API keys, DB integrity, memory dir layout, skills, optional CLIs, ports). Exit codes: `0` clean / `1` warnings / `2` failures.
 

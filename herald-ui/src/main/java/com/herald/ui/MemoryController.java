@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Compatibility CRUD for retained manual SQLite entries; learned memory uses FileMemoryController. */
 @RestController
 @RequestMapping("/api/memory")
 class MemoryController {

@@ -37,6 +37,9 @@ Thumbs.db
 
 # Node (herald-ui)
 node_modules/
+*.tsbuildinfo
+# Console resources are generated under target, never committed.
+herald-ui/src/main/resources/static/
 dist/
 
 # Environment / secrets

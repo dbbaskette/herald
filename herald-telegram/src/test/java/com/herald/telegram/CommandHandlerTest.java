@@ -161,13 +161,13 @@ class CommandHandlerTest {
     @Test
     void memoryCommandShowsAgentManagedMessage() {
         handler.handle("/memory list");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") || msg.contains("agent")));
+        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") && msg.contains("File Memory") && msg.contains("manual references") && msg.contains("not automatically learned")));
     }
 
     @Test
     void memoryWithNoSubcommandShowsAgentMessage() {
         handler.handle("/memory");
-        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") || msg.contains("agent")));
+        verify(sender).sendMessage(argThat(msg -> msg.contains("AutoMemoryTools") && msg.contains("File Memory") && msg.contains("manual references") && msg.contains("not automatically learned")));
     }
 
     // --- /model status ---

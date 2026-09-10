@@ -280,23 +280,16 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                 Optional.empty(), false, Optional.empty());
 
-        // Should have: DateTimePromptAdvisor, ContextMdAdvisor, HotMdAdvisor,
-        // HeraldAutoMemoryAdvisor, PromptDumpAdvisor, LeadingTurnSanitizingAdvisor.
-        // (ToolSearchToolCallAdvisor was removed — incompatible with Spring AI 2.0
-        // Jackson 3 API. Spring AI auto-installs ToolCallAdvisor when tools are
-        // attached via .defaultTools / .defaultToolCallbacks, so we don't add it
-        // explicitly to this chain.)
-        assertThat(advisors).hasSize(6);
+        // Persistence is optional; execution safety remains active on every client.
+        assertThat(advisors).hasSize(9);
         assertThat(advisors).anyMatch(a -> a instanceof LeadingTurnSanitizingAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof OneShotMemoryAdvisor);
         assertThat(advisors).noneMatch(a -> a instanceof ContextCompactionAdvisor);
     }
 
     @Test
-    void advisorChainOmitsToolCallAdvisor(@TempDir Path tempDir) {
-        // Spring AI auto-installs ToolCallAdvisor when tools are configured on the
-        // chat client; herald no longer adds one explicitly. This test pins that
-        // contract so a future regression doesn't silently double-up.
+    void advisorChainHasOneBoundedToolLoop(@TempDir Path tempDir) {
+        // Explicit upstream loop prevents auto-registration and places the step guard inside it.
         HeraldAgentConfig agentConfig = new HeraldAgentConfig();
         ContextMdAdvisor contextMdAdvisor = new ContextMdAdvisor(Path.of("/tmp/test-context.md"));
         ChatModel mockModel = mock(ChatModel.class);
@@ -310,8 +303,9 @@ class HeraldAgentConfigIntegrationTest {
                 Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false),
                 Optional.empty(), false, Optional.empty());
 
-        assertThat(advisors)
-                .noneMatch(a -> a instanceof org.springframework.ai.chat.client.advisor.ToolCallAdvisor);
+        assertThat(advisors.stream().filter(a -> a instanceof org.springframework.ai.chat.client.advisor.ToolCallingAdvisor)).hasSize(1);
+        assertThat(advisors).anyMatch(ExecutionBoundaryAdvisor.class::isInstance);
+        assertThat(advisors).anyMatch(ExecutionStepAdvisor.class::isInstance);
     }
 
     @Test

@@ -29,6 +29,10 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <key>SERVER_PORT</key>
+        <string>8081</string>
+        <key>SERVER_ADDRESS</key>
+        <string>127.0.0.1</string>
         <key>HERALD_TELEGRAM_BOT_TOKEN</key>
         <string>__HERALD_TELEGRAM_BOT_TOKEN__</string>
         <key>ANTHROPIC_API_KEY</key>

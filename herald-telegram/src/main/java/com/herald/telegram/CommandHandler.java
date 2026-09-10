@@ -197,6 +197,7 @@ public class CommandHandler implements SlashCommandDispatcher {
 
     private void handleMemory(String[] parts) {
         sender.sendMessage("Memory is now managed by the agent via long-term memory files (AutoMemoryTools). "
+                + "The console File Memory tab is canonical; Legacy Key·Value entries are manual references, not automatically learned facts. "
                 + "Ask the agent directly to view or manage memories — e.g., \"what do you remember about me?\"");
     }
 

@@ -84,11 +84,13 @@ public class AgentService {
         long cacheWriteTokens = 0;
         List<String> toolCalls = Collections.emptyList();
         ChatResponse chatResponse = null;
+        var executionUsage = new AtomicReference<ExecutionUsage>();
 
         try {
             chatResponse = modelSwitcher.getActiveClient().prompt()
                     .user(userMessage)
-                    .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                    .advisors(a -> a.param("chat_memory_conversation_id", conversationId)
+                            .param(ExecutionUsage.OBSERVER, (java.util.function.Consumer<ExecutionUsage>) executionUsage::set))
                     .call()
                     .chatResponse();
 
@@ -110,7 +112,7 @@ public class AgentService {
             toolCalls = extractToolCalls(chatResponse);
         } finally {
             long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
-            if (agentTurnListener != null) {
+            if (agentTurnListener != null && !recordExecutionUsage(executionUsage.get(), latencyMs, toolCalls)) {
                 String provider = AgentTurnListener.deriveProvider(model);
                 agentTurnListener.recordTurn(provider, model, tokensIn, tokensOut,
                         cacheReadTokens, cacheWriteTokens, latencyMs, toolCalls, null);
@@ -182,6 +184,7 @@ public class AgentService {
 
 
         long startTime = System.nanoTime();
+        var executionUsage = new AtomicReference<ExecutionUsage>();
         AtomicReference<String> modelRef = new AtomicReference<>("unknown");
         AtomicLong tokensInRef = new AtomicLong(0);
         AtomicLong tokensOutRef = new AtomicLong(0);
@@ -201,7 +204,8 @@ public class AgentService {
                                 new ByteArrayResource(att.data()));
                     }
                 })
-                .advisors(a -> a.param("chat_memory_conversation_id", conversationId))
+                .advisors(a -> a.param("chat_memory_conversation_id", conversationId)
+                        .param(ExecutionUsage.OBSERVER, (java.util.function.Consumer<ExecutionUsage>) executionUsage::set))
                 .stream()
                 .chatResponse();
 
@@ -246,7 +250,7 @@ public class AgentService {
                     long latencyMs = (System.nanoTime() - startTime) / 1_000_000;
                     log.info("Agent stream finished (conversation={}, signal={}), chars={}",
                             conversationId, signal, totalChars.get());
-                    if (agentTurnListener != null) {
+                    if (agentTurnListener != null && !recordExecutionUsage(executionUsage.get(), latencyMs, toolCallsRef.get())) {
                         String model = modelRef.get();
                         String provider = AgentTurnListener.deriveProvider(model);
                         agentTurnListener.recordTurn(provider, model,
@@ -255,6 +259,15 @@ public class AgentService {
                                 latencyMs, toolCallsRef.get(), null);
                     }
                 });
+    }
+
+    private boolean recordExecutionUsage(ExecutionUsage usage, long latencyMs, List<String> toolCalls) {
+        if (usage == null || usage.models().isEmpty()) return false;
+        for (var model : usage.models()) {
+            agentTurnListener.recordTurn(AgentTurnListener.deriveProvider(model.model()), model.model(),
+                    model.input(), model.output(), model.cacheRead(), model.cacheWrite(), latencyMs, toolCalls, null);
+        }
+        return true;
     }
 
     public static String stripThinkTags(String text) {

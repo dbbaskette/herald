@@ -2,7 +2,7 @@ PLIST       := com.herald.plist
 PLIST_DEST  := $(HOME)/Library/LaunchAgents/$(PLIST)
 LABEL       := com.herald
 HERALD_HOME := $(HOME)/.herald
-JAR_SOURCE  := herald-bot/target/herald-bot-0.1.0-SNAPSHOT.jar
+JAR_SOURCE  = $(shell ./scripts/find-artifact.sh bot)
 JAR_DEST    := $(HERALD_HOME)/herald-bot.jar
 LOG_FILE    := $(HOME)/Library/Logs/herald.log
 GUI_TARGET  := gui/$(shell id -u)
@@ -10,23 +10,19 @@ GUI_TARGET  := gui/$(shell id -u)
 UI_PLIST      := com.herald-ui.plist
 UI_PLIST_DEST := $(HOME)/Library/LaunchAgents/$(UI_PLIST)
 UI_LABEL      := com.herald-ui
-UI_JAR_SOURCE := herald-ui/target/herald-ui-0.1.0-SNAPSHOT.jar
+UI_JAR_SOURCE = $(shell ./scripts/find-artifact.sh ui)
 UI_JAR_DEST   := $(HERALD_HOME)/herald-ui.jar
 UI_LOG_FILE   := $(HOME)/Library/Logs/herald-ui.log
 
 JAVA_HOME_BIN := $(shell /usr/libexec/java_home 2>/dev/null)/bin/java
 JAVA_BIN      := $(if $(wildcard $(JAVA_HOME_BIN)),$(JAVA_HOME_BIN),/usr/bin/java)
 
-.PHONY: build build-ui build-all install install-ui install-all uninstall uninstall-ui start start-ui stop stop-ui restart restart-ui logs dev check-env
+.PHONY: build build-ui build-all install install-ui install-all uninstall uninstall-ui start start-ui stop stop-ui restart restart-ui logs logs-ui dev check-env verify
 
-build:
-	./mvnw -pl herald-bot package -DskipTests
+build build-ui build-all: verify
 
-build-ui:
-	./mvnw -pl herald-ui package -DskipTests
-
-build-all:
-	./mvnw package -DskipTests
+verify:
+	./scripts/build.sh
 
 check-env:
 	@fail=0; \
@@ -39,7 +35,7 @@ install: build check-env
 	@mkdir -p $(HERALD_HOME)
 	@mkdir -p $(HOME)/Library/LaunchAgents
 	@mkdir -p $(HOME)/Library/Logs
-	cp $(JAR_SOURCE) $(JAR_DEST)
+	cp "$(JAR_SOURCE)" "$(JAR_DEST)"
 	sed -e 's|__HOME__|$(HOME)|g' \
 	    -e 's|__JAVA_BIN__|$(JAVA_BIN)|g' \
 	    -e 's|__HERALD_TELEGRAM_BOT_TOKEN__|$(HERALD_TELEGRAM_BOT_TOKEN)|g' \
@@ -56,7 +52,7 @@ install-ui: build-ui
 	@mkdir -p $(HERALD_HOME)
 	@mkdir -p $(HOME)/Library/LaunchAgents
 	@mkdir -p $(HOME)/Library/Logs
-	cp $(UI_JAR_SOURCE) $(UI_JAR_DEST)
+	cp "$(UI_JAR_SOURCE)" "$(UI_JAR_DEST)"
 	sed -e 's|__HOME__|$(HOME)|g' \
 	    -e 's|__JAVA_BIN__|$(JAVA_BIN)|g' \
 	    $(UI_PLIST) > $(UI_PLIST_DEST)
@@ -96,5 +92,8 @@ restart-ui:
 logs:
 	tail -f $(LOG_FILE)
 
+logs-ui:
+	tail -f $(UI_LOG_FILE)
+
 dev:
-	./mvnw -pl herald-bot spring-boot:run
+	./run.sh bot

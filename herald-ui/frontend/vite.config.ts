@@ -18,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: resolve(import.meta.dirname, '../src/main/resources/static'),
+    outDir: resolve(import.meta.dirname, '../target/generated-resources/console/static'),
     emptyOutDir: true,
   },
   test: {

@@ -67,8 +67,8 @@ const obsidianQuery = ref('')
 const obsidianFolder = ref('')
 
 const allTabs: { id: TabId; label: string; hint: string }[] = [
-  { id: 'wiki',     label: 'Wiki',      hint: 'Typed long-term pages — concepts, entities, sources. The store Herald learns from.' },
-  { id: 'kv',       label: 'Legacy Key·Value', hint: 'SQLite key-value entries for quick facts and preferences.' },
+  { id: 'wiki',     label: 'File Memory', hint: 'Canonical learned memory — the index and typed Markdown notes Herald reads and maintains.' },
+  { id: 'kv',       label: 'Legacy Key·Value', hint: 'Retained SQLite entries for compatibility and manual reference. These are not automatically learned or loaded into agent context.' },
   { id: 'obsidian', label: 'Obsidian',  hint: 'Search the connected Obsidian vault.' },
 ]
 
@@ -123,8 +123,7 @@ function startEdit(key: string, value: string) {
 }
 function cancelEdit() { editingKey.value = null; editValue.value = '' }
 async function saveEdit(key: string) {
-  await store.updateEntry(key, editValue.value)
-  editingKey.value = null; editValue.value = ''
+  if (await store.updateEntry(key, editValue.value)) { editingKey.value = null; editValue.value = '' }
 }
 async function addEntry() {
   if (!newKey.value.trim()) return
@@ -159,8 +158,8 @@ function formatTime(ts: string | null): string {
     <PageHeader title="Memory" path="/memory">
       <template #right>
         <div v-if="activeTab === 'kv'" class="header-actions">
-          <button class="btn-secondary" @click="store.exportJson()">Export</button>
-          <button class="btn-secondary" @click="triggerImport()">Import</button>
+          <button class="btn-secondary" :disabled="store.loading" @click="store.exportJson()">Export legacy backup</button>
+          <button class="btn-secondary" @click="triggerImport()">Import legacy JSON</button>
           <input ref="importInput" type="file" accept=".json" class="hidden" @change="handleImport" />
         </div>
         <button
@@ -263,12 +262,17 @@ function formatTime(ts: string | null): string {
 
     <!-- ── Key·Value ────────────────────────────────────────────── -->
     <div v-show="activeTab === 'kv'">
+      <p class="hint legacy-ownership">Use File Memory for facts Herald should remember. Legacy edits stay in SQLite and do not update learned Markdown notes or runtime settings. Export backs up only legacy keys and values; importing restores those entries and overwrites matching keys. Neither operation changes File Memory or Obsidian.</p>
+      <div v-if="store.error" class="alert alert-warn" role="alert">
+        {{ store.error }}
+        <button class="btn-secondary" :disabled="store.loading" @click="store.fetchEntries()">Retry legacy load</button>
+      </div>
       <div
         v-if="importStatus"
         class="alert"
         :class="importStatus.errors.length ? 'alert-warn' : 'alert-ok'"
       >
-        <p>Imported {{ importStatus.imported }} entries.</p>
+        <p>Imported {{ importStatus.imported }} legacy entries.</p>
         <p v-for="(err, i) in importStatus.errors" :key="i" class="caption">{{ err }}</p>
         <button class="link-dismiss" @click="importStatus = null">dismiss</button>
       </div>
@@ -331,7 +335,7 @@ function formatTime(ts: string | null): string {
           </tr>
           <tr v-if="store.filteredEntries.length === 0">
             <td colspan="4" class="empty-cell">
-              {{ store.filter ? 'no entries match the filter' : 'no memory entries yet' }}
+              {{ store.filter ? 'no entries match the filter' : 'no legacy entries retained' }}
             </td>
           </tr>
         </tbody>

@@ -25,7 +25,6 @@ import org.springaicommunity.agent.tools.task.TaskOutputTool;
 import org.springaicommunity.agent.tools.task.TaskTool;
 import org.springaicommunity.agent.tools.task.claude.ClaudeSubagentType;
 import com.herald.agent.subagent.HeraldSubagentReferences;
-import org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.AnthropicCacheStrategy;
 import org.springframework.ai.chat.client.ChatClient;
@@ -93,6 +92,44 @@ public class HeraldAgentConfig {
     private static final ZoneId DEFAULT_TIMEZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter DATETIME_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a z");
+    private com.herald.tools.BrowserTools browserTools;
+    private com.herald.tools.BrowserScreenshotAdvisor browserScreenshotAdvisor;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBrowserTools(com.herald.tools.BrowserTools browserTools) { this.browserTools = browserTools; }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBrowserScreenshotAdvisor(com.herald.tools.BrowserScreenshotAdvisor advisor) {
+        this.browserScreenshotAdvisor = advisor;
+    }
+
+    private com.herald.mcp.McpToolRegistry mcpTools = com.herald.mcp.McpToolRegistry.disabled();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMcpTools(com.herald.mcp.McpToolRegistry mcpTools) {
+        this.mcpTools = mcpTools;
+    }
+
+    private ExecutionLimits executionLimits = ExecutionLimits.defaults();
+    private Runnable executionBudgetCheck = () -> {};
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureExecutionLimits(org.springframework.core.env.Environment environment,
+                                         Optional<BudgetPolicy> budgetPolicy) {
+        executionLimits = new ExecutionLimits(
+                environment.getProperty("herald.agent.execution.max-steps", Integer.class, 32),
+                environment.getProperty("herald.agent.execution.deadline", java.time.Duration.class, java.time.Duration.ofMinutes(5)),
+                environment.getProperty("herald.agent.execution.max-tokens", Long.class, 200_000L),
+                environment.getProperty("herald.agent.execution.max-cost-usd", Double.class, 0.0),
+                environment.getProperty("herald.agent.execution.input-usd-per-million", Double.class, 0.0),
+                environment.getProperty("herald.agent.execution.output-usd-per-million", Double.class, 0.0));
+        executionBudgetCheck = () -> budgetPolicy.ifPresent(policy -> {
+            var state = ExecutionState.current();
+            var decision = policy.evaluate(state == null ? null : state.usageSnapshot());
+            if (decision.isBlocked()) throw new ExecutionLimitException(decision.message());
+        });
+    }
+
     private static final int MAX_CONVERSATION_MESSAGES = 20;
 
     @Bean
@@ -221,7 +258,7 @@ public class HeraldAgentConfig {
 
     @Bean
     public org.springaicommunity.agent.tools.task.repository.TaskRepository taskRepository() {
-        return new DefaultTaskRepository();
+        return new OwnedTaskRepository();
     }
 
     @Bean
@@ -337,7 +374,8 @@ public class HeraldAgentConfig {
 
         // Configure multi-model routing for subagent delegation
         var subagentTypeBuilder = ClaudeSubagentType.builder()
-                .chatClientBuilder("default", ChatClient.builder(chatModel))
+                .chatClientBuilder("default", SubagentToolCallbackCompatibility.wrap(ChatClient.builder(chatModel)
+                        .defaultAdvisors(ExecutionAdvisors.create(executionLimits, executionBudgetCheck))))
                 .chatClientBuilder("haiku", chatClientBuilderForModel(chatModel, haikuModel))
                 .chatClientBuilder("sonnet", chatClientBuilderForModel(chatModel, sonnetModel))
                 .chatClientBuilder("opus", chatClientBuilderForModel(chatModel, opusModel));
@@ -430,13 +468,18 @@ public class HeraldAgentConfig {
                 remindersToolsOpt, remindersAvailabilityChecker,
                 webTools, cronToolsOpt, validateSkillTool);
 
+        if (browserTools != null) toolList.add(browserTools);
+        if (browserScreenshotAdvisor != null) advisorChain.add(browserScreenshotAdvisor);
+        var reservedToolNames = java.util.Arrays.stream(org.springframework.ai.support.ToolCallbacks.from(toolList.toArray()))
+                .map(callback -> callback.getToolDefinition().name()).toList();
+
         // Factory that creates a ChatClient.Builder with all shared config for any ChatModel
         Function<ChatModel, ChatClient.Builder> clientBuilderFactory = cm ->
                 ChatClient.builder(cm)
                         .defaultSystem(systemPrompt)
                         .defaultTools(toolList.toArray())
-                        .defaultToolCallbacks(buildToolCallbacks(taskTool, taskOutputTool,
-                                reloadableSkillsTool, activeToolNames, toolEventBus))
+                        .defaultToolCallbacks(mcpTools.appendTo(buildToolCallbacks(taskTool, taskOutputTool,
+                                reloadableSkillsTool, activeToolNames, toolEventBus), reservedToolNames))
                         .defaultAdvisors(advisorChain);
 
         // Register available provider ChatModels and their default model names
@@ -564,9 +607,7 @@ public class HeraldAgentConfig {
         // Ollama) 400 otherwise; harmless for Anthropic/Gemini. (#meeting-ingest 400)
         advisors.add(new LeadingTurnSanitizingAdvisor());
 
-        // Spring AI's built-in ToolCallAdvisor is added automatically by the chat
-        // client when tools are configured via .defaultTools / .defaultToolCallbacks
-        // (see DefaultChatClient). No explicit registration needed here.
+        advisors.addAll(ExecutionAdvisors.create(executionLimits, executionBudgetCheck));
 
         return advisors;
     }
@@ -603,8 +644,9 @@ public class HeraldAgentConfig {
     }
 
     private ChatClient.Builder chatClientBuilderForModel(ChatModel chatModel, String modelId) {
-        return ChatClient.builder(chatModel)
-                .defaultOptions(chatOptionsForModel(chatModel, modelId));
+        return SubagentToolCallbackCompatibility.wrap(ChatClient.builder(chatModel)
+                .defaultAdvisors(ExecutionAdvisors.create(executionLimits, executionBudgetCheck))
+                .defaultOptions(chatOptionsForModel(chatModel, modelId)));
     }
 
     // Used for subagent ChatClient builders — skills not needed for subagents

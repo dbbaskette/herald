@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useMemoryStore } from './memory'
 
@@ -7,6 +7,8 @@ const sampleEntries = [
   { key: 'bot.mode', value: 'production', lastUpdated: '2026-03-10T09:00:00Z' },
   { key: 'project.repo', value: 'herald', lastUpdated: '2026-03-09T08:00:00Z' },
 ]
+
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('memory store', () => {
   beforeEach(() => {
@@ -27,13 +29,15 @@ describe('memory store', () => {
     expect(store.loading).toBe(false)
   })
 
-  it('sets entries to empty array on fetch error', async () => {
+  it('preserves retained entries and reports a failed legacy load', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('fail')))
 
     const store = useMemoryStore()
-    await store.fetchEntries()
+    store.entries = [...sampleEntries]
+    expect(await store.fetchEntries()).toBe(false)
 
-    expect(store.entries).toEqual([])
+    expect(store.entries).toEqual(sampleEntries)
+    expect(store.error).toContain('Unable to load legacy')
     expect(store.loading).toBe(false)
   })
 
@@ -131,4 +135,48 @@ describe('memory store', () => {
 
     expect(ok).toBe(false)
   })
+})
+
+it('exports a fresh unfiltered legacy-only backup and restores its exact keys without touching files', async () => {
+  setActivePinia(createPinia())
+  const fixture = JSON.parse((await import('../../tests/fixtures/legacy-memory.json?raw')).default) as Record<string, string>
+  const entries = Object.entries(fixture).map(([key, value]) => ({ key, value, lastUpdated: 'fixture-time' }))
+  const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+    expect(url.startsWith('/api/memory')).toBe(true)
+    expect(url).not.toContain('/files')
+    if (options?.method === 'PUT') {
+      const key = decodeURIComponent(url.slice('/api/memory/'.length))
+      return new Response(JSON.stringify({ key, ...JSON.parse(String(options.body)), lastUpdated: 'restored-time' }))
+    }
+    expect(url).toBe('/api/memory')
+    return new Response(JSON.stringify(entries))
+  })
+  vi.stubGlobal('fetch', fetcher)
+  let blob: Blob | undefined, filename = ''
+  vi.stubGlobal('URL', {
+    createObjectURL: vi.fn((value: Blob) => { blob = value; return 'blob:fixture' }),
+    revokeObjectURL: vi.fn(),
+  })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { filename = this.download })
+  const store = useMemoryStore(); store.filter = 'user'; store.entries = []
+  expect(await store.exportJson()).toBe(true)
+  expect(filename).toBe('herald-legacy-memory-backup.json')
+  const text = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(blob!) })
+  expect(JSON.parse(text)).toEqual(fixture)
+  const restored = await store.importJson({ text: async () => text } as File)
+  expect(restored).toEqual({ imported: 3, errors: [] })
+  expect(fetcher.mock.calls.filter(call => call[1]?.method === 'DELETE')).toHaveLength(0)
+  vi.restoreAllMocks(); vi.unstubAllGlobals()
+})
+
+it('does not export stale or empty data when the fresh legacy backup read fails', async () => {
+  setActivePinia(createPinia())
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  const store = useMemoryStore(); store.entries = [...sampleEntries]
+  expect(await store.exportJson()).toBe(false)
+  expect(download).not.toHaveBeenCalled()
+  expect(store.entries).toEqual(sampleEntries)
+  expect(store.error).toContain('Retry')
+  vi.restoreAllMocks(); vi.unstubAllGlobals()
 })

@@ -74,7 +74,7 @@ public class ParallelBriefingService {
         }
 
         taskIds.add(dispatchTask("priorities",
-                "Use memory_list to surface the top 3 priorities or open items from memory. " +
+                "Use MemoryView to read MEMORY.md and the relevant linked Markdown notes, then surface the top 3 priorities or open items. " +
                 "Return a bullet list."));
 
         log.info("Dispatched {} parallel briefing threads", taskIds.size());

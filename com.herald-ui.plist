@@ -29,6 +29,8 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <key>SERVER_PORT</key>
+        <string>8080</string>
         <key>SERVER_ADDRESS</key>
         <string>127.0.0.1</string>
     </dict>

@@ -172,7 +172,7 @@ Herald separates tools into two categories matching how Spring AI handles them:
 ```bash
 # 1. Build
 git clone https://github.com/dbbaskette/herald.git && cd herald
-./mvnw package -DskipTests
+./scripts/build.sh
 
 # 2. Create a minimal agent
 cat > hello-agent.md << 'EOF'
@@ -188,7 +188,7 @@ EOF
 
 # 3. Run it
 export ANTHROPIC_API_KEY=sk-ant-...
-java -jar herald-bot/target/herald-bot-*.jar --agents=hello-agent.md \
+java -jar "$(./scripts/find-artifact.sh bot)" --agents=hello-agent.md \
     --prompt="What's in the current directory?"
 ```
 
@@ -215,6 +215,8 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 **Capabilities**
 - 🧩 **Skills** — hot-reloaded Markdown files in `skills/` ([Agent Skills — Part 1](https://spring.io/blog/2026/01/13/spring-ai-generic-agent-skills/))
 - 🕵️ **Subagents** — TaskTool delegation for Explore, Plan, Research, Bash ([Part 4](https://spring.io/blog/2026/01/27/spring-ai-agentic-patterns-4-task-subagents))
+- **Optional MCP tools** — explicitly allowlisted remote callbacks in the real agent loop; [setup and fixture](docs/mcp-client.md).
+- **Optional browser automation** — isolated browser sessions, approved actions and vision screenshots; [setup and boundaries](docs/integrations/browser.md).
 - 🌐 **A2A protocol** — delegate to remote agents alongside local ones ([Part 5](https://spring.io/blog/2026/01/29/spring-ai-agentic-patterns-a2a-integration))
 - ❓ **Clarify-before-act** — `AskUserQuestionTool` with Telegram inline-keyboard integration ([Part 2](https://spring.io/blog/2026/01/16/spring-ai-ask-user-question-tool))
 - ✅ **Structured task tracking** — `TodoWriteTool` with per-step progress messages ([Part 3](https://spring.io/blog/2026/01/20/spring-ai-agentic-patterns-3-todowrite))
@@ -233,10 +235,13 @@ For the full personal-assistant experience with Telegram + memory, jump to [Gett
 **Operational health**
 - 🩺 **`./run.sh doctor`** — fast diagnostic battery (Java, API keys, DB integrity + WAL mode, memory dir, skills, optional CLIs, ports). Human / `--json` / `--quiet` output; exit `0` clean / `1` warnings / `2` failures
 - 💸 **`/budget`** — daily and monthly spend caps, model ceiling, auto-pause when exceeded
+- **Execution limits** — shared step, deadline, token and optional estimated cost bounds for main turns and [delegated workers](docs/subagent-execution.md); [configuration](docs/agent-execution.md).
 - 📦 **Anthropic prompt caching** — `system_and_tools` strategy by default; large skills + tool catalog cached across turns for ~75% cost reduction on cache hits
 - 🧹 **Daily memory consolidation** — once per UTC day, the first turn injects a reminder for the model to merge duplicate / drop stale memory pages
 
 ## The Memory System
+
+File memory is the canonical learned store. The legacy SQLite key-value archive remains available for manual reference and backup; see [memory ownership](docs/memory-ownership.md).
 
 Herald implements the compounding-knowledge pattern from [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — memory that gets *more valuable* over time instead of turning into a scratchpad. Everything is plain Markdown on disk. No database, no lock-in.
 
@@ -448,10 +453,10 @@ You will also need:
 ```bash
 git clone https://github.com/dbbaskette/herald.git
 cd herald
-./mvnw package -DskipTests
+./scripts/build.sh
 ```
 
-Builds all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-bot`, `herald-ui`.
+Builds and verifies all modules: `herald-core`, `herald-persistence`, `herald-telegram`, `herald-bot`, `herald-ui`. Use Java 21 and Node 22.23.1 (`nvm install && nvm use`). The build runs lockfile-based `npm ci`; no credentials or running integrations are required. See [Building and installing](docs/building.md) for the shared local/CI/package path.
 
 ### Step 3 — Configure
 
@@ -490,7 +495,7 @@ HERALD_TELEGRAM_ALLOWED_CHAT_ID=your-chat-id
 ./run.sh ui        # ui only (port 8080)
 ./run.sh stop      # stops everything (broad sweep — see below)
 ./run.sh restart [bot|ui|all]
-./run.sh build     # builds all modules
+./run.sh build     # clean build and verification (same as ./scripts/build.sh)
 ./run.sh doctor    # diagnose common misconfig (--json, --quiet)
 ./run.sh onboard   # interactive setup wizard (writes .env)
 ./run.sh auth [scopes]  # Google OAuth — one flow for all Workspace scopes
@@ -532,11 +537,11 @@ Logs land in `~/Library/Logs/herald.log`.
 ### Step 6 — Start the console (optional)
 
 ```bash
-cd herald-ui/frontend && npm ci && npm run build && cd ../..
-./mvnw -pl herald-ui spring-boot:run
+./scripts/build.sh
+java -jar "$(./scripts/find-artifact.sh ui)"
 ```
 
-See [Console scheduling, skills and memory](docs/console-editing.md) for validation, recoverable memory edits and run-state behavior.
+See [Console scheduling, skills and memory](docs/console-editing.md) for validation, recoverable memory edits and run-state behavior. [Memory ownership and retention](docs/memory-ownership.md) explains canonical file memory and the separate legacy SQLite reference entries.
 
 Then open [http://localhost:8080](http://localhost:8080). The console requires Safari 16.4+, Chrome 111+, or Firefox 128+ for Tailwind CSS 4. Node is required to build the console assets, but not to run the packaged Java application.
 
@@ -808,7 +813,7 @@ Contributions welcome! To get started:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Before submitting, please run `./mvnw verify` and make sure the test suite is green.
+Before submitting, run `./scripts/build.sh`. It executes a clean Maven verification, including frontend typechecking, regression tests, asset generation, and executable-package comparison. See [Building and installing](docs/building.md).
 
 ## License
 

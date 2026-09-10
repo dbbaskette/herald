@@ -51,7 +51,9 @@ public class BudgetPolicy {
      * Evaluate whether a new turn may proceed. Called before every dispatch
      * in {@code TelegramPoller} and before every cron-driven prompt.
      */
-    public Decision evaluate() {
+    public Decision evaluate() { return evaluate(null); }
+
+    public Decision evaluate(ExecutionUsage activeTurn) {
         BudgetSettings s = load();
         if (s.isEmpty()) {
             return Decision.allow();
@@ -62,8 +64,9 @@ public class BudgetPolicy {
             return Decision.block("Paused until " + s.pausedUntil + ". Use /budget resume to override.");
         }
 
-        BigDecimal daily = usageTracker.estimateDailyCost();
-        BigDecimal monthly = usageTracker.estimateMonthlyCost();
+        BigDecimal pending = activeTurn == null ? BigDecimal.ZERO : usageTracker.estimateExecutionCost(activeTurn);
+        BigDecimal daily = usageTracker.estimateDailyCost().add(pending);
+        BigDecimal monthly = usageTracker.estimateMonthlyCost().add(pending);
 
         if (s.dailyCap != null && daily.compareTo(s.dailyCap) >= 0) {
             return Decision.block(String.format(
