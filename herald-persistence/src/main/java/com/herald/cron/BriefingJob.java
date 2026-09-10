@@ -21,6 +21,7 @@ import com.herald.tools.GwsAvailabilityChecker;
 import com.herald.tools.RemindersAvailabilityChecker;
 
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class BriefingJob {
 
     private static final Logger log = LoggerFactory.getLogger(BriefingJob.class);

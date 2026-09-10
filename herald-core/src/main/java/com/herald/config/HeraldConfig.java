@@ -40,14 +40,19 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
      * catalog and meeting folders live, so Herald can ingest completed meetings
      * into long-term memory. See issue #373.
      */
-    public record MeetingNotes(String dbPath, String dir) {
+    public record MeetingNotes(String dbPath, String dir, Boolean enabled) {
         @ConstructorBinding
         public MeetingNotes {}
+        public MeetingNotes(String dbPath, String dir) { this(dbPath, dir, null); }
     }
 
-    public record A2a(List<A2aAgent> agents, Server server) {
+    public record A2a(List<A2aAgent> agents, Server server, Client client) {
         @ConstructorBinding
         public A2a {}
+
+        public A2a(List<A2aAgent> agents, Server server) {
+            this(agents, server, null);
+        }
 
         /**
          * Backwards-compatible constructor for callers that predate the A2A
@@ -55,7 +60,11 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
          * disabled).
          */
         public A2a(List<A2aAgent> agents) {
-            this(agents, null);
+            this(agents, null, null);
+        }
+
+        /** Client-side remote delegation is opt-in even when agent entries exist. */
+        public record Client(Boolean enabled) {
         }
 
         /**
@@ -130,6 +139,9 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
                         List<String> anthropicSkills,
                         List<String> skillsRequiringApproval,
                         ModelFailover modelFailover) {
+        @ConstructorBinding
+        public Agent {}
+
         /**
          * Backwards-compatible constructor predating the model-failover block.
          * Keeps existing test fixtures + wiring code working without churn.
@@ -284,13 +296,18 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
         return mf.chain() != null && mf.chain().size() >= 2;
     }
 
-    public record Cron(String timezone) {
+    public record Cron(String timezone, Boolean enabled) {
+        @ConstructorBinding public Cron {}
+        public Cron(String timezone) { this(timezone, null); }
     }
 
     public record Weather(String location) {
     }
 
     public record Obsidian(String vaultPath, String vaultMode) {
+        @ConstructorBinding
+        public Obsidian {}
+
         /**
          * Backwards-compatible constructor predating the Phase E vault-mode flag.
          * Leaves {@code vaultMode} null so the resolver falls back to {@code auto}.
@@ -499,7 +516,7 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
      * for Anthropic prompt-cache hits. See issue #313.
      */
     public List<A2aAgent> a2aAgents() {
-        if (a2a != null && a2a.agents() != null) {
+        if (a2aClientEnabled() && a2a.agents() != null) {
             return a2a.agents().stream()
                     .sorted(java.util.Comparator.comparing(
                             A2aAgent::name,
@@ -507,5 +524,9 @@ public record HeraldConfig(Memory memory, Telegram telegram, Agent agent, Provid
                     .toList();
         }
         return List.of();
+    }
+
+    public boolean a2aClientEnabled() {
+        return a2a != null && a2a.client() != null && Boolean.TRUE.equals(a2a.client().enabled());
     }
 }

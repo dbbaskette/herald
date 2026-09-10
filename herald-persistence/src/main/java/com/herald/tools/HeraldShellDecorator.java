@@ -43,6 +43,13 @@ public class HeraldShellDecorator {
     public HeraldShellDecorator(ShellSecurityConfig securityConfig,
                          Optional<ShellCommandExecutor> delegate,
                          Optional<MessageSender> messageSender,
+                         ApprovalGate approvalGate) {
+        this(securityConfig, delegate, messageSender, null, approvalGate);
+    }
+
+    public HeraldShellDecorator(ShellSecurityConfig securityConfig,
+                         Optional<ShellCommandExecutor> delegate,
+                         Optional<MessageSender> messageSender,
                          @SuppressWarnings("unused") JdbcTemplate jdbcTemplate,
                          ApprovalGate approvalGate) {
         // jdbcTemplate parameter retained for binary compatibility with callers

@@ -101,6 +101,7 @@ herald:
     bot-token: ${HERALD_TELEGRAM_BOT_TOKEN:}
     allowed-chat-id: ${HERALD_TELEGRAM_ALLOWED_CHAT_ID:}
   cron:
+    enabled: ${HERALD_CRON_ENABLED:true}
     timezone: ${HERALD_CRON_TIMEZONE:America/New_York}
   agent:
     default-provider: ${HERALD_DEFAULT_PROVIDER:anthropic}
@@ -173,7 +174,14 @@ herald:
     keep-recent-messages: 5
   weather:
     location: ${HERALD_WEATHER_LOCATION:}
+  persistence:
+    enabled: ${HERALD_PERSISTENCE_ENABLED:true}
+  google:
+    enabled: ${HERALD_GOOGLE_ENABLED:false}
+  reminders:
+    enabled: ${HERALD_REMINDERS_ENABLED:false}
   meetingnotes:
+    enabled: ${HERALD_MEETINGNOTES_ENABLED:false}
     recap-enabled: ${HERALD_MEETINGNOTES_RECAP_ENABLED:true}
     reminders-enabled: ${HERALD_MEETINGNOTES_REMINDERS_ENABLED:true}
     # Optional integration with the MeetingNotes desktop app. db-path is the
@@ -186,6 +194,12 @@ herald:
     # missed (e.g. Herald was down). Silent no-op when nothing was missed.
     # Set to "-" to disable.
     catchup-cron: ${HERALD_MEETINGNOTES_CATCHUP_CRON:0 0 18 * * *}
+  a2a:
+    client:
+      # Remote delegation is opt-in even when agent entries are present.
+      enabled: ${HERALD_A2A_CLIENT_ENABLED:false}
+    server:
+      enabled: ${HERALD_A2A_SERVER_ENABLED:false}
   web:
     search-api-key: ${HERALD_WEB_SEARCH_API_KEY:}
   security:

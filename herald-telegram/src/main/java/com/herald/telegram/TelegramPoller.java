@@ -17,7 +17,8 @@ import com.pengrad.telegrambot.response.GetUpdatesResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
+import com.herald.config.TelegramConfiguredCondition;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +38,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 @Component
-@ConditionalOnProperty("herald.telegram.bot-token")
+@Conditional(TelegramConfiguredCondition.class)
 public class TelegramPoller {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramPoller.class);

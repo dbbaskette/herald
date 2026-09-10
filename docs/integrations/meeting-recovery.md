@@ -1,5 +1,11 @@
 # MeetingNotes recovery and delivery
 
+The bridge is opt-in. Set `HERALD_MEETINGNOTES_ENABLED=true` (or
+`herald.meetingnotes.enabled=true`) to register the webhook API, catalog,
+worker, recovery poll, and catch-up schedule. It defaults to `false`. Disabling
+it unregisters those components without deleting queued work; re-enabling it
+resumes recovery. Persistence must also be enabled for durable claims.
+
 Completed webhook payloads are durably stored in Herald's SQLite database before
 HTTP 202 is returned. Completion webhooks without a nonblank summary are rejected
 with HTTP 400 before enqueue; incomplete catalog records are skipped so later

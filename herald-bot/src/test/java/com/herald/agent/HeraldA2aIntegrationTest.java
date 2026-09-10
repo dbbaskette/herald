@@ -89,7 +89,7 @@ class HeraldA2aIntegrationTest {
                 null, null,
                 new HeraldConfig.Agent("TestBot", null, null, null, null, null, null),
                 null, null, null, null, null, null, null,
-                new HeraldConfig.A2a(List.of(a2aAgent)));
+                new HeraldConfig.A2a(List.of(a2aAgent), null, new HeraldConfig.A2a.Client(true)));
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))

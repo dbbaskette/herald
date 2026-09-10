@@ -19,6 +19,7 @@ import jakarta.annotation.PreDestroy;
 
 /** Durable, sequential worker shared by webhook, recovery and backfill. */
 @Service
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingIngestService {
     private static final Logger log = LoggerFactory.getLogger(MeetingIngestService.class);
     private static final long LEASE_MS = 120_000;

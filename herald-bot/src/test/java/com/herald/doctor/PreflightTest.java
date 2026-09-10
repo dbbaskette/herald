@@ -72,23 +72,23 @@ class PreflightTest {
     }
 
     @Test
-    void assistantModeFailsOnMissingTelegramToken(@TempDir Path tempDir) {
+    void assistantModeAllowsMissingTelegramToken(@TempDir Path tempDir) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Map<String, String> env = validAssistantEnv(tempDir);
         env.remove("HERALD_TELEGRAM_BOT_TOKEN");
         Preflight.Result r = Preflight.run(new String[0], env, sink(out));
         assertThat(r.fatalErrors()).extracting(Preflight.Issue::message)
-                .anyMatch(m -> m.contains("HERALD_TELEGRAM_BOT_TOKEN"));
+                .noneMatch(m -> m.contains("HERALD_TELEGRAM_BOT_TOKEN"));
     }
 
     @Test
-    void assistantModeFailsOnMissingChatId(@TempDir Path tempDir) {
+    void assistantModeAllowsMissingChatId(@TempDir Path tempDir) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Map<String, String> env = validAssistantEnv(tempDir);
         env.remove("HERALD_TELEGRAM_ALLOWED_CHAT_ID");
         Preflight.Result r = Preflight.run(new String[0], env, sink(out));
         assertThat(r.fatalErrors()).extracting(Preflight.Issue::message)
-                .anyMatch(m -> m.contains("HERALD_TELEGRAM_ALLOWED_CHAT_ID"));
+                .noneMatch(m -> m.contains("HERALD_TELEGRAM_ALLOWED_CHAT_ID"));
     }
 
     @Test
@@ -97,14 +97,13 @@ class PreflightTest {
         // Wipe all required vars and use a fresh tempDir so db check still passes.
         Map<String, String> env = Map.of("HERALD_DB_PATH", tempDir.resolve("herald.db").toString());
         Preflight.Result r = Preflight.run(new String[0], env, sink(out));
-        // Three errors expected: API key, bot token, chat id.
-        assertThat(r.fatalErrors()).hasSize(3);
+        // Telegram is optional; only the missing model provider is fatal.
+        assertThat(r.fatalErrors()).hasSize(1);
         // All printed in one go, not just the first.
         String report = out.toString(StandardCharsets.UTF_8);
         assertThat(report)
                 .contains("ANTHROPIC_API_KEY")
-                .contains("HERALD_TELEGRAM_BOT_TOKEN")
-                .contains("HERALD_TELEGRAM_ALLOWED_CHAT_ID");
+                .doesNotContain("HERALD_TELEGRAM_BOT_TOKEN", "HERALD_TELEGRAM_ALLOWED_CHAT_ID");
     }
 
     @Test
@@ -137,6 +136,24 @@ class PreflightTest {
             //noinspection ResultOfMethodCallIgnored
             lockedDir.toFile().setWritable(true);
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"openai,OPENAI_API_KEY,fixture", "gemini,GEMINI_API_KEY,fixture",
+            "ollama,OLLAMA_BASE_URL,http://localhost:11434", "lmstudio,LMSTUDIO_BASE_URL,http://localhost:1234"})
+    void alternativeProviderOnlyStartsWithoutTelegram(String provider, String key, String value, @TempDir Path dir) {
+        var env = Map.of("HERALD_DEFAULT_PROVIDER", provider, key, value,
+                "HERALD_DB_PATH", dir.resolve("herald.db").toString());
+        assertThat(Preflight.run(new String[0], env, sink(new ByteArrayOutputStream())).ok()).isTrue();
+        assertThat(Preflight.run(new String[]{"--agents=fixture.md"}, env, sink(new ByteArrayOutputStream())).ok()).isTrue();
+    }
+
+    @Test void configuredFallbackPassesAndDoctorMatches(@TempDir Path dir) {
+        var env = Map.of("HERALD_DEFAULT_PROVIDER", "anthropic", "OPENAI_API_KEY", "fixture",
+                "HERALD_DB_PATH", dir.resolve("herald.db").toString());
+        assertThat(Preflight.run(new String[0], env, sink(new ByteArrayOutputStream())).ok()).isTrue();
+        var check = new com.herald.doctor.checks.ProviderCapabilityCheck(DiagnosticEnvironment.load(new String[0], env));
+        assertThat(check.run().message()).contains("openai", "fallback from anthropic");
     }
 
     @Test

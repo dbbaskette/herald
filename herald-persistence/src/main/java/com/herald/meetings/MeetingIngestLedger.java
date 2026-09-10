@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 /** Durable queue. Every update by a worker is fenced by its unique lease token. */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.MeetingNotesEnabledCondition.class)
 public class MeetingIngestLedger {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final JdbcTemplate jdbc;

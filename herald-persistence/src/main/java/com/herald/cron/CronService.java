@@ -27,6 +27,7 @@ import org.springframework.context.annotation.DependsOn;
 
 @Service
 @DependsOn("dataSourceInitializer")
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class CronService {
 
     private static final Logger log = LoggerFactory.getLogger(CronService.class);

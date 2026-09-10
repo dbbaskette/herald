@@ -38,8 +38,16 @@ public class GwsAvailabilityChecker {
         this.commandRunner = commandRunner;
     }
 
+    private boolean enabled = true;
+
+    @Autowired
+    void configureLifecycle(org.springframework.core.env.Environment environment) {
+        enabled = com.herald.config.IntegrationLifecycle.googleEnabled(environment);
+    }
+
     @PostConstruct
     void checkGwsAvailability() {
+        if (!enabled) return;
         try {
             CommandResult result = commandRunner.run("gws --version");
             if (result.exitCode() == 0 && !result.output().isBlank()) {

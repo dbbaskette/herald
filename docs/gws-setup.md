@@ -1,6 +1,6 @@
 # Google Workspace CLI (`gws`) Setup Guide
 
-Herald uses the [Google Workspace CLI](https://github.com/nicholasgasior/gws) (`gws`) to interact with Gmail, Google Calendar, and Google Drive via skills. This is **optional** — Herald runs without it, but Google-related skills will be unavailable.
+Herald uses the [Google Workspace CLI](https://github.com/googleworkspace/google-workspace-cli) (`gws`) to interact with Gmail, Google Calendar, and Google Drive via skills. This is **optional** and disabled by default.
 
 ---
 
@@ -42,6 +42,7 @@ Add the OAuth client credentials to your `.env` file:
 ```bash
 GOOGLE_WORKSPACE_CLI_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_WORKSPACE_CLI_CLIENT_SECRET=your-client-secret
+HERALD_GOOGLE_ENABLED=true
 ```
 
 The `gws` CLI reads these environment variables automatically — no need to download a `client_secret.json` file.

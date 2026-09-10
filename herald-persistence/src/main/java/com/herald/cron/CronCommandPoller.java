@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 /** Consumes only cron commands; acceptance in the UI never implies execution. */
 @Component
 @DependsOn("dataSourceInitializer")
+@org.springframework.context.annotation.Conditional(com.herald.config.CronEnabledCondition.class)
 public class CronCommandPoller {
     private static final Logger log = LoggerFactory.getLogger(CronCommandPoller.class);
     private final JdbcTemplate jdbc;

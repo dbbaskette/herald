@@ -11,10 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class GwsToolsTest {
 
-    // Null JdbcTemplate is safe — getSetting() catches exceptions gracefully,
-    // and tests using the 3-arg constructor bypass DB-dependent code paths.
-    private static final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = null;
-
     private GwsAvailabilityChecker unavailableChecker() {
         GwsAvailabilityChecker checker = new GwsAvailabilityChecker(
                 command -> new GwsAvailabilityChecker.CommandResult(127, ""));
@@ -31,7 +27,7 @@ class GwsToolsTest {
 
     @Test
     void returnsUnavailableErrorWhenGwsNotConfigured() {
-        GwsTools tools = new GwsTools(unavailableChecker(), jdbcTemplate);
+        GwsTools tools = new GwsTools(unavailableChecker());
 
         String result = tools.gmail_threads_list();
         assertThat(result).contains("\"error\"");
@@ -40,7 +36,7 @@ class GwsToolsTest {
 
     @Test
     void calendarReturnsUnavailableErrorWhenGwsNotConfigured() {
-        GwsTools tools = new GwsTools(unavailableChecker(), jdbcTemplate);
+        GwsTools tools = new GwsTools(unavailableChecker());
 
         String result = tools.calendar_events_list();
         assertThat(result).contains("\"error\"");
@@ -50,7 +46,7 @@ class GwsToolsTest {
     @Test
     void returnsRawJsonOnSuccess() {
         String expectedJson = "[{\"id\":\"123\",\"subject\":\"Hello\"}]";
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(0, expectedJson, false));
 
         String result = tools.gmail_threads_list();
@@ -59,7 +55,7 @@ class GwsToolsTest {
 
     @Test
     void returnsEmptyArrayWhenOutputIsEmpty() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(0, "", false));
 
         String result = tools.gmail_threads_list();
@@ -69,7 +65,7 @@ class GwsToolsTest {
     @Test
     void calendarReturnsRawJsonOnSuccess() {
         String expectedJson = "[{\"id\":\"evt1\",\"title\":\"Meeting\"}]";
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(0, expectedJson, false));
 
         String result = tools.calendar_events_list();
@@ -78,7 +74,7 @@ class GwsToolsTest {
 
     @Test
     void returnsErrorJsonOnTimeout() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(-1, "", true));
 
         String result = tools.gmail_threads_list();
@@ -88,7 +84,7 @@ class GwsToolsTest {
 
     @Test
     void returnsErrorJsonOnNonZeroExitCode() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(1, "auth required", false));
 
         String result = tools.gmail_threads_list();
@@ -99,7 +95,7 @@ class GwsToolsTest {
 
     @Test
     void returnsErrorJsonWhenProcessRunnerThrows() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> { throw new RuntimeException("No such file"); });
 
         String result = tools.gmail_threads_list();
@@ -109,7 +105,7 @@ class GwsToolsTest {
 
     @Test
     void returnsErrorJsonOnIOException() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> { throw new IOException("No such file or directory"); });
 
         String result = tools.gmail_threads_list();
@@ -121,7 +117,7 @@ class GwsToolsTest {
     @Test
     void passesCorrectCommandForGmail() {
         List<String>[] captured = new List[1];
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> { captured[0] = command; return new GwsTools.ProcessResult(0, "[]", false); });
 
         tools.gmail_threads_list();
@@ -132,7 +128,7 @@ class GwsToolsTest {
     @Test
     void passesCorrectCommandForCalendar() {
         List<String>[] captured = new List[1];
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> { captured[0] = command; return new GwsTools.ProcessResult(0, "[]", false); });
 
         tools.calendar_events_list();
@@ -141,7 +137,7 @@ class GwsToolsTest {
 
     @Test
     void escapesSpecialCharactersInErrorOutput() {
-        GwsTools tools = new GwsTools(availableChecker(), jdbcTemplate,
+        GwsTools tools = new GwsTools(availableChecker(),
                 (command, env) -> new GwsTools.ProcessResult(1, "line1\nline2\ttab\r\nquote\"end", false));
 
         String result = tools.calendar_events_list();

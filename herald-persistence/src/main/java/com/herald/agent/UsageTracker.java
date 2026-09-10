@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
  * Queries the model_usage table to provide daily usage summaries and cost estimates.
  */
 @Component
+@org.springframework.context.annotation.Conditional(com.herald.config.PersistenceEnabledCondition.class)
 public class UsageTracker {
 
     // Cost per million tokens (input/output) for common models

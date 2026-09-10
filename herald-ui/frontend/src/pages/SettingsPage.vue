@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useSettingsStore, settingDefs } from '@/stores/settings'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useSettingsStore, settingDefs, validateSettings } from '@/stores/settings'
 import { useModelStatus } from '@/composables/useModelStatus'
 import NowStripe from '@/components/NowStripe.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -9,6 +9,10 @@ import MeetingsProgress from '@/components/MeetingsProgress.vue'
 
 const store = useSettingsStore()
 const form = ref<Record<string, string>>({})
+const changes = computed(() => Object.fromEntries(settingDefs
+  .filter(def => (form.value[def.key] ?? '') !== (store.settings[def.key] ?? ''))
+  .map(def => [def.key, form.value[def.key] ?? ''])))
+const fieldErrors = computed(() => ({ ...store.validationErrors, ...validateSettings(changes.value) }))
 
 // Model switcher — shared logic via the composable (same source as the chat
 // header). The Settings form keeps its own selected provider/model fields.
@@ -200,16 +204,18 @@ async function gwsLogout() {
   } catch { gwsActionMessage.value = 'Failed to disconnect' }
 }
 
+async function load() {
+  if (await store.fetchSettings()) reset()
+}
 onMounted(async () => {
-  await store.fetchSettings()
-  for (const def of settingDefs) {
-    form.value[def.key] = store.settings[def.key] ?? ''
-  }
+  await load()
   fetchGwsStatus()
   fetchModelStatus()
 })
+onUnmounted(() => { if (loginPollTimer) clearInterval(loginPollTimer) })
 
 async function save() {
+  if (store.saving || Object.keys(fieldErrors.value).length) return
   // Only send changed values
   const updates: Record<string, string> = {}
   for (const def of settingDefs) {
@@ -220,14 +226,17 @@ async function save() {
     }
   }
   if (Object.keys(updates).length === 0) return
-  await store.saveSettings(updates)
-  // Sync form with saved state
-  for (const def of settingDefs) {
-    form.value[def.key] = store.settings[def.key] ?? ''
+  const outcome = await store.saveSettings(updates)
+  if (outcome.success) {
+    for (const [key, submitted] of Object.entries(updates)) {
+      if (form.value[key] === submitted) form.value[key] = store.settings[key] ?? ''
+    }
   }
 }
 
 function reset() {
+  store.validationErrors = {}
+  store.saveError = null
   for (const def of settingDefs) {
     form.value[def.key] = store.settings[def.key] ?? ''
   }
@@ -249,8 +258,9 @@ function hasChanges(): boolean {
 
     <div v-if="store.loading" class="text-muted">Loading settings...</div>
 
-    <div v-else-if="store.error" class="alert-error card">
-      Failed to load settings: {{ store.error }}
+    <div v-else-if="store.loadError" class="alert-error card" role="alert">
+      Failed to load settings: {{ store.loadError }}
+      <button type="button" class="btn-secondary" @click="load()">Retry load</button>
     </div>
 
     <form v-else @submit.prevent="save()">
@@ -278,8 +288,26 @@ function hasChanges(): boolean {
               :type="def.secret ? 'password' : 'text'"
               :placeholder="def.placeholder"
               :autocomplete="def.secret ? 'off' : undefined"
+              :aria-invalid="!!fieldErrors[def.key]"
+              :aria-describedby="'state-' + def.key"
+              @input="delete store.validationErrors[def.key]; store.saved = false"
               class="input"
             />
+            <div :id="'state-' + def.key" class="setting-desc">
+              <p v-if="fieldErrors[def.key]" role="alert" class="status-err">{{ fieldErrors[def.key] }}</p>
+              <template v-if="store.statuses[def.key]">
+                <p>Saved preference: {{ store.statuses[def.key]?.saved || '(empty)' }}</p>
+                <p>Runtime effective: {{ store.statuses[def.key]?.effective ?? 'Unknown — bot unavailable' }}</p>
+                <p>Source: {{ store.statuses[def.key]?.source }}</p>
+                <p v-if="store.statuses[def.key]?.application === 'matches-runtime'">Matches runtime configuration. Saving did not apply this value.</p>
+                <p v-else-if="store.statuses[def.key]?.restartRequired">
+                  Not applied. Update <code>{{ store.statuses[def.key]?.environmentVariable }}</code> in the bot environment
+                  or <code>herald.{{ def.key }}</code> in the winning configuration, then restart the bot.
+                  Restart alone does not apply this saved preference.
+                </p>
+                <p v-else>Application status unknown until the bot is available.</p>
+              </template>
+            </div>
           </div>
         </div>
       </SectionCard>
@@ -376,7 +404,7 @@ function hasChanges(): boolean {
                   Connected<template v-if="gwsStatus.user"> as <span class="font-mono">{{ gwsStatus.user }}</span></template>
                 </template>
                 <template v-else-if="!gwsStatus.installed">gws CLI not installed</template>
-                <template v-else-if="!gwsStatus.clientConfigured">OAuth credentials not configured — enter Client ID and Secret above, save, then connect</template>
+                <template v-else-if="!gwsStatus.clientConfigured">OAuth credentials not configured — set them in .env using docs/gws-setup.md, then run ./run.sh all to reload the environment</template>
                 <template v-else-if="gwsStatus.hasRefreshToken && !gwsStatus.tokenValid">Token expired — reconnect to refresh</template>
                 <template v-else>Not connected</template>
               </span>
@@ -408,12 +436,14 @@ function hasChanges(): boolean {
                 from Google Cloud Console &rarr; Credentials &rarr; OAuth 2.0 Client ID,
                 copy the two values), then restart with
                 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">./run.sh all</code>.
+                Follow <a href="https://github.com/dbbaskette/herald/blob/main/docs/gws-setup.md" target="_blank" rel="noopener noreferrer">docs/gws-setup.md</a>.
               </p>
             </div>
 
             <!-- Action buttons -->
             <div class="flex items-center gap-3">
               <button
+                type="button"
                 v-if="gwsStatus.installed && gwsStatus.clientConfigured && !gwsStatus.authenticated"
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700"
                 @click="gwsLogin()"
@@ -421,6 +451,7 @@ function hasChanges(): boolean {
                 Connect Google Account
               </button>
               <button
+                type="button"
                 v-if="gwsStatus.authenticated"
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
                 @click="gwsLogout()"
@@ -428,6 +459,7 @@ function hasChanges(): boolean {
                 Disconnect
               </button>
               <button
+                type="button"
                 class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
                 @click="fetchGwsStatus()"
               >
@@ -449,22 +481,26 @@ function hasChanges(): boolean {
       </SectionCard>
 
       <!-- Action bar -->
+      <div v-if="store.saveError" role="alert" class="alert-error card">
+        {{ store.saveError }} Your draft is preserved.
+        <button type="button" class="btn-secondary" :disabled="store.saving || !!Object.keys(fieldErrors).length" @click="save()">Retry</button>
+      </div>
       <div class="action-bar">
-        <button type="submit" :disabled="store.saving || !hasChanges()" class="btn-primary">
+        <button type="submit" :disabled="store.saving || !hasChanges() || !!Object.keys(fieldErrors).length" class="btn-primary">
           {{ store.saving ? 'Saving...' : 'Save Changes' }}
         </button>
-        <button type="button" :disabled="!hasChanges()" class="btn-secondary" @click="reset()">
+        <button type="button" :disabled="store.saving || !hasChanges()" class="btn-secondary" @click="reset()">
           Reset
         </button>
-        <span v-if="store.saved" class="status-ok text-sm font-medium">Settings saved</span>
+        <span v-if="store.saved" role="status" class="status-ok text-sm font-medium">Preferences saved; runtime configuration unchanged</span>
       </div>
 
       <div class="info-note card">
         <p class="info-text">
           <strong>Note:</strong>
-          Some settings (persona, timezone, max context tokens) take effect on the next bot restart.
-          Obsidian vault path and weather location take effect immediately.
-          Google credentials live in <code>.env</code> — set them there and restart with <code>./run.sh all</code>.
+          Saved preferences do not override environment or YAML configuration. All five runtime values are startup configuration.
+          To apply a preference, update its winning configuration source and restart the bot; restarting alone does not load SQLite preferences.
+          Google credentials live in <code>.env</code> — set them there and run <code>./run.sh all</code> to reload environment configuration.
         </p>
       </div>
     </form>

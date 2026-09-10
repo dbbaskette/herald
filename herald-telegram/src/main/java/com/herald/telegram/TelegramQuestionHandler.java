@@ -7,7 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springaicommunity.agent.tools.AskUserQuestionTool;
 import org.springaicommunity.agent.tools.AskUserQuestionTool.Question;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
+import com.herald.config.TelegramConfiguredCondition;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -31,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * upstream validation expects.
  */
 @Component
-@ConditionalOnProperty("herald.telegram.bot-token")
+@Conditional(TelegramConfiguredCondition.class)
 public class TelegramQuestionHandler implements AskUserQuestionTool.QuestionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramQuestionHandler.class);
