@@ -8,7 +8,7 @@ import org.springaicommunity.agent.tools.task.repository.TaskRepository;
 
 /** Upstream task records with interruptible workers and originating-turn ownership. */
 public final class OwnedTaskRepository implements TaskRepository, AutoCloseable {
-    private record Entry(ExecutionState owner, BackgroundTask task, FutureTask<Void> work,
+    private record Entry(ExecutionState owner, BackgroundTask task, CompletableFuture<String> result, FutureTask<Void> work,
                          AtomicReference<ExecutionState.Registration> registration) {}
     private final ConcurrentHashMap<String, Entry> entries = new ConcurrentHashMap<>();
     private volatile boolean closed;
@@ -25,9 +25,12 @@ public final class OwnedTaskRepository implements TaskRepository, AutoCloseable 
             try (var scope = ExecutionState.attach(owner)) {
                 if (channel != null) ChatChannelContext.set(channel, conversation);
                 if (owner != null) owner.check();
-                result.complete(supplier.get());
+                String value = supplier.get();
+                if (owner != null) owner.check();
+                result.complete(value);
             } catch (Throwable failure) {
-                result.completeExceptionally(failure);
+                if ((owner != null && owner.cancelled.get()) || Thread.currentThread().isInterrupted()) result.cancel(false);
+                else result.completeExceptionally(failure);
             } finally { ChatChannelContext.clear(); }
             return null;
         }) {
@@ -41,14 +44,14 @@ public final class OwnedTaskRepository implements TaskRepository, AutoCloseable 
             }
         };
         var task = new BackgroundTask(id, result);
-        var entry = new Entry(owner, task, work, registration);
+        var entry = new Entry(owner, task, result, work, registration);
         if (entries.putIfAbsent(id, entry) != null) throw new IllegalArgumentException("Task already exists");
         result.whenComplete((ignored, failure) -> { if (result.isCancelled()) work.cancel(true); });
         if (owner != null) {
-            registration.set(owner.onCancel(() -> { entries.remove(id, entry); work.cancel(true); }));
+            registration.set(owner.onCancel(() -> { entries.remove(id, entry); cancel(entry); }));
             if (work.isCancelled()) { var hook = registration.getAndSet(null); if (hook != null) hook.close(); }
         }
-        if (closed) work.cancel(true);
+        if (closed) cancel(entry);
         Thread.ofVirtual().name("herald-worker").start(work);
         return task;
     }
@@ -67,6 +70,8 @@ public final class OwnedTaskRepository implements TaskRepository, AutoCloseable 
         });
     }
     private void cancel(Entry entry) {
+        // Publish cancellation before interrupting: a fast interrupted supplier must not win with success.
+        entry.result.cancel(false);
         entry.work.cancel(true);
         var hook = entry.registration.getAndSet(null);
         if (hook != null) hook.close();

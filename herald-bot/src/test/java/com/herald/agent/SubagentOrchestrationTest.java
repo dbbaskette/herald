@@ -145,7 +145,7 @@ class SubagentOrchestrationTest {
         assertThat(messages.getValue().getParameters().get("text").toString()).contains("Partial results preserved");
     }
 
-    @Test void cancellingParentInterruptsWorkerAndPreventsOtherTurnReadingItsTask() throws Exception {
+    @org.junit.jupiter.api.RepeatedTest(20) void cancellingParentInterruptsWorkerAndPreventsOtherTurnReadingItsTask() throws Exception {
         var owner = new ExecutionState(ExecutionLimits.defaults());
         var other = new ExecutionState(ExecutionLimits.defaults());
         var entered = new CountDownLatch(1); var interrupted = new CountDownLatch(1);
