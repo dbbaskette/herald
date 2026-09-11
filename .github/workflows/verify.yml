@@ -30,3 +30,6 @@ jobs:
           browser_fixture="$(command -v google-chrome)"
           test -x "$browser_fixture"
           ./scripts/build.sh "-Dherald.browser.fixture-executable=$browser_fixture"
+      - name: GenAI local and bound modes use the same packaged bot
+        timeout-minutes: 8
+        run: python3 smoke/genai-binding.py --jar herald-bot/target/herald-bot-0.4.1-SNAPSHOT.jar

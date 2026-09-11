@@ -171,6 +171,10 @@ otherwise.
 
 ## GenAI binding: one packaged artifact
 
+The GitHub verification workflow runs this harness after its clean Maven `verify`
+against the resulting bot JAR. Both the pinned build and this step must pass;
+the presence of the harness alone is not packaged-artifact evidence.
+
 ```sh
 bash mvnw -pl herald-bot -am package
 python3 smoke/genai-binding.py --jar herald-bot/target/herald-bot-0.4.1-SNAPSHOT.jar

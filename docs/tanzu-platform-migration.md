@@ -280,7 +280,7 @@ v1 runs at **1 instance** and needs none of this. To scale `herald-bot` past 1:
 - [ ] `herald-core/.../config/HeraldLimits.java:50` — make `UPLOADS_DIR` read `HERALD_UPLOADS_DIR` (only hardcoded `~/.herald` path left).
 - [ ] `herald-persistence/.../config/DataSourceConfig.java` + `herald-ui/.../config/DataSourceConfig.java` — Postgres on the `cloud` profile (prefer cfenv autoconfig; keep SQLite under `local`).
 - [ ] `schema.sql` — Postgres dialect (`INSERT OR IGNORE` → `ON CONFLICT DO NOTHING`, types, autoincrement); wire Flyway or `spring.sql.init`.
-- [x] Implement GenAI chat binding mapping to existing `openai` properties; synthetic coverage and artifact smoke harness are in the binding guide. Full build/live-foundation verification remains to be run in an enabled environment.
+- [ ] Accept GenAI chat binding mapping to existing `openai` properties. Implementation and synthetic coverage exist; target broker contract verification, the pinned build and the same-JAR smoke result are still required. See the binding guide. A live-foundation check is additional evidence.
 - [ ] Configure and verify GenAI embeddings separately.
 - [ ] Add `application-cloud.yaml` + a `cloud` profile that: disables `HeraldShellDecorator`, `RemindersTools`/checker, `ObsidianController`, `LmStudioModelDiscovery`; points all paths at `/var/data`; selects GenAI.
 - [ ] `manifest.yml` (+ optional `Procfile`), buildpack/JDK config.

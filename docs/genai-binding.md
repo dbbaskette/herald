@@ -1,8 +1,10 @@
 # Tanzu AI Services model binding
 
 Herald resolves a Tanzu GenAI/AI Services binding at startup into the existing
-`openai` provider. The bot JAR supports both local configuration and bindings without
-rebuilding. This is model configuration support, **not complete CF deployability**.
+`openai` provider. The adapter is implemented, but acceptance remains pending target
+broker contract verification and a passing pinned-build/same-JAR smoke run. The
+intended behavior is local configuration or bindings without rebuilding. This is
+model configuration support, **not complete CF deployability**.
 SQLite, local files/CLIs, optional desktop capabilities and Google API runtime work
 remain in [the migration plan](tanzu-platform-migration.md) and #388. Keep one bot
 instance, a private bot API, and a separately authenticated public console.
@@ -170,3 +172,21 @@ and packaging could not run here. The smoke script passed Python compilation and
 CLI checks, but the packaged-artifact smoke remains unrun. No live-foundation test
 was performed. Run both commands above in a dependency-enabled environment before
 accepting deployment evidence.
+
+### Review retry
+
+The retry reproduced both external blockers. The AI Services 10.3 schema URL still
+returned HTTP 403, and no target broker version or target binding contract has been
+supplied. Existing synthetic fixtures must not be described as target-derived.
+
+`MAVEN_USER_HOME=/tmp/herald-genai-wrapper bash mvnw -pl herald-bot -am verify`
+failed fetching the wrapper distribution. Installed Maven with a writable temporary
+repository also failed resolving the pinned Spring Boot 4.1.1 parent because Maven
+Central DNS was unavailable. No new package was produced; the same-JAR smoke remains
+unrun. The earlier cached-library checks do not satisfy this acceptance criterion.
+
+The existing GitHub verification workflow now runs `smoke/genai-binding.py` after
+its clean pinned Maven `verify`, using the JAR produced by that build. A failed
+smoke fails the job. Adding this step is not execution evidence: acceptance needs
+a successful workflow run (or equivalent local commands), its source revision and
+the smoke's unchanged SHA-256 result, alongside the target broker contract evidence.
