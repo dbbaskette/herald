@@ -49,6 +49,13 @@ spring:
         # Empty URL placeholders are invalid transports when MCP is enabled.
 
 herald:
+  genai:
+    binding:
+      # A selected binding overrides the entire OpenAI endpoint/key/model group.
+      # Disable to use local environment-over-YAML configuration, ignoring VCAP_SERVICES.
+      enabled: ${HERALD_GENAI_BINDING_ENABLED:true}
+      service-name: ${HERALD_GENAI_BINDING_SERVICE_NAME:}
+      model: ${HERALD_GENAI_BINDING_MODEL:} # Required for endpoint-only credentials.
   mcp:
     allowed-tools: ${HERALD_MCP_ALLOWED_TOOLS:} # Exact exposed names; empty denies every remote tool.
   memory:
@@ -89,10 +96,8 @@ herald:
     lmstudio:
       base-url: ${LMSTUDIO_BASE_URL:}
       api-key: ${LMSTUDIO_API_KEY:lm-studio}
-    # OpenAI provider — enabled when HERALD_PROVIDERS_OPENAI_API_KEY env var is set
-    # openai:
-    #   api-key: ${OPENAI_API_KEY}
-    #   base-url: https://api.openai.com
+    # OpenAI is enabled by OPENAI_API_KEY or HERALD_PROVIDERS_OPENAI_API_KEY,
+    # or a selected GenAI binding. Canonical provider properties also work.
     # Ollama provider — enabled when HERALD_PROVIDERS_OLLAMA_BASE_URL env var is set
     # ollama:
     #   base-url: http://localhost:11434

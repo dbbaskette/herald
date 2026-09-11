@@ -1,0 +1,16 @@
+{
+  "ai-services": [
+    {
+      "name": "endpoint-service",
+      "tags": [
+        "llm"
+      ],
+      "credentials": {
+        "endpoint": {
+          "api_base": "https://models.example.test/team/",
+          "api_key": "synthetic-secret"
+        }
+      }
+    }
+  ]
+}

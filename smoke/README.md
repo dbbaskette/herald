@@ -168,3 +168,30 @@ otherwise.
   later if false positives appear.
 - **`chat_send` doesn't stream.** It POSTs to the JSON endpoint, not SSE.
   Streaming-specific regressions need a separate test.
+
+## GenAI binding: one packaged artifact
+
+The GitHub verification workflow runs this harness after its clean Maven `verify`
+against the resulting bot JAR. Both the pinned build and this step must pass;
+the presence of the harness alone is not packaged-artifact evidence.
+
+```sh
+bash mvnw -pl herald-bot -am package
+python3 smoke/genai-binding.py --jar herald-bot/target/herald-bot-0.4.1-SNAPSHOT.jar
+```
+
+Requires Java 21 and standard-library Python 3.9+. No API credentials or live
+foundation are needed. The harness starts a loopback OpenAI stub and runs the same
+JAR sequentially in local, single-model binding, and endpoint-only binding modes.
+It isolates state under a temporary Java user home, allows no inherited provider
+credentials/configuration, disables Telegram (no token), cron and MCP, checks a
+chat response and outgoing auth/model/path, and checks the JAR hash after every run.
+Bound runs deliberately retain a synthetic conflicting `OPENAI_API_KEY` to detect
+SDK environment fallback bypassing binding precedence. Processes have bounded
+timeouts and are stopped on failure. `--timeout` changes the per-run time budget.
+Bot logs are temporary and are not printed, avoiding credential diagnostics.
+
+This provides synthetic model-binding evidence only. Follow
+[the binding guide](../docs/genai-binding.md) and
+[the migration plan](../docs/tanzu-platform-migration.md) for the separate CF
+storage/runtime and private bot/public console prerequisites.

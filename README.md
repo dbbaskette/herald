@@ -828,3 +828,11 @@ Before submitting, run `./scripts/build.sh`. It executes a clean Maven verificat
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for details.
+
+### Tanzu GenAI model bindings
+
+The bot resolves tagged `VCAP_SERVICES` bindings into its existing OpenAI provider,
+with binding → environment → YAML precedence. Set `HERALD_GENAI_BINDING_ENABLED=false`
+to explicitly use local configuration. See [binding formats, configuration and CF examples](docs/genai-binding.md)
+and the [single-instance internal-route manifest](manifest.yml). This model-binding
+support does not complete the [storage/runtime migration](docs/tanzu-platform-migration.md).

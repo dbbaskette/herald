@@ -188,6 +188,78 @@ class HeraldAgentConfigIntegrationTest {
         assertThat(switcher.getActiveClient()).isNotNull();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"local", "bound", "persisted"})
+    void modelSwitcherUsesResolvedBindingAndRetainsPersistedOverrides(String mode, @TempDir Path tempDir) throws Exception {
+        HeraldAgentConfig agentConfig = new HeraldAgentConfig();
+
+        ChatModel mockAnthropicModel = mock(ChatModel.class);
+        ChatModel mockOpenAiModel = mock(OpenAiChatModel.class);
+        ChatModel mockOllamaModel = mock(OpenAiChatModel.class);
+
+        String binding;
+        try (var input = getClass().getResourceAsStream("/genai/single-model.json")) {
+            binding = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        var env = com.herald.doctor.DiagnosticEnvironment.load(
+                new String[]{"--spring.config.location=classpath:/application.yaml"},
+                java.util.Map.of("VCAP_SERVICES", mode.equals("local") ? "{}" : binding,
+                        "HERALD_DEFAULT_PROVIDER", "openai", "OPENAI_API_KEY", "local-key",
+                        "HERALD_MODEL_OPENAI", "local-model", "HERALD_AGENT_MODEL_CATALOG_OPENAI", "local-model",
+                        "HERALD_MEMORIES_DIR", tempDir.resolve("memories").toString(),
+                        "HERALD_AGENT_CONTEXT_FILE", tempDir.resolve("CONTEXT.md").toString()));
+        HeraldConfig config = org.springframework.boot.context.properties.bind.Binder.get(env)
+                .bind("herald", HeraldConfig.class).get();
+        String resolvedModel = env.getProperty("herald.agent.model.openai");
+        String catalog = env.getProperty("herald.agent.model-catalog.openai");
+
+        JdbcChatMemoryRepository chatMemoryRepository = mock(JdbcChatMemoryRepository.class);
+        ChatMemory chatMemory = agentConfig.chatMemory(chatMemoryRepository);
+
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn(mode.equals("persisted") ? java.util.Collections.singletonList(new String[]{"openai", "persisted-model"}) : List.of());
+
+        ModelSwitcher switcher = agentConfig.modelSwitcher(
+                mockAnthropicModel, new org.springaicommunity.agent.tools.task.repository.DefaultTaskRepository(), config, Optional.empty(), new com.herald.agent.PromptDumpAdvisor(false), Optional.of(chatMemory),
+                mock(HeraldShellDecorator.class),
+                new FileSystemTools(), Optional.empty(), mock(ObjectProvider.class),
+                Optional.of(mock(TelegramSendTool.class)),
+                Optional.of(mock(GwsTools.class)),
+                Optional.empty(), mock(RemindersAvailabilityChecker.class),
+                new WebTools(""), Optional.of(mock(CronTools.class)),
+                Optional.of(jdbcTemplate),
+                new ClassPathResource("prompts/MAIN_AGENT_SYSTEM_PROMPT.md"),
+                tempDir.toString(), new ReloadableSkillsTool(tempDir.resolve("skills").toString()),
+                new ValidateSkillTool(tempDir.resolve("skills").toString()),
+                SONNET_MODEL, HAIKU_MODEL, SONNET_MODEL, OPUS_MODEL,
+                resolvedModel, OLLAMA_MODEL, GEMINI_MODEL, LMSTUDIO_MODEL,
+                "", catalog, "", "", "",
+                "system_and_tools",
+                "daily",
+                Optional.of(mockOpenAiModel), Optional.of(mockOllamaModel), Optional.empty(), Optional.empty(),
+                List.of("shell", "filesystem", "todoWrite", "askUserQuestion", "task", "taskOutput", "skills", "web", "toolSearchTool"),
+                Optional.empty(),
+                new com.herald.agent.ToolEventBus());
+
+        assertThat(switcher.getActiveProvider()).isEqualTo("openai");
+        assertThat(switcher.getActiveModel()).isEqualTo(mode.equals("persisted") ? "persisted-model" : resolvedModel);
+        assertThat(switcher.getAvailableProviderDefaults()).containsEntry("openai", resolvedModel);
+        assertThat(switcher.getProviderModelCatalog().get("openai")).containsExactly(resolvedModel);
+
+        // Exercise the same builder used for OpenAI subagents, inspecting the outgoing prompt.
+        when(mockOpenAiModel.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(
+                new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage("PONG")))));
+        org.springframework.ai.chat.client.ChatClient.Builder subagentBuilder =
+                org.springframework.test.util.ReflectionTestUtils.invokeMethod(agentConfig,
+                        "chatClientBuilderForModel", mockOpenAiModel, resolvedModel);
+        assertThat(subagentBuilder.build().prompt().user("ping").call().content()).isEqualTo("PONG");
+        var prompt = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+        org.mockito.Mockito.verify(mockOpenAiModel).call(prompt.capture());
+        assertThat(prompt.getValue().getOptions().getModel()).isEqualTo(resolvedModel);
+    }
+
     @Test
     void loadSubagentReferencesFromDirectory(@TempDir Path tempDir) throws IOException {
         Files.writeString(tempDir.resolve("research-agent.md"),

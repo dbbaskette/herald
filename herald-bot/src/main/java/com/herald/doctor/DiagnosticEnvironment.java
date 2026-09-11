@@ -14,6 +14,7 @@ public final class DiagnosticEnvironment {
         environment.getPropertySources().addFirst(new SimpleCommandLinePropertySource(args));
         new org.springframework.boot.support.SpringApplicationJsonEnvironmentPostProcessor().postProcessEnvironment(environment, null);
         ConfigDataEnvironmentPostProcessor.applyTo(environment);
+        com.herald.config.GenAiBindingEnvironmentPostProcessor.applyTo(environment);
         return environment;
     }
 }
