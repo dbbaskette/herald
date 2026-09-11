@@ -1,0 +1,21 @@
+# Model-binding example only. Storage and runtime prerequisites are still required;
+# see docs/tanzu-platform-migration.md and docs/genai-binding.md before deployment.
+applications:
+  - name: herald-bot
+    instances: 1
+    path: herald-bot/target/herald-bot-0.4.1-SNAPSHOT.jar
+    memory: 2G
+    buildpacks:
+      - java_buildpack_offline
+    routes:
+      - route: herald-bot.apps.internal
+    services:
+      - ((genai-service))
+    env:
+      JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
+      HERALD_BOT_BIND_ADDRESS: 0.0.0.0
+      # CF provides PORT; use it rather than the local bot port default.
+      HERALD_SERVER_PORT: '${PORT}'
+      HERALD_GENAI_BINDING_SERVICE_NAME: ((genai-service))
+      HERALD_GENAI_BINDING_MODEL: ((genai-model))
+      HERALD_CRON_ENABLED: 'false'

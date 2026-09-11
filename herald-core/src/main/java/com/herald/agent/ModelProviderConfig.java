@@ -57,14 +57,15 @@ public class ModelProviderConfig {
                 com.openai.client.okhttp.OkHttpClient.builder()
                         .timeout(AbstractOpenAiOptions.DEFAULT_TIMEOUT)
                         .build());
+        // Pass the resolved key explicitly: OpenAiSetup otherwise re-reads OPENAI_API_KEY.
         Credential credential = BearerTokenCredential.create(apiKey);
         OpenAIClient syncClient = OpenAiSetup.setupSyncClient(
-                baseUrl, null, credential, null, null, null, false, false,
+                baseUrl, apiKey, credential, null, null, null, false, false,
                 null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
                 ObservationRegistry.NOOP, Metrics.globalRegistry, List.of())
                 .withOptions(b -> b.httpClient(sharedSig));
         OpenAIClientAsync asyncClient = OpenAiSetup.setupAsyncClient(
-                baseUrl, null, credential, null, null, null, false, false,
+                baseUrl, apiKey, credential, null, null, null, false, false,
                 null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
                 ObservationRegistry.NOOP, Metrics.globalRegistry, List.of())
                 .withOptions(b -> b.httpClient(sharedSig));
@@ -101,10 +102,11 @@ public class ModelProviderConfig {
     }
 
     private static ChatModel buildOpenAiChatModel(String apiKey, String baseUrl) {
+        // Pass the resolved key explicitly: OpenAiSetup otherwise re-reads OPENAI_API_KEY.
         Credential credential = BearerTokenCredential.create(apiKey);
         OpenAIClient syncClient = buildSyncClient(apiKey, baseUrl);
         OpenAIClientAsync asyncClient = OpenAiSetup.setupAsyncClient(
-                baseUrl, null, credential, null, null, null, false, false,
+                baseUrl, apiKey, credential, null, null, null, false, false,
                 null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
                 ObservationRegistry.NOOP, Metrics.globalRegistry, List.of());
         return OpenAiChatModel.builder()
@@ -114,9 +116,10 @@ public class ModelProviderConfig {
     }
 
     private static OpenAIClient buildSyncClient(String apiKey, String baseUrl) {
+        // Pass the resolved key explicitly: OpenAiSetup otherwise re-reads OPENAI_API_KEY.
         Credential credential = BearerTokenCredential.create(apiKey);
         return OpenAiSetup.setupSyncClient(
-                baseUrl, null, credential, null, null, null, false, false,
+                baseUrl, apiKey, credential, null, null, null, false, false,
                 null, AbstractOpenAiOptions.DEFAULT_TIMEOUT, 2, null, null,
                 ObservationRegistry.NOOP, Metrics.globalRegistry, List.of());
     }

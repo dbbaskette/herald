@@ -124,20 +124,22 @@ Make it env-configurable (`HERALD_UPLOADS_DIR`) like every other path. This is t
 
 ---
 
-## 4. Model binding — the easy win (GenAI tile)
+## 4. Model binding — existing OpenAI provider
 
-**Today:** `herald-core/.../agent/ModelProviderConfig.java` builds `ChatModel` beans for `openai`, `ollama`, `gemini`, `lmstudio` — **all via the OpenAI-compatible client** (`OpenAiSetup` / `OpenAiChatModel`) — plus Anthropic via Spring AI autoconfig. Providers are gated on config (`herald.providers.<p>.base-url` / `.api-key`). LM Studio (`localhost:1234`) and Ollama (`localhost:11434`) default to localhost; LM Studio also provides the **embedding** model and a discovery/rescan flow.
+The startup adapter now maps tagged GenAI/AI Services bindings to the existing
+`openai` provider. See [the binding contract and examples](genai-binding.md) for
+supported credentials, evidence limits, precedence, selection and sanitized errors.
+Discovery uses `genai`/`llm` tags, independent of offering/plan names. A selected
+binding supplies endpoint, key, model, catalog and default provider together;
+`HERALD_GENAI_BINDING_ENABLED=false` restores local environment/YAML configuration.
+The doctor path shares this resolution.
 
-**Because Herald already speaks OpenAI-compatible HTTP, the Tanzu GenAI tile drops straight in.** The GenAI service binding exposes an **OpenAI-compatible base URL + API key** (and often an embeddings model) in `VCAP_SERVICES`.
-
-**Change:**
-1. Add a **`tanzu-genai` provider** (or reuse the `openai`/`lmstudio` provider wiring) whose `base-url` + `api-key` are read from the **bound GenAI service** (`VCAP_SERVICES` → service label `genai`). Spring AI ships a Tanzu GenAI/Cloud Bindings integration that can surface this as properties — simplest is a tiny `EnvironmentPostProcessor`/`@Configuration` that maps the binding's `uri`/`api_key`/`model` to `herald.providers.tanzu-genai.*`.
-2. Set `HERALD_DEFAULT_PROVIDER=tanzu-genai` and the model name to whatever the tile serves (e.g. a bound `mistral`/`llama` chat model; an embedding model for the vault/RAG).
-3. **Embeddings:** point `lmstudioEmbeddingModel` (or a renamed `genaiEmbeddingModel`) at the GenAI embeddings endpoint. If the tile doesn't serve embeddings, the vault/RAG indexing stays disabled (it's not wired up yet anyway).
-4. **Disable LM Studio discovery on CF** (`LmStudioModelDiscovery` + the `localhost→127.0.0.1` normalization are desktop-specific). Gate behind the `local` profile or `herald.providers.lmstudio.base-url` being set.
-5. **Anthropic / OpenAI / Gemini** can still be reached directly *if egress is opened* (see §7) and keys are supplied — useful for failover. Otherwise leave them unconfigured so their beans don't activate.
-
-**This is the part the user already anticipated ("for sure it will just bind to a local model").** On TP, "local model" = the GenAI tile, bound, OpenAI-compatible. **Effort:** ~½ day. **Risk:** low.
+The root manifest demonstrates an existing model service binding, Java 21, one
+instance and an internal route only. It is not a complete deployment recipe.
+Storage, desktop capability gating, CLI/runtime changes and Google API work remain
+separate prerequisites (including #388). No cloud profile is introduced here.
+Embedding bindings and remote model discovery are outside this adapter's scope.
+Direct providers/failover still require their own configuration and permitted egress.
 
 ---
 
@@ -278,7 +280,8 @@ v1 runs at **1 instance** and needs none of this. To scale `herald-bot` past 1:
 - [ ] `herald-core/.../config/HeraldLimits.java:50` — make `UPLOADS_DIR` read `HERALD_UPLOADS_DIR` (only hardcoded `~/.herald` path left).
 - [ ] `herald-persistence/.../config/DataSourceConfig.java` + `herald-ui/.../config/DataSourceConfig.java` — Postgres on the `cloud` profile (prefer cfenv autoconfig; keep SQLite under `local`).
 - [ ] `schema.sql` — Postgres dialect (`INSERT OR IGNORE` → `ON CONFLICT DO NOTHING`, types, autoincrement); wire Flyway or `spring.sql.init`.
-- [ ] Add GenAI provider wiring in `ModelProviderConfig` (or map the binding → `herald.providers.*`); set default provider/model; embeddings → GenAI.
+- [x] Implement GenAI chat binding mapping to existing `openai` properties; synthetic coverage and artifact smoke harness are in the binding guide. Full build/live-foundation verification remains to be run in an enabled environment.
+- [ ] Configure and verify GenAI embeddings separately.
 - [ ] Add `application-cloud.yaml` + a `cloud` profile that: disables `HeraldShellDecorator`, `RemindersTools`/checker, `ObsidianController`, `LmStudioModelDiscovery`; points all paths at `/var/data`; selects GenAI.
 - [ ] `manifest.yml` (+ optional `Procfile`), buildpack/JDK config.
 
@@ -299,9 +302,9 @@ v1 runs at **1 instance** and needs none of this. To scale `herald-bot` past 1:
 
 ### Day 1 — "boots on TP, talks to GenAI, remembers"
 1. Provision: GenAI service, Postgres service, NFS volume; create a `cloud` Spring profile.
-2. Code: `HeraldLimits` uploads env var; Postgres `DataSourceConfig` + `schema.sql`; GenAI provider; disable shell/reminders/obsidian/lmstudio-discovery on `cloud`.
+2. Code: `HeraldLimits` uploads env var; Postgres `DataSourceConfig` + `schema.sql`; GenAI chat binding validation; disable shell/reminders/obsidian/lmstudio-discovery on `cloud`.
 3. Package both JARs; write `manifest.yml`; `cf push herald-bot` (internal route) + `cf push herald-ui` (public) + network policy.
-4. Bind services; set env (Telegram token, default provider=genai); open Telegram ASG.
+4. Bind services; set env (Telegram token, default provider=openai (selected by the binding)); open Telegram ASG.
 5. **Smoke test:** `/actuator/health` UP; `POST /api/chat` returns a GenAI completion (the PONG test); a memory write lands on the volume; a Telegram turn round-trips. **1 instance.**
 
 ### Day 2 — "feature parity minus desktop bits"

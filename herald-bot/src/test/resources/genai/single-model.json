@@ -1,0 +1,25 @@
+{
+  "renamed-ai-offering": [
+    {
+      "instance_name": "chosen",
+      "tags": [
+        "genai",
+        "llm"
+      ],
+      "credentials": {
+        "api_base": "https://models.example.test/team/openai",
+        "api_key": "synthetic-secret",
+        "model_name": "test/chat-model",
+        "wire_format": "openai",
+        "model_capabilities": [
+          "chat",
+          "tools"
+        ],
+        "endpoint": {
+          "api_base": "https://ignored.example.test",
+          "api_key": "ignored-secret"
+        }
+      }
+    }
+  ]
+}

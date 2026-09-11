@@ -1,0 +1,12 @@
+{
+  "ai-services": [
+    {
+      "tags": [
+        "genai"
+      ],
+      "credentials": {
+        "api_key": "synthetic-secret"
+      }
+    }
+  ]
+}
